@@ -85,4 +85,6 @@ app.post('/api/pac/missions/:id/accept', auth, (req, res) => {
   res.json({ message: 'Mission accepted', mission: m })
 })
 
-app.listen(5000, () => console.log('Backend running on http://localhost:5000'))
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
+
+app.listen(process.env.PORT || 5000, () => console.log(`Backend running on port ${process.env.PORT || 5000}`))
