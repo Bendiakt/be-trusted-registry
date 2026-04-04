@@ -1,0 +1,13 @@
+{
+  "name": "be-trusted-registry",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "build": "cd frontend && npm install && npm run build",
+    "dev:backend": "cd backend && node server.js",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
