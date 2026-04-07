@@ -92,4 +92,5 @@ app.post('/api/pac/missions/:id/accept', auth, (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
-app.listen(process.env.PORT || 5000, () => console.log(`Backend running on port ${process.env.PORT || 5000}`))
+const PORT = process.env.PORT || 8080
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`))
