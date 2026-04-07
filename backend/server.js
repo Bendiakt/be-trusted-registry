@@ -1,3 +1,4 @@
+require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const bcrypt = require('bcryptjs')
@@ -10,7 +11,7 @@ app.use(express.json())
 const { router: paymentsRouter, setCompanies } = require('./routes/payments')
 app.use('/api/payments', paymentsRouter)
 
-const SECRET = 'be-registry-secret-2024'
+const SECRET = process.env.JWT_SECRET || 'be-registry-secret-2024'
 const users = []
 const companies = []
 const missions = []
