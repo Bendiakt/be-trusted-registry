@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import api from '../lib/api'
 
 export default function PACPortal() {
   const [missions, setMissions] = useState([])
@@ -11,21 +11,21 @@ export default function PACPortal() {
   const token = localStorage.getItem('token')
 
   useEffect(() => {
-    axios.get('/api/pac/missions', { headers: { Authorization: `Bearer ${token}` } })
+    api.get('/api/pac/missions', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => setMissions(res.data)).catch(() => {})
   }, [])
 
   const saveProfile = async (e) => {
     e.preventDefault()
     try {
-      await axios.post('/api/pac/profile', profile, { headers: { Authorization: `Bearer ${token}` } })
+      await api.post('/api/pac/profile', profile, { headers: { Authorization: `Bearer ${token}` } })
       setMsg({ text: 'Profile saved successfully', type: 'success' })
     } catch { setMsg({ text: 'Error saving profile', type: 'error' }) }
   }
 
   const acceptMission = async (id) => {
     try {
-      await axios.post(`/api/pac/missions/${id}/accept`, {}, { headers: { Authorization: `Bearer ${token}` } })
+      await api.post(`/api/pac/missions/${id}/accept`, {}, { headers: { Authorization: `Bearer ${token}` } })
       setMsg({ text: 'Mission accepted!', type: 'success' })
       setMissions(prev => prev.map(m => m.id === id ? { ...m, status: 'assigned' } : m))
     } catch { setMsg({ text: 'Error accepting mission', type: 'error' }) }

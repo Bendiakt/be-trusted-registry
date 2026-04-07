@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import axios from 'axios'
+import api from '../lib/api'
 
 const BADGES = {
   0: { label: 'NOT CERTIFIED', color: '#555', bg: 'rgba(100,100,100,0.08)', border: '#333', icon: '○', desc: 'This company has not yet completed MyDD certification.' },
@@ -16,7 +16,7 @@ export default function Verify() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    axios.get(`/api/verify/${id}`)
+    api.get(`/api/verify/${id}`)
       .then(res => { setData(res.data); setLoading(false) })
       .catch(() => { setError('Company not found or not registered in MyDD.'); setLoading(false) })
   }, [id])

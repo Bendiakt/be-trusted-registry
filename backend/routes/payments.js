@@ -8,7 +8,12 @@ const setCompanies = (companiesArray) => { companies = companiesArray }
 
 let _stripe = null
 const getStripe = () => {
-  if (!_stripe) _stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('Missing STRIPE_SECRET_KEY')
+    }
+    _stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+  }
   return _stripe
 }
 
@@ -42,6 +47,9 @@ router.post('/create-checkout-session', async (req, res) => {
     res.json({ url: session.url })
   } catch (err) {
     console.error('Stripe error:', err.message, err.code, err.type)
+    if (err.message === 'Missing STRIPE_SECRET_KEY') {
+      return res.status(500).json({ error: 'Server payment configuration is incomplete' })
+    }
     res.status(500).json({ error: 'Payment session failed' })
   }
 })
@@ -50,6 +58,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
   const sig = req.headers['stripe-signature']
   let event
   try {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      return res.status(500).send('Missing STRIPE_WEBHOOK_SECRET')
+    }
     event = getStripe().webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || '')
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`)
