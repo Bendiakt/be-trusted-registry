@@ -6,7 +6,11 @@ const jwt = require('jsonwebtoken')
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+const jsonMiddleware = express.json()
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') return next()
+  return jsonMiddleware(req, res, next)
+})
 
 const { router: paymentsRouter, setCompanies } = require('./routes/payments')
 app.use('/api/payments', paymentsRouter)
