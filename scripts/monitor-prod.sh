@@ -4,6 +4,7 @@ set -euo pipefail
 backend="${BACKEND_URL:-https://be-trusted-registry-production.up.railway.app}"
 backend="${backend%/}"
 max_ms="${MAX_HEALTH_MS:-1500}"
+run_stripe_check="${RUN_STRIPE_CHECK:-1}"
 
 echo "Monitoring target: ${backend}"
 
@@ -65,3 +66,81 @@ print(f"Snapshot: env={data.get('env')} node={data.get('node')} uptimeSec={data.
 PY
 
 echo "PASS: production monitoring baseline is healthy"
+
+if [[ "${run_stripe_check}" == "1" ]]; then
+    echo "Running Stripe end-to-end check"
+    email="monitor-$(date +%s)-$RANDOM@test.io"
+    password="MonPass123"
+
+    register_resp="$(curl -sS -X POST "${backend}/api/auth/register" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"Monitor Bot\",\"email\":\"${email}\",\"password\":\"${password}\",\"role\":\"company\"}")"
+
+    python3 - << 'PY' "${register_resp}"
+import json
+import sys
+
+resp = json.loads(sys.argv[1])
+msg = resp.get("message")
+err = resp.get("error")
+
+if msg == "Registered successfully":
+        print("PASS: monitor user registered")
+        sys.exit(0)
+
+if err == "Email already exists":
+        print("PASS: monitor user already existed")
+        sys.exit(0)
+
+print(f"FAIL: register response unexpected: {resp}")
+sys.exit(1)
+PY
+
+    login_resp="$(curl -sS -X POST "${backend}/api/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"${email}\",\"password\":\"${password}\"}")"
+
+    token="$(python3 - << 'PY' "${login_resp}"
+import json
+import sys
+resp = json.loads(sys.argv[1])
+print(resp.get("token", ""))
+PY
+)"
+
+    if [[ -z "${token}" ]]; then
+        echo "FAIL: login did not return a token"
+        exit 1
+    fi
+    echo "PASS: token acquired"
+
+    checkout_resp="$(curl -sS -X POST "${backend}/api/payments/create-checkout-session" \
+        -H "Authorization: Bearer ${token}" \
+        -H "Content-Type: application/json" \
+        -d '{"planId":"level1"}')"
+
+    python3 - << 'PY' "${checkout_resp}"
+import json
+import sys
+
+resp = json.loads(sys.argv[1])
+url = resp.get("url", "")
+if not url:
+        print(f"FAIL: checkout response missing url: {resp}")
+        sys.exit(1)
+
+if "checkout.stripe.com" not in url:
+        print(f"FAIL: checkout url is invalid: {url}")
+        sys.exit(1)
+
+if "cs_live_" not in url:
+        print(f"FAIL: checkout session is not live: {url}")
+        sys.exit(1)
+
+print("PASS: Stripe live checkout session created")
+PY
+
+    echo "PASS: Stripe end-to-end check succeeded"
+else
+    echo "Stripe end-to-end check skipped (RUN_STRIPE_CHECK=0)"
+fi
