@@ -9,6 +9,7 @@
     "monitor:prod": "bash scripts/monitor-prod.sh",
     "monitor:alert": "bash scripts/monitor-and-alert.sh",
     "monitor:cron:install": "bash scripts/install-monitor-cron.sh",
+    "stripe:validate:test": "STRIPE_CHECK_MODE=test bash scripts/stripe-live-validate.sh",
     "stripe:validate:live": "bash scripts/stripe-live-validate.sh",
     "ops:daily-report": "bash scripts/ops-daily-report.sh"
   },
