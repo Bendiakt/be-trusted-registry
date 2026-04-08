@@ -5,6 +5,7 @@ backend="${BACKEND_URL:-https://be-trusted-registry-production.up.railway.app}"
 backend="${backend%/}"
 max_ms="${MAX_HEALTH_MS:-1500}"
 run_stripe_check="${RUN_STRIPE_CHECK:-1}"
+stripe_check_mode="${STRIPE_CHECK_MODE:-live}"
 
 echo "Monitoring target: ${backend}"
 
@@ -119,11 +120,12 @@ PY
         -H "Content-Type: application/json" \
         -d '{"planId":"level1"}')"
 
-    python3 - << 'PY' "${checkout_resp}"
+    python3 - << 'PY' "${checkout_resp}" "${stripe_check_mode}"
 import json
 import sys
 
 resp = json.loads(sys.argv[1])
+mode = sys.argv[2]
 url = resp.get("url", "")
 if not url:
         print(f"FAIL: checkout response missing url: {resp}")
@@ -133,11 +135,23 @@ if "checkout.stripe.com" not in url:
         print(f"FAIL: checkout url is invalid: {url}")
         sys.exit(1)
 
-if "cs_live_" not in url:
+if mode == "live":
+    if "cs_live_" not in url:
         print(f"FAIL: checkout session is not live: {url}")
         sys.exit(1)
+elif mode == "test":
+    if "cs_test_" not in url:
+        print(f"FAIL: checkout session is not test: {url}")
+        sys.exit(1)
+elif mode == "any":
+    if "cs_live_" not in url and "cs_test_" not in url:
+        print(f"FAIL: checkout session id not recognized: {url}")
+        sys.exit(1)
+else:
+    print(f"FAIL: invalid STRIPE_CHECK_MODE={mode} (expected live|test|any)")
+    sys.exit(1)
 
-print("PASS: Stripe live checkout session created")
+print(f"PASS: Stripe {mode} checkout session created")
 PY
 
     echo "PASS: Stripe end-to-end check succeeded"

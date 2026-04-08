@@ -5,9 +5,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_URL="${BACKEND_URL:-https://be-trusted-registry-production.up.railway.app}"
 RAILWAY_SERVICE="${RAILWAY_SERVICE:-be-trusted-registry}"
 RAILWAY_ENVIRONMENT="${RAILWAY_ENVIRONMENT:-production}"
+STRIPE_CHECK_MODE="${STRIPE_CHECK_MODE:-live}"
 
 # 1) Validate auth + live checkout session generation
-BACKEND_URL="${BACKEND_URL}" RUN_STRIPE_CHECK=1 "${ROOT_DIR}/scripts/monitor-prod.sh"
+BACKEND_URL="${BACKEND_URL}" RUN_STRIPE_CHECK=1 STRIPE_CHECK_MODE="${STRIPE_CHECK_MODE}" "${ROOT_DIR}/scripts/monitor-prod.sh"
 
 # 2) Validate webhook endpoint is reachable and signature-protected
 webhook_status="$(curl -s -o /tmp/be-registry-webhook-check.out -w "%{http_code}" \
