@@ -44,7 +44,9 @@ router.post('/create-checkout-session', async (req, res) => {
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
       metadata: { planId, companyId: String(companyId || '') },
     })
-    res.json({ url: session.url })
+    console.log('Session URL type:', typeof session.url)
+    console.log('Session URL:', String(session.url).substring(0, 200))
+    res.json({ url: String(session.url) })
   } catch (err) {
     console.error('Stripe error:', err.message, err.code, err.type)
     if (err.message === 'Missing STRIPE_SECRET_KEY') {
