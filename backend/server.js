@@ -6,6 +6,23 @@ const jwt = require('jsonwebtoken')
 
 const app = express()
 app.use(cors())
+
+// Lightweight request logging for production monitoring.
+app.use((req, res, next) => {
+  const start = Date.now()
+  res.on('finish', () => {
+    const durationMs = Date.now() - start
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(),
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs,
+    }))
+  })
+  next()
+})
+
 const jsonMiddleware = express.json()
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook') return next()
@@ -90,7 +107,21 @@ app.post('/api/pac/missions/:id/accept', auth, (req, res) => {
   res.json({ message: 'Mission accepted', mission: m })
 })
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
+app.get('/api/health', (req, res) => {
+  const mem = process.memoryUsage()
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptimeSec: Math.floor(process.uptime()),
+    memory: {
+      rss: mem.rss,
+      heapUsed: mem.heapUsed,
+      heapTotal: mem.heapTotal,
+    },
+    node: process.version,
+    env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'unknown',
+  })
+})
 
 const PORT = process.env.PORT || 8080
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`))
