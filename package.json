@@ -6,7 +6,11 @@
     "build": "cd frontend && npm install && npm run build",
     "dev:backend": "cd backend && node server.js",
     "dev:frontend": "cd frontend && npm run dev",
-    "monitor:prod": "bash scripts/monitor-prod.sh"
+    "monitor:prod": "bash scripts/monitor-prod.sh",
+    "monitor:alert": "bash scripts/monitor-and-alert.sh",
+    "monitor:cron:install": "bash scripts/install-monitor-cron.sh",
+    "stripe:validate:live": "bash scripts/stripe-live-validate.sh",
+    "ops:daily-report": "bash scripts/ops-daily-report.sh"
   },
   "engines": {
     "node": ">=22.12.0"
