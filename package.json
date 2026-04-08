@@ -5,7 +5,8 @@
     "start": "cd backend && node server.js",
     "build": "cd frontend && npm install && npm run build",
     "dev:backend": "cd backend && node server.js",
-    "dev:frontend": "cd frontend && npm run dev"
+    "dev:frontend": "cd frontend && npm run dev",
+    "monitor:prod": "bash scripts/monitor-prod.sh"
   },
   "engines": {
     "node": ">=22.12.0"
