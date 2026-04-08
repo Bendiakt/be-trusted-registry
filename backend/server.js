@@ -7,11 +7,20 @@ const jwt = require('jsonwebtoken')
 const app = express()
 app.use(cors())
 
-// Lightweight request logging for production monitoring.
+// --- Metrics counters (initialised at startup) ---
+const startTime = Date.now()
+let requestCount = 0
+let errorCount = 0
+let totalLatency = 0
+
+// Middleware: track every request for metrics + lightweight logging.
 app.use((req, res, next) => {
   const start = Date.now()
   res.on('finish', () => {
     const durationMs = Date.now() - start
+    requestCount++
+    totalLatency += durationMs
+    if (res.statusCode >= 400) errorCount++
     console.log(JSON.stringify({
       ts: new Date().toISOString(),
       method: req.method,
@@ -120,6 +129,74 @@ app.get('/api/health', (req, res) => {
     },
     node: process.version,
     env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'unknown',
+  })
+})
+
+// --- Prometheus-compatible metrics endpoint ---
+app.get('/metrics', (req, res) => {
+  const uptimeSec = (Date.now() - startTime) / 1000
+  const mem = process.memoryUsage()
+  const avgLatencyMs = requestCount > 0 ? totalLatency / requestCount : 0
+  const errorRatePct = requestCount > 0 ? (errorCount / requestCount) * 100 : 0
+
+  const lines = [
+    '# HELP process_uptime_seconds Total uptime of the process in seconds',
+    '# TYPE process_uptime_seconds gauge',
+    `process_uptime_seconds ${uptimeSec.toFixed(3)}`,
+    '',
+    '# HELP http_requests_total Total number of HTTP requests received',
+    '# TYPE http_requests_total counter',
+    `http_requests_total ${requestCount}`,
+    '',
+    '# HELP http_errors_total Total number of HTTP responses with status >= 400',
+    '# TYPE http_errors_total counter',
+    `http_errors_total ${errorCount}`,
+    '',
+    '# HELP http_request_latency_avg_ms Average request latency in milliseconds',
+    '# TYPE http_request_latency_avg_ms gauge',
+    `http_request_latency_avg_ms ${avgLatencyMs.toFixed(3)}`,
+    '',
+    '# HELP http_error_rate_percent Percentage of requests that resulted in an error',
+    '# TYPE http_error_rate_percent gauge',
+    `http_error_rate_percent ${errorRatePct.toFixed(4)}`,
+    '',
+    '# HELP process_resident_memory_bytes Resident set size memory usage in bytes',
+    '# TYPE process_resident_memory_bytes gauge',
+    `process_resident_memory_bytes ${mem.rss}`,
+    '',
+    '# HELP process_heap_used_bytes Heap memory currently in use in bytes',
+    '# TYPE process_heap_used_bytes gauge',
+    `process_heap_used_bytes ${mem.heapUsed}`,
+    '',
+    '# HELP process_heap_total_bytes Total heap memory allocated in bytes',
+    '# TYPE process_heap_total_bytes gauge',
+    `process_heap_total_bytes ${mem.heapTotal}`,
+  ]
+
+  res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+  res.send(lines.join('\n') + '\n')
+})
+
+// --- JSON metrics endpoint for modern dashboards ---
+app.get('/metrics/json', (req, res) => {
+  const mem = process.memoryUsage()
+  const avgLatencyMs = requestCount > 0 ? totalLatency / requestCount : 0
+  const errorRatePct = requestCount > 0 ? (errorCount / requestCount) * 100 : 0
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    uptime_ms: Date.now() - startTime,
+    requests_total: requestCount,
+    errors_total: errorCount,
+    latency_avg_ms: parseFloat(avgLatencyMs.toFixed(3)),
+    error_rate_percent: parseFloat(errorRatePct.toFixed(4)),
+    memory: {
+      rss_mb: parseFloat((mem.rss / 1024 / 1024).toFixed(2)),
+      heap_used_mb: parseFloat((mem.heapUsed / 1024 / 1024).toFixed(2)),
+      heap_total_mb: parseFloat((mem.heapTotal / 1024 / 1024).toFixed(2)),
+    },
+    node_version: process.version,
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'unknown',
   })
 })
 
