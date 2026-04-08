@@ -33,5 +33,9 @@ if [[ -n "${recent_webhook_logs}" ]]; then
   echo "PASS: Found recent real webhook completion logs"
 else
   echo "WARN: No recent 'Payment confirmed:' logs found in last 24h."
-  echo "Manual step: complete one live payment in Stripe Checkout and re-run this script to verify end-to-end webhook completion."
+  if [[ "${STRIPE_CHECK_MODE}" == "test" ]]; then
+    echo "Manual step: complete one test payment in Stripe Checkout and re-run this script to verify end-to-end webhook completion."
+  else
+    echo "Manual step: complete one live payment in Stripe Checkout and re-run this script to verify end-to-end webhook completion."
+  fi
 fi
