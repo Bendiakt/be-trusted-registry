@@ -44,9 +44,9 @@ router.post('/create-checkout-session', async (req, res) => {
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
       metadata: { planId, companyId: String(companyId || '') },
     })
-    console.log('Session URL type:', typeof session.url)
-    console.log('Session URL:', String(session.url).substring(0, 200))
-    res.json({ url: String(session.url) })
+    // Strip fragment from URL (Stripe SDK v22+ adds metadata fragments that break URLs in LIVE mode)
+    const cleanUrl = String(session.url).split('#')[0]
+    res.json({ url: cleanUrl })
   } catch (err) {
     console.error('Stripe error:', err.message, err.code, err.type)
     if (err.message === 'Missing STRIPE_SECRET_KEY') {
