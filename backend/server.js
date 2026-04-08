@@ -38,10 +38,19 @@ app.use((req, res, next) => {
   return jsonMiddleware(req, res, next)
 })
 
+const SECRET = process.env.JWT_SECRET || 'be-registry-secret-2024'
+
+const auth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+  try { req.user = jwt.verify(token, SECRET); next() }
+  catch { res.status(401).json({ error: 'Invalid token' }) }
+}
+
 const { router: paymentsRouter, setCompanies } = require('./routes/payments')
+app.post('/api/payments/create-checkout-session', auth)
 app.use('/api/payments', paymentsRouter)
 
-const SECRET = process.env.JWT_SECRET || 'be-registry-secret-2024'
 const users = []
 const companies = []
 const missions = []
@@ -68,13 +77,6 @@ app.post('/api/auth/login', async (req, res) => {
   const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, SECRET, { expiresIn: '7d' })
   res.json({ token, user: { id: user.id, name: user.name, role: user.role } })
 })
-
-const auth = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]
-  if (!token) return res.status(401).json({ error: 'Unauthorized' })
-  try { req.user = jwt.verify(token, SECRET); next() }
-  catch { res.status(401).json({ error: 'Invalid token' }) }
-}
 
 app.get('/api/companies', auth, (req, res) => res.json(companies))
 
