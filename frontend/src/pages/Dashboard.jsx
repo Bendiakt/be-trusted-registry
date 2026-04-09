@@ -19,6 +19,8 @@ export default function Dashboard() {
   const [tab, setTab] = useState('overview')
   const [company, setCompany] = useState(null)
   const [user, setUser] = useState(null)
+  const [paymentError, setPaymentError] = useState('')
+  const [checkoutPlanId, setCheckoutPlanId] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -42,12 +44,16 @@ export default function Dashboard() {
   }
 
   const handleCheckout = async (planId) => {
+    setPaymentError('')
+    setCheckoutPlanId(planId)
     try {
       const token = localStorage.getItem('token')
       const res = await axios.post('/api/payments/create-checkout-session', { planId }, { headers: { Authorization: 'Bearer ' + token } })
       window.location.href = res.data.url
     } catch (err) {
-      alert(err.response?.data?.error || 'Payment init failed. Check Stripe key in .env')
+      setPaymentError(err.response?.data?.error || 'Payment initialization failed. Please try again.')
+    } finally {
+      setCheckoutPlanId('')
     }
   }
 
@@ -141,6 +147,17 @@ export default function Dashboard() {
               <div style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.25rem' }}>Certification Plans</div>
               <div style={{ color: '#888', fontSize: '0.875rem' }}>Annual certification valid for 12 months. One-time payment.</div>
             </div>
+            {!company && (
+              <div style={{ ...G.card, background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.35)', marginBottom: '1rem' }}>
+                <div style={{ color: '#C9A84C', fontWeight: '700', marginBottom: '0.4rem' }}>Complete your company profile first</div>
+                <div style={{ color: '#aaa', fontSize: '0.875rem' }}>Checkout is enabled after saving your company profile in the Register Company tab.</div>
+              </div>
+            )}
+            {paymentError && (
+              <div style={{ ...G.card, background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.35)', marginBottom: '1rem', color: '#ff7f7f' }}>
+                {paymentError}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
               {PLANS.map((plan, i) => (
                 <div key={plan.id} style={{ ...G.planCard, ...(i === 2 ? { border: '1px solid #C9A84C', boxShadow: '0 0 20px rgba(201,168,76,0.15)' } : {}) }}>
@@ -157,11 +174,11 @@ export default function Dashboard() {
                     ))}
                   </ul>
                   <button
-                    style={{ ...G.btn, opacity: lvl >= (i + 1) ? 0.5 : 1, cursor: lvl >= (i + 1) ? 'default' : 'pointer' }}
-                    onClick={() => lvl < (i + 1) && handleCheckout(plan.id)}
-                    disabled={lvl >= (i + 1)}
+                    style={{ ...G.btn, opacity: lvl >= (i + 1) || !company ? 0.5 : 1, cursor: lvl >= (i + 1) || !company ? 'default' : 'pointer' }}
+                    onClick={() => lvl < (i + 1) && company && handleCheckout(plan.id)}
+                    disabled={lvl >= (i + 1) || !company || checkoutPlanId === plan.id}
                   >
-                    {lvl >= (i + 1) ? 'Current Plan' : 'Get Certified'}
+                    {checkoutPlanId === plan.id ? 'Redirecting...' : (lvl >= (i + 1) ? 'Current Plan' : 'Get Certified')}
                   </button>
                 </div>
               ))}

@@ -12,7 +12,10 @@ const getStripe = () => {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('Missing STRIPE_SECRET_KEY')
     }
-    _stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+    _stripe = Stripe(process.env.STRIPE_SECRET_KEY, {
+      maxNetworkRetries: 2,
+      timeout: 15000,
+    })
   }
   return _stripe
 }
@@ -57,7 +60,20 @@ router.post('/create-checkout-session', async (req, res) => {
     if (err.message === 'Missing STRIPE_SECRET_KEY') {
       return res.status(500).json({ error: 'Server payment configuration is incomplete' })
     }
-    res.status(500).json({ error: 'Payment session failed' })
+
+    if (err.type === 'StripeConnectionError' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
+      return res.status(503).json({ error: 'Payment provider is temporarily unreachable. Please retry in a minute.' })
+    }
+
+    if (err.type === 'StripeAuthenticationError') {
+      return res.status(500).json({ error: 'Payment configuration is invalid. Please contact support.' })
+    }
+
+    if (err.type === 'StripeInvalidRequestError') {
+      return res.status(400).json({ error: 'Invalid payment request. Please refresh and try again.' })
+    }
+
+    res.status(500).json({ error: 'Payment session failed. Please try again later.' })
   }
 })
 
