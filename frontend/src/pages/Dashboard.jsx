@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import api from '../lib/api'
 
 const PLANS = [
   { id: 'level1', name: 'Bronze Certification', price: '$490', features: ['Basic registry listing', 'Certification badge', 'Email verification', 'Valid 12 months'] },
@@ -35,7 +35,7 @@ export default function Dashboard() {
 
   const fetchProfile = async (token) => {
     try {
-      const res = await axios.get('/api/companies/me', { headers: { Authorization: 'Bearer ' + token } })
+      const res = await api.get('/api/companies/me', { headers: { Authorization: 'Bearer ' + token } })
       setCompany(res.data.company)
       setUser(res.data.user)
     } catch {
@@ -48,7 +48,7 @@ export default function Dashboard() {
     setCheckoutPlanId(planId)
     try {
       const token = localStorage.getItem('token')
-      const res = await axios.post('/api/payments/create-checkout-session', { planId }, { headers: { Authorization: 'Bearer ' + token } })
+      const res = await api.post('/api/payments/create-checkout-session', { planId }, { headers: { Authorization: 'Bearer ' + token } })
       window.location.href = res.data.url
     } catch (err) {
       setPaymentError(err.response?.data?.error || 'Payment initialization failed. Please try again.')
@@ -205,7 +205,7 @@ function RegisterCompanyForm({ company, onSaved }) {
     setSaving(true); setMsg('')
     try {
       const token = localStorage.getItem('token')
-      const res = await axios.post('/api/companies/register', form, { headers: { Authorization: 'Bearer ' + token } })
+      const res = await api.post('/api/companies/register', form, { headers: { Authorization: 'Bearer ' + token } })
       setMsg('Saved successfully')
       onSaved(res.data.company)
     } catch (err) {
