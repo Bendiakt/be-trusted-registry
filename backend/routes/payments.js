@@ -25,9 +25,16 @@ const PLANS = {
 
 router.post('/create-checkout-session', async (req, res) => {
   try {
-    const { planId, companyId } = req.body
+    const { planId } = req.body
     const plan = PLANS[planId]
     if (!plan) return res.status(400).json({ error: 'Invalid plan' })
+
+    // Resolve companyId from authenticated user (req.user set by auth middleware)
+    const userCompany = companies.find(c => c.userId === req.user.id)
+    if (!userCompany) {
+      return res.status(400).json({ error: 'Register your company profile before checkout' })
+    }
+    const resolvedCompanyId = String(userCompany.id)
 
     const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
@@ -42,7 +49,7 @@ router.post('/create-checkout-session', async (req, res) => {
       mode: 'payment',
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&plan=${planId}`,
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
-      metadata: { planId, companyId: String(companyId || '') },
+      metadata: { planId, companyId: resolvedCompanyId },
     })
     res.json({ url: session.url })
   } catch (err) {
@@ -75,9 +82,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
       const company = companies.find(c => c.id === parseInt(companyId))
       if (company) {
         const levelMap = { level1: 1, level2: 2, level3: 3 }
-        company.level = levelMap[planId] || company.level
-        company.badge = company.level > 0 ? 'certified' : 'not-certified'
-        console.log(`Company ${companyId} upgraded to level ${company.level}`)
+        const newLevel = levelMap[planId]
+        if (newLevel) {
+          company.certificationLevel = Math.max(company.certificationLevel || 0, newLevel)
+          console.log(`Company ${companyId} upgraded to certificationLevel ${company.certificationLevel}`)
+        }
       }
     }
   }

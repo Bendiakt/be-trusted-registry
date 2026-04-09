@@ -74,29 +74,62 @@ app.post('/api/auth/login', async (req, res) => {
   if (!user) return res.status(400).json({ error: 'Invalid credentials' })
   const valid = await bcrypt.compare(password, user.password)
   if (!valid) return res.status(400).json({ error: 'Invalid credentials' })
-  const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, SECRET, { expiresIn: '7d' })
-  res.json({ token, user: { id: user.id, name: user.name, role: user.role } })
+  const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, SECRET, { expiresIn: '7d' })
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
 })
 
 app.get('/api/companies', auth, (req, res) => res.json(companies))
 
-app.post('/api/companies/apply', auth, (req, res) => {
-  const { companyName, country, sector, website } = req.body
-  if (companies.find(c => c.userId === req.user.id)) return res.status(400).json({ error: 'Application already submitted' })
-  const company = { id: companies.length + 1, userId: req.user.id, companyName, country, sector, website, status: 'pending', level: 0, badge: 'not-certified', createdAt: new Date().toISOString() }
-  companies.push(company)
-  res.json(company)
+// Primary profile endpoint used by Dashboard
+app.get('/api/companies/me', auth, (req, res) => {
+  const company = companies.find(c => c.userId === req.user.id)
+  const { id, name, email, role } = req.user
+  res.json({ company: company || null, user: { id, name, email, role } })
 })
 
+// Alias for backwards compatibility
 app.get('/api/companies/mine', auth, (req, res) => {
   const company = companies.find(c => c.userId === req.user.id)
   res.json(company || null)
 })
 
+// Create or update company profile (used by Dashboard RegisterCompanyForm)
+app.post('/api/companies/register', auth, (req, res) => {
+  const { name, industry, country, description } = req.body
+  if (!name) return res.status(400).json({ error: 'Company name is required' })
+  let company = companies.find(c => c.userId === req.user.id)
+  if (company) {
+    // Update existing
+    Object.assign(company, { name, industry, country, description, updatedAt: new Date().toISOString() })
+  } else {
+    company = { id: companies.length + 1, userId: req.user.id, name, industry, country, description, certificationLevel: 0, status: 'pending', createdAt: new Date().toISOString() }
+    companies.push(company)
+  }
+  res.json({ company })
+})
+
+// Legacy apply endpoint
+app.post('/api/companies/apply', auth, (req, res) => {
+  const { companyName, country, sector, website } = req.body
+  if (companies.find(c => c.userId === req.user.id)) return res.status(400).json({ error: 'Application already submitted' })
+  const company = { id: companies.length + 1, userId: req.user.id, companyName, country, sector, website, status: 'pending', certificationLevel: 0, createdAt: new Date().toISOString() }
+  companies.push(company)
+  res.json(company)
+})
+
 app.get('/api/verify/:id', (req, res) => {
   const company = companies.find(c => c.id === parseInt(req.params.id))
   if (!company) return res.status(404).json({ error: 'Company not found' })
-  res.json(company)
+  // Normalize to a stable public shape regardless of which registration route was used
+  const level = company.certificationLevel ?? company.level ?? 0
+  res.json({
+    ...company,
+    companyName: company.name || company.companyName || '',
+    sector: company.industry || company.sector || '',
+    level,
+    certificationLevel: level,
+    badge: level > 0 ? 'certified' : 'not-certified',
+  })
 })
 
 app.get('/api/pac/missions', auth, (req, res) => {
