@@ -3,6 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { query, initDb } = require('./db')
 
 const app = express()
 app.use(cors())
@@ -47,94 +48,192 @@ const auth = (req, res, next) => {
   catch { res.status(401).json({ error: 'Invalid token' }) }
 }
 
-const { router: paymentsRouter, setCompanies } = require('./routes/payments')
+const mapCompanyRow = (row) => {
+  if (!row) return null
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    companyName: row.company_name || row.name || '',
+    industry: row.industry,
+    sector: row.sector || row.industry || '',
+    country: row.country,
+    description: row.description,
+    website: row.website,
+    status: row.status,
+    certificationLevel: row.certification_level || 0,
+    level: row.certification_level || 0,
+    badge: (row.certification_level || 0) > 0 ? 'certified' : 'not-certified',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+const mapMissionRow = (row) => {
+  if (!row) return null
+  return {
+    id: row.id,
+    assigned_to: row.assigned_to,
+    status: row.status,
+    createdAt: row.created_at,
+  }
+}
+
+const { router: paymentsRouter } = require('./routes/payments')
 app.post('/api/payments/create-checkout-session', auth)
 app.use('/api/payments', paymentsRouter)
 
-const users = []
-const companies = []
-const missions = []
-
-// Pass companies array to payments router
-setCompanies(companies)
-
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role } = req.body
-  if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
-  if (users.find(u => u.email === email)) return res.status(400).json({ error: 'Email already exists' })
-  const hash = await bcrypt.hash(password, 10)
-  const user = { id: users.length + 1, name, email, password: hash, role: role || 'company' }
-  users.push(user)
-  res.json({ message: 'Registered successfully' })
+  try {
+    const { name, email, password, role } = req.body
+    if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
+
+    const existing = await query('SELECT id FROM users WHERE email = $1 LIMIT 1', [email])
+    if (existing.rows.length > 0) return res.status(400).json({ error: 'Email already exists' })
+
+    const hash = await bcrypt.hash(password, 10)
+    await query(
+      'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+      [name, email, hash, role || 'company']
+    )
+
+    res.json({ message: 'Registered successfully' })
+  } catch (err) {
+    console.error('Register error:', err.message)
+    res.status(500).json({ error: 'Registration failed' })
+  }
 })
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body
-  const user = users.find(u => u.email === email)
-  if (!user) return res.status(400).json({ error: 'Invalid credentials' })
-  const valid = await bcrypt.compare(password, user.password)
-  if (!valid) return res.status(400).json({ error: 'Invalid credentials' })
-  const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, SECRET, { expiresIn: '7d' })
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  try {
+    const { email, password } = req.body
+    const userResult = await query('SELECT id, name, email, password, role FROM users WHERE email = $1 LIMIT 1', [email])
+    const user = userResult.rows[0]
+    if (!user) return res.status(400).json({ error: 'Invalid credentials' })
+
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(400).json({ error: 'Invalid credentials' })
+
+    const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, SECRET, { expiresIn: '7d' })
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  } catch (err) {
+    console.error('Login error:', err.message)
+    res.status(500).json({ error: 'Login failed' })
+  }
 })
 
-app.get('/api/companies', auth, (req, res) => res.json(companies))
+app.get('/api/companies', auth, async (req, res) => {
+  try {
+    const result = await query('SELECT * FROM companies ORDER BY id DESC')
+    res.json(result.rows.map(mapCompanyRow))
+  } catch (err) {
+    console.error('List companies error:', err.message)
+    res.status(500).json({ error: 'Failed to load companies' })
+  }
+})
 
 // Primary profile endpoint used by Dashboard
-app.get('/api/companies/me', auth, (req, res) => {
-  const company = companies.find(c => c.userId === req.user.id)
-  const { id, name, email, role } = req.user
-  res.json({ company: company || null, user: { id, name, email, role } })
+app.get('/api/companies/me', auth, async (req, res) => {
+  try {
+    const companyResult = await query('SELECT * FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    const company = mapCompanyRow(companyResult.rows[0])
+    const { id, name, email, role } = req.user
+    res.json({ company: company || null, user: { id, name, email, role } })
+  } catch (err) {
+    console.error('My company error:', err.message)
+    res.status(500).json({ error: 'Failed to load profile' })
+  }
 })
 
 // Alias for backwards compatibility
-app.get('/api/companies/mine', auth, (req, res) => {
-  const company = companies.find(c => c.userId === req.user.id)
-  res.json(company || null)
+app.get('/api/companies/mine', auth, async (req, res) => {
+  try {
+    const companyResult = await query('SELECT * FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    const company = mapCompanyRow(companyResult.rows[0])
+    res.json(company || null)
+  } catch (err) {
+    console.error('Mine company error:', err.message)
+    res.status(500).json({ error: 'Failed to load company' })
+  }
 })
 
 // Create or update company profile (used by Dashboard RegisterCompanyForm)
-app.post('/api/companies/register', auth, (req, res) => {
-  const { name, industry, country, description } = req.body
-  if (!name) return res.status(400).json({ error: 'Company name is required' })
-  let company = companies.find(c => c.userId === req.user.id)
-  if (company) {
-    // Update existing
-    Object.assign(company, { name, industry, country, description, updatedAt: new Date().toISOString() })
-  } else {
-    company = { id: companies.length + 1, userId: req.user.id, name, industry, country, description, certificationLevel: 0, status: 'pending', createdAt: new Date().toISOString() }
-    companies.push(company)
+app.post('/api/companies/register', auth, async (req, res) => {
+  try {
+    const { name, industry, country, description } = req.body
+    if (!name) return res.status(400).json({ error: 'Company name is required' })
+
+    const result = await query(
+      `INSERT INTO companies (user_id, name, company_name, industry, sector, country, description, status, certification_level)
+       VALUES ($1, $2, $2, $3, $3, $4, $5, 'pending', 0)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         name = EXCLUDED.name,
+         company_name = EXCLUDED.company_name,
+         industry = EXCLUDED.industry,
+         sector = EXCLUDED.sector,
+         country = EXCLUDED.country,
+         description = EXCLUDED.description,
+         updated_at = NOW()
+       RETURNING *`,
+      [req.user.id, name, industry || null, country || null, description || null]
+    )
+
+    res.json({ company: mapCompanyRow(result.rows[0]) })
+  } catch (err) {
+    console.error('Register company error:', err.message)
+    res.status(500).json({ error: 'Save failed' })
   }
-  res.json({ company })
 })
 
 // Legacy apply endpoint
-app.post('/api/companies/apply', auth, (req, res) => {
-  const { companyName, country, sector, website } = req.body
-  if (companies.find(c => c.userId === req.user.id)) return res.status(400).json({ error: 'Application already submitted' })
-  const company = { id: companies.length + 1, userId: req.user.id, companyName, country, sector, website, status: 'pending', certificationLevel: 0, createdAt: new Date().toISOString() }
-  companies.push(company)
-  res.json(company)
+app.post('/api/companies/apply', auth, async (req, res) => {
+  try {
+    const { companyName, country, sector, website } = req.body
+
+    const existing = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    if (existing.rows.length > 0) return res.status(400).json({ error: 'Application already submitted' })
+
+    const result = await query(
+      `INSERT INTO companies (
+         user_id, name, company_name, industry, sector, country, website, status, certification_level
+       ) VALUES ($1, $2, $2, $3, $3, $4, $5, 'pending', 0)
+       RETURNING *`,
+      [req.user.id, companyName || null, sector || null, country || null, website || null]
+    )
+
+    res.json(mapCompanyRow(result.rows[0]))
+  } catch (err) {
+    console.error('Legacy apply error:', err.message)
+    res.status(500).json({ error: 'Application failed' })
+  }
 })
 
-app.get('/api/verify/:id', (req, res) => {
-  const company = companies.find(c => c.id === parseInt(req.params.id))
-  if (!company) return res.status(404).json({ error: 'Company not found' })
-  // Normalize to a stable public shape regardless of which registration route was used
-  const level = company.certificationLevel ?? company.level ?? 0
-  res.json({
-    ...company,
-    companyName: company.name || company.companyName || '',
-    sector: company.industry || company.sector || '',
-    level,
-    certificationLevel: level,
-    badge: level > 0 ? 'certified' : 'not-certified',
-  })
+app.get('/api/verify/:id', async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.id, 10)
+    if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
+
+    const result = await query('SELECT * FROM companies WHERE id = $1 LIMIT 1', [companyId])
+    const company = mapCompanyRow(result.rows[0])
+    if (!company) return res.status(404).json({ error: 'Company not found' })
+
+    res.json(company)
+  } catch (err) {
+    console.error('Verify error:', err.message)
+    res.status(500).json({ error: 'Verification failed' })
+  }
 })
 
-app.get('/api/pac/missions', auth, (req, res) => {
-  if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
-  res.json(missions)
+app.get('/api/pac/missions', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
+    const result = await query('SELECT * FROM missions ORDER BY id DESC')
+    res.json(result.rows.map(mapMissionRow))
+  } catch (err) {
+    console.error('List missions error:', err.message)
+    res.status(500).json({ error: 'Failed to load missions' })
+  }
 })
 
 app.post('/api/pac/profile', auth, (req, res) => {
@@ -142,13 +241,27 @@ app.post('/api/pac/profile', auth, (req, res) => {
   res.json({ message: 'Profile saved', data: req.body })
 })
 
-app.post('/api/pac/missions/:id/accept', auth, (req, res) => {
-  if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
-  const m = missions.find(x => x.id === parseInt(req.params.id))
-  if (!m) return res.status(404).json({ error: 'Mission not found' })
-  m.assigned_to = req.user.id
-  m.status = 'accepted'
-  res.json({ message: 'Mission accepted', mission: m })
+app.post('/api/pac/missions/:id/accept', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const result = await query(
+      `UPDATE missions
+       SET assigned_to = $1, status = 'accepted'
+       WHERE id = $2
+       RETURNING *`,
+      [req.user.id, missionId]
+    )
+
+    const mission = mapMissionRow(result.rows[0])
+    if (!mission) return res.status(404).json({ error: 'Mission not found' })
+    res.json({ message: 'Mission accepted', mission })
+  } catch (err) {
+    console.error('Accept mission error:', err.message)
+    res.status(500).json({ error: 'Failed to accept mission' })
+  }
 })
 
 app.get('/api/health', (req, res) => {
@@ -236,4 +349,15 @@ app.get('/metrics/json', (req, res) => {
 })
 
 const PORT = process.env.PORT || 8080
-app.listen(PORT, () => console.log(`Backend running on port ${PORT}`))
+
+const startServer = async () => {
+  try {
+    await initDb()
+    app.listen(PORT, () => console.log(`Backend running on port ${PORT}`))
+  } catch (err) {
+    console.error('Failed to initialize backend:', err.message)
+    process.exit(1)
+  }
+}
+
+startServer()

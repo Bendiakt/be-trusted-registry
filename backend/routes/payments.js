@@ -1,10 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const Stripe = require('stripe')
-
-// Import shared data (in production, use a database)
-let companies = []
-const setCompanies = (companiesArray) => { companies = companiesArray }
+const { query } = require('../db')
 
 let _stripe = null
 const getStripe = () => {
@@ -33,7 +30,8 @@ router.post('/create-checkout-session', async (req, res) => {
     if (!plan) return res.status(400).json({ error: 'Invalid plan' })
 
     // Resolve companyId from authenticated user (req.user set by auth middleware)
-    const userCompany = companies.find(c => c.userId === req.user.id)
+    const companyResult = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    const userCompany = companyResult.rows[0]
     if (!userCompany) {
       return res.status(400).json({ error: 'Register your company profile before checkout' })
     }
@@ -77,7 +75,7 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 })
 
-router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature']
   let event
   try {
@@ -88,25 +86,33 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object
-    console.log('Payment confirmed:', session.metadata)
-    
-    // Update company certification level
-    const { planId, companyId } = session.metadata
-    if (companyId) {
-      const company = companies.find(c => c.id === parseInt(companyId))
-      if (company) {
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object
+      console.log('Payment confirmed:', session.metadata)
+
+      // Update company certification level
+      const { planId, companyId } = session.metadata
+      if (companyId) {
         const levelMap = { level1: 1, level2: 2, level3: 3 }
         const newLevel = levelMap[planId]
         if (newLevel) {
-          company.certificationLevel = Math.max(company.certificationLevel || 0, newLevel)
-          console.log(`Company ${companyId} upgraded to certificationLevel ${company.certificationLevel}`)
+          await query(
+            `UPDATE companies
+             SET certification_level = GREATEST(certification_level, $1),
+                 updated_at = NOW()
+             WHERE id = $2`,
+            [newLevel, parseInt(companyId, 10)]
+          )
+          console.log(`Company ${companyId} upgraded to certificationLevel ${newLevel}`)
         }
       }
     }
+    res.json({ received: true })
+  } catch (err) {
+    console.error('Webhook processing error:', err.message)
+    res.status(500).send('Webhook processing failed')
   }
-  res.json({ received: true })
 })
 
-module.exports = { router, setCompanies }
+module.exports = { router }
