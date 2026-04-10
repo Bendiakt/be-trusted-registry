@@ -58,13 +58,16 @@ echo "size=${SIZE}"
 # Rotate old backups (keep most recent KEEP_BACKUPS, default 7)
 KEEP="${KEEP_BACKUPS:-7}"
 if [[ "${KEEP}" -gt 0 ]]; then
-  # list dumps oldest first, delete all but the last $KEEP
-  mapfile -t old_dumps < <(ls -1t "${OUT_DIR}"/be-registry-*.dump 2>/dev/null | tail -n +$((KEEP + 1)))
-  if [[ "${#old_dumps[@]}" -gt 0 ]]; then
-    echo "Rotating ${#old_dumps[@]} old dump(s) (keeping last ${KEEP})"
-    for f in "${old_dumps[@]}"; do
-      rm -f "${f}"
-      echo "  removed: $(basename "${f}")"
-    done
+  # list dumps oldest first, delete all but the last $KEEP (macOS bash 3 compatible)
+  old_count=0
+  while IFS= read -r f; do
+    [[ -z "${f}" ]] && continue
+    rm -f "${f}"
+    old_count=$((old_count + 1))
+    echo "  removed: $(basename "${f}")"
+  done < <(ls -1t "${OUT_DIR}"/be-registry-*.dump 2>/dev/null | tail -n +$((KEEP + 1)))
+
+  if [[ "${old_count}" -gt 0 ]]; then
+    echo "Rotating ${old_count} old dump(s) (keeping last ${KEEP})"
   fi
 fi
