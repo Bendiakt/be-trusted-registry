@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: be-registry
+    orgId: 1
+    folder: be-registry
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
