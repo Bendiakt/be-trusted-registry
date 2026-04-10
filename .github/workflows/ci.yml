@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Backend lint & health check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Check syntax (all JS files)
+        working-directory: backend
+        run: |
+          find . -name "*.js" -not -path "*/node_modules/*" \
+            -exec node --check {} \; && echo "Syntax OK"
+
+      - name: Verify required env vars documented
+        run: |
+          grep -q "JWT_SECRET" backend/.env.example || \
+            (echo "FAIL: JWT_SECRET missing from .env.example" && exit 1)
+          grep -q "STRIPE_SECRET_KEY" backend/.env.example || \
+            (echo "FAIL: STRIPE_SECRET_KEY missing from .env.example" && exit 1)
+          echo "Env vars documented OK"
+
+  production-health:
+    name: Production health check
+    runs-on: ubuntu-latest
+    # Only run on push to main (not on PRs from forks without secrets)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Health check
+        run: |
+          RESPONSE=$(curl -sf --max-time 10 \
+            https://be-trusted-registry-production.up.railway.app/api/health)
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('status') == 'ok', f'status not ok: {d}'
+          print(f'PASS: health OK, uptimeSec={d.get(\"uptimeSec\",\"?\")}')
+          "
+
+      - name: Verify auth endpoint is live
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            -X POST https://be-trusted-registry-production.up.railway.app/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci-probe@test.io","password":"wrong"}')
+          echo "Auth endpoint status: $STATUS"
+          [[ "$STATUS" == "401" || "$STATUS" == "400" ]] && echo "PASS: auth endpoint active" || \
+            (echo "FAIL: unexpected status $STATUS" && exit 1)
