@@ -11,7 +11,10 @@
     "monitor:cron:install": "bash scripts/install-monitor-cron.sh",
     "stripe:validate:test": "STRIPE_CHECK_MODE=test bash scripts/stripe-live-validate.sh",
     "stripe:validate:live": "bash scripts/stripe-live-validate.sh",
-    "ops:daily-report": "bash scripts/ops-daily-report.sh"
+    "ops:daily-report": "bash scripts/ops-daily-report.sh",
+    "db:smoke": "node scripts/db-smoke.js",
+    "db:backup": "bash scripts/db-backup.sh",
+    "db:restore": "bash scripts/db-restore.sh"
   },
   "engines": {
     "node": ">=22.12.0"
