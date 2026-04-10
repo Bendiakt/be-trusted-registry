@@ -79,20 +79,36 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   const sig = req.headers['stripe-signature']
   let event
   try {
+    if (!sig) {
+      return res.status(400).send('Missing Stripe signature')
+    }
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
       return res.status(500).send('Missing STRIPE_WEBHOOK_SECRET')
     }
     event = getStripe().webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || '')
+    console.log(JSON.stringify({
+      event: 'stripe.webhook.received',
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+    }))
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object
-      console.log('Payment confirmed:', session.metadata)
+      const { planId, companyId } = session.metadata || {}
+      console.log(JSON.stringify({
+        event: 'stripe.payment.confirmed',
+        stripeEventId: event.id,
+        sessionId: session.id,
+        planId,
+        companyId,
+        amountTotal: session.amount_total,
+        currency: session.currency,
+      }))
 
       // Update company certification level
-      const { planId, companyId } = session.metadata
       if (companyId) {
         const levelMap = { level1: 1, level2: 2, level3: 3 }
         const newLevel = levelMap[planId]
@@ -104,7 +120,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
              WHERE id = $2`,
             [newLevel, parseInt(companyId, 10)]
           )
-          console.log(`Company ${companyId} upgraded to certificationLevel ${newLevel}`)
+          console.log(JSON.stringify({
+            event: 'company.certification.upgraded',
+            companyId,
+            certificationLevel: newLevel,
+            stripeEventId: event.id,
+          }))
         }
       }
     }

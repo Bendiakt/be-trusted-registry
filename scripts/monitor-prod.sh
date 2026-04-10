@@ -115,6 +115,27 @@ PY
     fi
     echo "PASS: token acquired"
 
+    company_resp="$(curl -sS -X POST "${backend}/api/companies/register" \
+        -H "Authorization: Bearer ${token}" \
+        -H "Content-Type: application/json" \
+        -d '{"name":"Monitor Co","industry":"services","country":"SN","description":"Monitoring profile"}')"
+
+    python3 - << 'PY' "${company_resp}"
+import json
+import sys
+
+resp = json.loads(sys.argv[1])
+company = resp.get("company")
+err = resp.get("error")
+
+if company and company.get("id"):
+    print("PASS: company profile ready")
+    sys.exit(0)
+
+print(f"FAIL: company profile response unexpected: {resp}")
+sys.exit(1)
+PY
+
     checkout_resp="$(curl -sS -X POST "${backend}/api/payments/create-checkout-session" \
         -H "Authorization: Bearer ${token}" \
         -H "Content-Type: application/json" \

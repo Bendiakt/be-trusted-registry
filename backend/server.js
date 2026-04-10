@@ -6,7 +6,32 @@ const jwt = require('jsonwebtoken')
 const { query, initDb } = require('./db')
 
 const app = express()
-app.use(cors())
+
+const resolveAllowedOrigins = () => {
+  const configured = process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173'
+  return configured
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
+
+const allowedOrigins = resolveAllowedOrigins()
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow server-to-server and CLI calls without an Origin header.
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    return callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true,
+}))
+
+app.use((err, req, res, next) => {
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS origin denied' })
+  }
+  return next(err)
+})
 
 // --- Metrics counters (initialised at startup) ---
 const startTime = Date.now()
@@ -39,7 +64,10 @@ app.use((req, res, next) => {
   return jsonMiddleware(req, res, next)
 })
 
-const SECRET = process.env.JWT_SECRET || 'be-registry-secret-2024'
+const SECRET = process.env.JWT_SECRET
+if (!SECRET) {
+  throw new Error('Missing JWT_SECRET environment variable')
+}
 
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1]
