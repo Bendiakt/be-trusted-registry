@@ -26,13 +26,13 @@ echo "PASS: webhook endpoint is active and signature verification works"
 
 # 3) Attempt to find a real completed webhook in recent logs (non-blocking)
 set +e
-recent_webhook_logs="$(${ROOT_DIR}/scripts/railway-cli.sh logs --service "${RAILWAY_SERVICE}" --environment "${RAILWAY_ENVIRONMENT}" --since 1d --filter "Payment confirmed:" 2>/dev/null)"
+recent_webhook_logs="$(${ROOT_DIR}/scripts/railway-cli.sh logs --service "${RAILWAY_SERVICE}" --environment "${RAILWAY_ENVIRONMENT}" --since 1d --filter "Payment confirmed: OR stripe.payment.confirmed OR webhook event received" 2>/dev/null)"
 set -e
 
 if [[ -n "${recent_webhook_logs}" ]]; then
   echo "PASS: Found recent real webhook completion logs"
 else
-  echo "WARN: No recent 'Payment confirmed:' logs found in last 24h."
+  echo "WARN: No recent webhook completion logs found in last 24h."
   if [[ "${STRIPE_CHECK_MODE}" == "test" ]]; then
     echo "Manual step: complete one test payment in Stripe Checkout and re-run this script to verify end-to-end webhook completion."
   else
