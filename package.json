@@ -16,6 +16,8 @@
     "monitoring:stack:up": "docker compose -f monitoring/docker-compose.monitoring.yml up -d",
     "monitoring:stack:down": "docker compose -f monitoring/docker-compose.monitoring.yml down",
     "failover:auto": "bash scripts/auto-failover.sh",
+    "failover:test": "DRY_RUN=1 FORCE_UNHEALTHY=1 MAX_RETRIES=1 RETRY_DELAY_SEC=1 bash scripts/auto-failover.sh",
+    "dr:validate": "bash scripts/dr-validate.sh",
     "stripe:validate:test": "STRIPE_CHECK_MODE=test bash scripts/stripe-live-validate.sh",
     "stripe:validate:live": "bash scripts/stripe-live-validate.sh",
     "ops:daily-report": "bash scripts/ops-daily-report.sh",

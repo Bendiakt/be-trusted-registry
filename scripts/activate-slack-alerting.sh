@@ -15,15 +15,25 @@ if [[ "${SLACK_WEBHOOK_URL}" != https://hooks.slack.com/services/* ]]; then
   exit 1
 fi
 
+if [[ "${SLACK_WEBHOOK_URL}" == *"/XXX/YYY/ZZZ"* ]]; then
+  echo "FAIL: placeholder webhook detected (XXX/YYY/ZZZ)"
+  exit 1
+fi
+
+echo "Sending Slack test message..."
+SLACK_RESP="$(curl -sS -X POST "${SLACK_WEBHOOK_URL}" \
+  -H "Content-Type: application/json" \
+  -d "{\"text\":\"be-registry: validating Slack webhook before activation.\"}")"
+
+if [[ "${SLACK_RESP}" != "ok" ]]; then
+  echo "FAIL: Slack webhook test failed: ${SLACK_RESP}"
+  exit 1
+fi
+
 echo "Installing monitor LaunchAgent with Slack..."
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL}" bash "${ROOT_DIR}/scripts/install-monitor-launchagent.sh"
 
 echo "Installing DB audit LaunchAgent with Slack..."
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL}" bash "${ROOT_DIR}/scripts/install-audit-launchagent.sh"
-
-echo "Sending Slack test message..."
-curl -sS -X POST "${SLACK_WEBHOOK_URL}" \
-  -H "Content-Type: application/json" \
-  -d "{\"text\":\"be-registry: Slack alerting is now active for monitor + db audit.\"}" >/dev/null
 
 echo "PASS: Slack alerting activated"

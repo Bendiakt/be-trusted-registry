@@ -8,6 +8,8 @@ MAX_RETRIES="${MAX_RETRIES:-3}"
 RETRY_DELAY_SEC="${RETRY_DELAY_SEC:-10}"
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
 NTFY_TOPIC="${NTFY_TOPIC:-}"
+DRY_RUN="${DRY_RUN:-0}"
+FORCE_UNHEALTHY="${FORCE_UNHEALTHY:-0}"
 
 notify() {
   local title="$1"
@@ -29,7 +31,20 @@ notify() {
 }
 
 health_ok() {
+  if [[ "${FORCE_UNHEALTHY}" == "1" ]]; then
+    return 1
+  fi
   curl -fsS --max-time 10 "${BACKEND_URL}/api/health" >/dev/null
+}
+
+safe_action() {
+  local action="$1"
+  shift
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    echo "[failover] DRY_RUN: would run railway ${action} $*"
+    return 0
+  fi
+  NODE_TLS_REJECT_UNAUTHORIZED=0 "${ROOT_DIR}/scripts/railway-cli.sh" "${action}" "$@" >/dev/null
 }
 
 echo "[failover] checking health: ${BACKEND_URL}/api/health"
@@ -39,7 +54,7 @@ if health_ok; then
 fi
 
 echo "[failover] FAIL: service unhealthy, trying restart"
-NODE_TLS_REJECT_UNAUTHORIZED=0 "${ROOT_DIR}/scripts/railway-cli.sh" restart --service "${SERVICE_NAME}" >/dev/null
+safe_action restart --service "${SERVICE_NAME}"
 sleep "${RETRY_DELAY_SEC}"
 
 for i in $(seq 1 "${MAX_RETRIES}"); do
@@ -53,7 +68,7 @@ for i in $(seq 1 "${MAX_RETRIES}"); do
 done
 
 echo "[failover] still unhealthy, trying redeploy"
-NODE_TLS_REJECT_UNAUTHORIZED=0 "${ROOT_DIR}/scripts/railway-cli.sh" redeploy --service "${SERVICE_NAME}" --yes >/dev/null
+safe_action redeploy --service "${SERVICE_NAME}" --yes
 sleep "${RETRY_DELAY_SEC}"
 
 for i in $(seq 1 "${MAX_RETRIES}"); do
