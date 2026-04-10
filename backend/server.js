@@ -6,7 +6,20 @@ const jwt = require('jsonwebtoken')
 const { query, initDb } = require('./db')
 
 const app = express()
-app.use(cors())
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'https://be-trusted-registry-production.up.railway.app'
+]
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('CORS not allowed'))
+    }
+  },
+  credentials: true
+}))
 
 // --- Metrics counters (initialised at startup) ---
 const startTime = Date.now()
@@ -39,7 +52,11 @@ app.use((req, res, next) => {
   return jsonMiddleware(req, res, next)
 })
 
-const SECRET = process.env.JWT_SECRET || 'be-registry-secret-2024'
+const SECRET = process.env.JWT_SECRET
+if (!SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is required')
+  process.exit(1)
+}
 
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1]
