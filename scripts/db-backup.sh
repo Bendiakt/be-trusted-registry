@@ -13,8 +13,25 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 
 if ! command -v pg_dump >/dev/null 2>&1; then
-  echo "FAIL: pg_dump not found"
-  echo "Install PostgreSQL client tools (macOS: brew install libpq && brew link --force libpq)"
+  # Try libpq from Homebrew if not in PATH
+  if [[ -x "/usr/local/opt/libpq/bin/pg_dump" ]]; then
+    export PATH="/usr/local/opt/libpq/bin:$PATH"
+  elif [[ -x "/opt/homebrew/opt/libpq/bin/pg_dump" ]]; then
+    export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+  else
+    echo "FAIL: pg_dump not found"
+    echo "Install PostgreSQL client tools (macOS: brew install libpq && brew link --force libpq)"
+    exit 1
+  fi
+fi
+
+# Detect Railway internal hostname — not accessible from outside Railway network
+if [[ "${DATABASE_URL}" == *"railway.internal"* ]]; then
+  echo "WARNING: DATABASE_URL points to postgres.railway.internal"
+  echo "This hostname is only reachable inside the Railway private network."
+  echo "To run backups from your local machine, activate the public endpoint:"
+  echo "  Railway Dashboard → PostgreSQL service → Settings → Networking → Enable Public Networking"
+  echo "  Then: DATABASE_URL='<public_url>' npm run db:backup"
   exit 1
 fi
 
