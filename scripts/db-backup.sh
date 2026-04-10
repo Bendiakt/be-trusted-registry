@@ -37,3 +37,17 @@ SIZE="$(du -h "${OUT_FILE}" | awk '{print $1}')"
 echo "PASS: backup created"
 echo "file=${OUT_FILE}"
 echo "size=${SIZE}"
+
+# Rotate old backups (keep most recent KEEP_BACKUPS, default 7)
+KEEP="${KEEP_BACKUPS:-7}"
+if [[ "${KEEP}" -gt 0 ]]; then
+  # list dumps oldest first, delete all but the last $KEEP
+  mapfile -t old_dumps < <(ls -1t "${OUT_DIR}"/be-registry-*.dump 2>/dev/null | tail -n +$((KEEP + 1)))
+  if [[ "${#old_dumps[@]}" -gt 0 ]]; then
+    echo "Rotating ${#old_dumps[@]} old dump(s) (keeping last ${KEEP})"
+    for f in "${old_dumps[@]}"; do
+      rm -f "${f}"
+      echo "  removed: $(basename "${f}")"
+    done
+  fi
+fi
