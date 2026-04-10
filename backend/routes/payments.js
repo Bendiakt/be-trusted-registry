@@ -77,11 +77,19 @@ router.post('/create-checkout-session', async (req, res) => {
 
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature']
+
+  // Early guard: stripe-signature header must be present
+  if (!sig) {
+    console.warn('Webhook rejected: missing stripe-signature header', {
+      timestamp: new Date().toISOString(),
+      path: '/api/payments/webhook',
+      reason: 'missing_header'
+    })
+    return res.status(400).send('Missing stripe-signature header')
+  }
+
   let event
   try {
-    if (!sig) {
-      return res.status(400).send('Missing Stripe signature')
-    }
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
       return res.status(500).send('Missing STRIPE_WEBHOOK_SECRET')
     }
@@ -92,6 +100,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       stripeEventType: event.type,
     }))
   } catch (err) {
+    console.warn('Webhook signature verification failed', {
+      timestamp: new Date().toISOString(),
+      error: err.message,
+      code: err.code
+    })
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
   try {
@@ -100,6 +113,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       const { planId, companyId } = session.metadata || {}
       console.log(JSON.stringify({
         event: 'stripe.payment.confirmed',
+        message: 'webhook event received',
         stripeEventId: event.id,
         sessionId: session.id,
         planId,
