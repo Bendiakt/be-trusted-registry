@@ -18,6 +18,7 @@
     "db:backup:cron:install": "bash scripts/install-backup-cron.sh",
     "db:backup:launchagent:install": "bash scripts/install-backup-launchagent.sh",
     "db:backup:launchagent:run": "bash scripts/run-backup-launchagent-now.sh",
+    "db:audit:cycle": "bash scripts/db-audit-cycle.sh",
     "db:restore": "bash scripts/db-restore.sh",
     "db:restore:dry-run": "bash scripts/db-restore-dry-run.sh"
   },
