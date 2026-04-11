@@ -8,12 +8,13 @@ const { computeTrustScore } = require('../lib/trustScore')
 const METRICS_QUERY_TIMEOUT_MS = 8000
 
 const safeMetricQuery = async (text, values = []) => {
-  const res = await getPool().query({
-    text,
-    values,
-    statement_timeout: METRICS_QUERY_TIMEOUT_MS,
-  })
-  return res
+  const timeoutP = new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error(`Query timed out after ${METRICS_QUERY_TIMEOUT_MS}ms`)),
+      METRICS_QUERY_TIMEOUT_MS,
+    ),
+  )
+  return Promise.race([getPool().query({ text, values }), timeoutP])
 }
 
 const settledValue = (result, fallback) => {
