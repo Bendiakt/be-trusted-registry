@@ -8,6 +8,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': 'http://localhost:5000',
+      '/ws': { target: 'ws://localhost:5000', ws: true },
     },
   },
   preview: {

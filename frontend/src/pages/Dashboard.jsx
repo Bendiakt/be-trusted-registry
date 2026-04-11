@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
+import MetricsDashboard from '../components/MetricsDashboard'
 
 const PLANS = [
   { id: 'level1', name: 'Bronze Certification', price: '$490', features: ['Basic registry listing', 'Certification badge', 'Email verification', 'Valid 12 months'] },
@@ -98,6 +99,7 @@ export default function Dashboard() {
           <TabBtn id="overview" label="Overview" />
           <TabBtn id="register" label="Register Company" />
           <TabBtn id="pricing" label="Pricing &amp; Upgrade" />
+          <TabBtn id="metrics" label="Metrics" />
         </div>
 
         {tab === 'overview' && (
@@ -183,6 +185,12 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {tab === 'metrics' && (
+          <div style={G.card}>
+            <MetricsDashboard />
           </div>
         )}
       </main>

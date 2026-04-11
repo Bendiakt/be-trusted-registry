@@ -3,6 +3,11 @@ const express = require('express')
 const cors = require('cors')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const http = require('http')
+const { WebSocketServer } = require('ws')
+const { hashForIntegrity } = require('./lib/encryption')
+const { checkFraud } = require('./lib/fraudDetection')
+const metricsRouter = require('./routes/metrics')
 const { query, initDb } = require('./db')
 
 const app = express()
@@ -110,6 +115,16 @@ const mapMissionRow = (row) => {
 const { router: paymentsRouter } = require('./routes/payments')
 app.post('/api/payments/create-checkout-session', auth)
 app.use('/api/payments', paymentsRouter)
+app.use('/api/metrics', metricsRouter)
+
+// Immutable audit trail helper — fire-and-forget (never blocks response)
+const logAudit = (userId, action, resource, ip, payload) => {
+  const hash = hashForIntegrity(payload || '')
+  query(
+    'INSERT INTO audit_log (user_id, action, resource, ip_address, payload_hash) VALUES ($1, $2, $3, $4, $5)',
+    [userId || null, action, resource || null, ip || null, hash],
+  ).catch(e => console.error('audit_log write failed:', e.message))
+}
 
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -125,7 +140,9 @@ app.post('/api/auth/register', async (req, res) => {
       [name, email, hash, role || 'company']
     )
 
-    res.json({ message: 'Registered successfully' })
+  res.json({ message: 'Registered successfully' })
+  logAudit(null, 'user_register', 'users', req.ip, { email, role: role || 'company' })
+  await checkFraud({ userId: null, email, ip: req.ip, action: 'user_register' }).catch(() => {})
   } catch (err) {
     console.error('Register error:', err.message)
     res.status(500).json({ error: 'Registration failed' })
@@ -142,8 +159,9 @@ app.post('/api/auth/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) return res.status(400).json({ error: 'Invalid credentials' })
 
-    const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, SECRET, { expiresIn: '7d' })
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, SECRET, { expiresIn: '7d' })
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  logAudit(user.id, 'user_login', 'users', req.ip, { email })
   } catch (err) {
     console.error('Login error:', err.message)
     res.status(500).json({ error: 'Login failed' })
@@ -208,6 +226,8 @@ app.post('/api/companies/register', auth, async (req, res) => {
     )
 
     res.json({ company: mapCompanyRow(result.rows[0]) })
+    logAudit(req.user.id, 'company_profile_update', 'companies', req.ip, { name, industry, country })
+    checkFraud({ userId: req.user.id, email: req.user.email, ip: req.ip, action: 'company_profile_update', companyId: result.rows[0].id }).catch(() => {})
   } catch (err) {
     console.error('Register company error:', err.message)
     res.status(500).json({ error: 'Save failed' })
@@ -378,10 +398,63 @@ app.get('/metrics/json', (req, res) => {
 
 const PORT = process.env.PORT || 8080
 
+const server = http.createServer(app)
+const wss = new WebSocketServer({ server, path: '/ws/metrics' })
+
+const getBusinessMetrics = async () => {
+  try {
+    const [usersRes, companiesRes, certifiedRes, alertsRes, avgScoreRes, revenueRes] = await Promise.all([
+      query('SELECT COUNT(*) FROM users'),
+      query('SELECT COUNT(*) FROM companies'),
+      query('SELECT COUNT(*) FROM companies WHERE certification_level > 0'),
+      query('SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE'),
+      query("SELECT ROUND(AVG(score), 1) AS avg FROM trust_scores WHERE computed_at > NOW() - INTERVAL '7 days'"),
+      query(`SELECT COALESCE(SUM(CASE certification_level WHEN 1 THEN 490 WHEN 2 THEN 990 WHEN 3 THEN 2490 ELSE 0 END), 0) AS total FROM companies WHERE certification_level > 0`),
+    ])
+    const usersTotal = parseInt(usersRes.rows[0].count, 10)
+    const companiesTotal = parseInt(companiesRes.rows[0].count, 10)
+    const certifiedTotal = parseInt(certifiedRes.rows[0].count, 10)
+    return {
+      timestamp: new Date().toISOString(),
+      users_total: usersTotal,
+      companies_total: companiesTotal,
+      certified_total: certifiedTotal,
+      cert_rate_pct: companiesTotal > 0 ? Math.round((certifiedTotal / companiesTotal) * 100) : 0,
+      fraud_alerts_active: parseInt(alertsRes.rows[0].count, 10),
+      avg_trust_score: parseFloat(avgScoreRes.rows[0].avg || 0),
+      revenue_total_usd: parseFloat(revenueRes.rows[0].total),
+      requests_total: requestCount,
+    }
+  } catch (e) {
+    console.error('getBusinessMetrics error:', e.message)
+    return null
+  }
+}
+
+wss.on('connection', (ws) => {
+  getBusinessMetrics().then(data => {
+    if (data && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'metrics', data }))
+    }
+  }).catch(() => {})
+})
+
 const startServer = async () => {
   try {
     await initDb()
-    app.listen(PORT, () => console.log(`Backend running on port ${PORT}`))
+    server.listen(PORT, () => {
+      console.log(`Backend running on port ${PORT}`)
+      // Broadcast business metrics every 10 s to all connected WS clients
+      setInterval(async () => {
+        if (wss.clients.size === 0) return
+        const data = await getBusinessMetrics()
+        if (!data) return
+        const msg = JSON.stringify({ type: 'metrics', data })
+        for (const ws of wss.clients) {
+          if (ws.readyState === 1) ws.send(msg)
+        }
+      }, 10_000)
+    })
   } catch (err) {
     console.error('Failed to initialize backend:', err.message)
     process.exit(1)

@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const Stripe = require('stripe')
 const { query } = require('../db')
+const { checkFraud } = require('../lib/fraudDetection')
 
 let _stripe = null
 const getStripe = () => {
@@ -122,6 +123,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         currency: session.currency,
       }))
 
+      let companyUserId = null
+
       // Update company certification level
       if (companyId) {
         const levelMap = { level1: 1, level2: 2, level3: 3 }
@@ -134,6 +137,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
              WHERE id = $2`,
             [newLevel, parseInt(companyId, 10)]
           )
+
+          const companyResult = await query('SELECT user_id FROM companies WHERE id = $1 LIMIT 1', [parseInt(companyId, 10)])
+          companyUserId = companyResult.rows[0]?.user_id || null
+
           console.log(JSON.stringify({
             event: 'company.certification.upgraded',
             companyId,
@@ -142,6 +149,37 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           }))
         }
       }
+
+      // Stripe Radar + dispute risk signals (if payment_intent is available)
+      let stripeRiskLevel = null
+      let stripeDisputed = false
+      if (session.payment_intent) {
+        try {
+          const pi = await getStripe().paymentIntents.retrieve(session.payment_intent, { expand: ['latest_charge'] })
+          const latestCharge = pi.latest_charge
+          stripeRiskLevel = latestCharge?.outcome?.risk_level || null
+          stripeDisputed = Boolean(latestCharge?.disputed)
+          console.log(JSON.stringify({
+            event: 'stripe.risk.signal',
+            stripeEventId: event.id,
+            paymentIntent: session.payment_intent,
+            riskLevel: stripeRiskLevel,
+            disputed: stripeDisputed,
+          }))
+        } catch (riskErr) {
+          console.warn('Unable to fetch Stripe risk signal:', riskErr.message)
+        }
+      }
+
+      await checkFraud({
+        userId: companyUserId,
+        companyId: companyId ? parseInt(companyId, 10) : null,
+        action: 'stripe_webhook',
+        stripeRiskLevel,
+        stripeDisputed,
+      }).catch((fraudErr) => {
+        console.error('Stripe fraud check error:', fraudErr.message)
+      })
     }
     res.json({ received: true })
   } catch (err) {
