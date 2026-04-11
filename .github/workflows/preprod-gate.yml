@@ -71,11 +71,6 @@ jobs:
             sleep 1
           done
 
-          cat /tmp/preprod-gate-health.json | python3 -c "
-import json, sys
-obj = json.load(sys.stdin)
-assert obj.get('status') == 'ok', f'health not ok: {obj}'
-print('PASS: preprod gate health is ok')
-"
+          python3 -c "import json; d=json.load(open('/tmp/preprod-gate-health.json')); assert d.get('status')=='ok', f'health not ok: {d}'; print('PASS: preprod gate health is ok')"
 
           kill "$APP_PID"
