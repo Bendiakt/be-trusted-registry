@@ -6,7 +6,13 @@
     "start": "node server.js",
     "dev": "node server.js",
     "migrate": "node scripts/migrate.js",
-    "start:preprod": "npm run migrate && node server.js"
+    "start:preprod": "npm run migrate && node server.js",
+    "alerts:slack:activate": "bash ../scripts/activate-slack-alerting.sh",
+    "monitoring:stack:up": "docker compose -f ../monitoring/docker-compose.yml up -d",
+    "monitoring:stack:down": "docker compose -f ../monitoring/docker-compose.yml down",
+    "failover:auto": "bash ../scripts/auto-failover.sh",
+    "db:audit:launchagent:install": "bash ../scripts/install-audit-launchagent.sh",
+    "db:audit:launchagent:run": "bash ../scripts/run-audit-launchagent-now.sh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
