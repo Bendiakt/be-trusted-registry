@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "start:preprod": "npm run migrate && node server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
