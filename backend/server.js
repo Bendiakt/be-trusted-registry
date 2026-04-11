@@ -441,20 +441,34 @@ wss.on('connection', (ws) => {
 
 const startServer = async () => {
   try {
-    await initDb()
-    server.listen(PORT, () => {
-      console.log(`Backend running on port ${PORT}`)
-      // Broadcast business metrics every 10 s to all connected WS clients
-      setInterval(async () => {
-        if (wss.clients.size === 0) return
-        const data = await getBusinessMetrics()
-        if (!data) return
-        const msg = JSON.stringify({ type: 'metrics', data })
-        for (const ws of wss.clients) {
-          if (ws.readyState === 1) ws.send(msg)
-        }
-      }, 10_000)
+    // Listen first — healthcheck must respond immediately.
+    await new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(PORT, () => {
+        server.removeListener('error', reject)
+        resolve()
+      })
     })
+    console.log(`Backend running on port ${PORT}`)
+
+    // Init DB after port is bound so healthcheck can always respond.
+    try {
+      await initDb()
+      console.log('Database initialized')
+    } catch (dbErr) {
+      console.error('Database init error (non-fatal):', dbErr.message)
+    }
+
+    // Broadcast business metrics every 10 s to all connected WS clients.
+    setInterval(async () => {
+      if (wss.clients.size === 0) return
+      const data = await getBusinessMetrics()
+      if (!data) return
+      const msg = JSON.stringify({ type: 'metrics', data })
+      for (const ws of wss.clients) {
+        if (ws.readyState === 1) ws.send(msg)
+      }
+    }, 10_000)
   } catch (err) {
     console.error('Failed to initialize backend:', err.message)
     process.exit(1)
