@@ -106,6 +106,12 @@ const initDb = async () => {
         snapshot_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `)
+
+    // Indexes for frequent metrics aggregations and latest snapshot lookup.
+    await query('CREATE INDEX IF NOT EXISTS idx_companies_certification_level ON companies(certification_level)')
+    await query('CREATE INDEX IF NOT EXISTS idx_fraud_alerts_resolved ON fraud_alerts(resolved)')
+    await query('CREATE INDEX IF NOT EXISTS idx_trust_scores_computed_at ON trust_scores(computed_at DESC)')
+    await query('CREATE INDEX IF NOT EXISTS idx_metrics_snapshot_id_desc ON metrics_snapshot(id DESC)')
   }
 
 module.exports = {

@@ -2,8 +2,24 @@
 
 const express = require('express')
 const router = express.Router()
-const { query } = require('../db')
+const { getPool, query } = require('../db')
 const { computeTrustScore } = require('../lib/trustScore')
+
+const METRICS_QUERY_TIMEOUT_MS = 8000
+
+const safeMetricQuery = async (text, values = []) => {
+  const res = await getPool().query({
+    text,
+    values,
+    statement_timeout: METRICS_QUERY_TIMEOUT_MS,
+  })
+  return res
+}
+
+const settledValue = (result, fallback) => {
+  if (!result || result.status !== 'fulfilled') return fallback
+  return result.value
+}
 
 /**
  * GET /api/metrics/business
@@ -20,15 +36,15 @@ router.get('/business', async (req, res) => {
       avgScoreRes,
       revenueRes,
       snapshotRes,
-    ] = await Promise.all([
-      query('SELECT COUNT(*) FROM users'),
-      query('SELECT COUNT(*) FROM companies'),
-      query('SELECT COUNT(*) FROM companies WHERE certification_level > 0'),
-      query('SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE'),
-      query(
+    ] = await Promise.allSettled([
+      safeMetricQuery('SELECT COUNT(*) FROM users'),
+      safeMetricQuery('SELECT COUNT(*) FROM companies'),
+      safeMetricQuery('SELECT COUNT(*) FROM companies WHERE certification_level > 0'),
+      safeMetricQuery('SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE'),
+      safeMetricQuery(
         "SELECT ROUND(AVG(score), 1) AS avg FROM trust_scores WHERE computed_at > NOW() - INTERVAL '7 days'",
       ),
-      query(`
+      safeMetricQuery(`
         SELECT COALESCE(SUM(
           CASE certification_level
             WHEN 1 THEN 490
@@ -40,21 +56,52 @@ router.get('/business', async (req, res) => {
         FROM companies
         WHERE certification_level > 0
       `),
-      query(
-        'SELECT * FROM metrics_snapshot ORDER BY snapshot_at DESC LIMIT 1',
+      safeMetricQuery(
+        `SELECT users_count, companies_count, certified_count, fraud_alerts_count,
+                avg_trust_score, revenue_total, snapshot_at
+         FROM metrics_snapshot
+         ORDER BY id DESC
+         LIMIT 1`,
       ),
     ])
 
-    const usersTotal = parseInt(usersRes.rows[0].count, 10)
-    const companiesTotal = parseInt(companiesRes.rows[0].count, 10)
-    const certifiedTotal = parseInt(certifiedRes.rows[0].count, 10)
-    const fraudAlerts = parseInt(alertsRes.rows[0].count, 10)
-    const avgTrustScore = parseFloat(avgScoreRes.rows[0].avg || 0)
-    const revenueTotal = parseFloat(revenueRes.rows[0].total)
-    const prev = snapshotRes.rows[0] || null
+    const degraded = [
+      usersRes,
+      companiesRes,
+      certifiedRes,
+      alertsRes,
+      avgScoreRes,
+      revenueRes,
+      snapshotRes,
+    ].some((r) => r.status === 'rejected')
+
+    if (degraded) {
+      const failed = [usersRes, companiesRes, certifiedRes, alertsRes, avgScoreRes, revenueRes, snapshotRes]
+        .map((r, idx) => ({ r, idx }))
+        .filter(({ r }) => r.status === 'rejected')
+        .map(({ r, idx }) => `q${idx + 1}:${r.reason?.message || String(r.reason)}`)
+      console.error('Business metrics degraded response:', failed.join(' | '))
+    }
+
+    const users = settledValue(usersRes, { rows: [{ count: '0' }] })
+    const companies = settledValue(companiesRes, { rows: [{ count: '0' }] })
+    const certified = settledValue(certifiedRes, { rows: [{ count: '0' }] })
+    const alerts = settledValue(alertsRes, { rows: [{ count: '0' }] })
+    const avgScore = settledValue(avgScoreRes, { rows: [{ avg: 0 }] })
+    const revenue = settledValue(revenueRes, { rows: [{ total: 0 }] })
+    const snapshot = settledValue(snapshotRes, { rows: [] })
+
+    const usersTotal = parseInt(users.rows[0].count, 10)
+    const companiesTotal = parseInt(companies.rows[0].count, 10)
+    const certifiedTotal = parseInt(certified.rows[0].count, 10)
+    const fraudAlerts = parseInt(alerts.rows[0].count, 10)
+    const avgTrustScore = parseFloat(avgScore.rows[0].avg || 0)
+    const revenueTotal = parseFloat(revenue.rows[0].total)
+    const prev = snapshot.rows[0] || null
 
     res.json({
       timestamp: new Date().toISOString(),
+      degraded,
       users_total: usersTotal,
       companies_total: companiesTotal,
       certified_total: certifiedTotal,
@@ -77,7 +124,7 @@ router.get('/business', async (req, res) => {
         : null,
     })
   } catch (err) {
-    console.error('Business metrics error:', err.message)
+    console.error('Business metrics error:', err)
     res.status(500).json({ error: 'Metrics unavailable' })
   }
 })
