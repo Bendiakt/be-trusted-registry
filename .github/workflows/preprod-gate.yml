@@ -1,0 +1,81 @@
+name: Preprod Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why you are triggering this run
+        required: false
+        default: manual verification
+  pull_request:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - .github/workflows/preprod-gate.yml
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - .github/workflows/preprod-gate.yml
+
+jobs:
+  preprod-gate:
+    name: Preprod Gate / migrate-before-boot
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    env:
+      DATABASE_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+      JWT_SECRET: ${{ secrets.PREPROD_JWT_SECRET }}
+      FRONTEND_URL: https://preprod.example.com
+      PORT: 8080
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          [[ -n "${DATABASE_URL}" ]] || (echo "Missing secret: PREPROD_DATABASE_URL" && exit 1)
+          [[ -n "${JWT_SECRET}" ]] || (echo "Missing secret: PREPROD_JWT_SECRET" && exit 1)
+          echo "Secrets present"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Apply DB migrations (preprod)
+        working-directory: backend
+        run: npm run migrate
+
+      - name: Start backend after migration and health-check
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          npm run start:preprod > /tmp/preprod-gate-backend.log 2>&1 &
+          APP_PID=$!
+
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 2 "http://127.0.0.1:${PORT}/api/health" >/tmp/preprod-gate-health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          cat /tmp/preprod-gate-health.json | python3 -c "
+import json, sys
+obj = json.load(sys.stdin)
+assert obj.get('status') == 'ok', f'health not ok: {obj}'
+print('PASS: preprod gate health is ok')
+"
+
+          kill "$APP_PID"
