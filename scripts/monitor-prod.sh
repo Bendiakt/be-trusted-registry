@@ -69,6 +69,26 @@ PY
 
 echo "PASS: production monitoring baseline is healthy"
 
+echo "Checking readiness probe"
+ready_http="$(curl -sS -o /tmp/monitor_ready_body.txt -w "%{http_code}" "${backend}/api/health/ready")"
+ready_body="$(cat /tmp/monitor_ready_body.txt)"
+echo "Readiness HTTP: ${ready_http}  body: ${ready_body}"
+if [[ "${ready_http}" != "200" ]]; then
+  echo "FAIL: /api/health/ready returned ${ready_http} — DB may be unreachable"
+  exit 1
+fi
+python3 - "${ready_body}" << 'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+if not data.get("ready"):
+    print(f"FAIL: readiness probe ready=false — {data}")
+    sys.exit(1)
+if data.get("db") != "ok":
+    print(f"FAIL: readiness probe db != ok — {data}")
+    sys.exit(1)
+print("PASS: readiness probe reports ready=true, db=ok")
+PY
+
 echo "Checking business metrics endpoint"
 business_with_time="$(curl -sS -w "\n%{http_code} %{time_total}" "${backend}/api/metrics/business")"
 business_body="$(echo "${business_with_time}" | head -n 1)"

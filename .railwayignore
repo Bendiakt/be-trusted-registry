@@ -1,0 +1,30 @@
+# Files and directories excluded from Railway deployments.
+# This prevents accidental uploads of sensitive or non-backend files
+# when running `railway up` from the repository root.
+
+# Version control
+.git/
+.github/
+
+# Frontend sources (built output is included via railway.toml buildCommand)
+frontend/node_modules/
+frontend/.vite/
+
+# Local and test artefacts
+backups/
+monitoring/
+postgres-recovery/
+scripts/
+*.sh
+
+# Local environment files — never shipped to Railway
+.env
+backend/.env
+
+# Logs and temporaries
+*.log
+tmp/
+.DS_Store
+
+# Documentation
+*.md
