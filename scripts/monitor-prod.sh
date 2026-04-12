@@ -4,6 +4,7 @@ set -euo pipefail
 backend="${BACKEND_URL:-https://be-trusted-registry-production.up.railway.app}"
 backend="${backend%/}"
 max_ms="${MAX_HEALTH_MS:-1500}"
+max_business_metrics_ms="${MAX_BUSINESS_METRICS_MS:-1000}"
 run_stripe_check="${RUN_STRIPE_CHECK:-1}"
 stripe_check_mode="${STRIPE_CHECK_MODE:-live}"
 
@@ -67,6 +68,51 @@ print(f"Snapshot: env={data.get('env')} node={data.get('node')} uptimeSec={data.
 PY
 
 echo "PASS: production monitoring baseline is healthy"
+
+echo "Checking business metrics endpoint"
+business_with_time="$(curl -sS -w "\n%{http_code} %{time_total}" "${backend}/api/metrics/business")"
+business_body="$(echo "${business_with_time}" | head -n 1)"
+business_status_line="$(echo "${business_with_time}" | tail -n 1)"
+business_http_code="$(echo "${business_status_line}" | awk '{print $1}')"
+business_time_total="$(echo "${business_status_line}" | awk '{print $2}')"
+business_latency_ms="$(python3 - "${business_time_total}" << 'PY'
+import sys
+print(int(float(sys.argv[1]) * 1000))
+PY
+)"
+
+echo "Business metrics HTTP: ${business_http_code}"
+echo "Business metrics latency: ${business_latency_ms}ms"
+
+if [[ "${business_http_code}" != "200" ]]; then
+  echo "FAIL: /api/metrics/business did not return HTTP 200"
+  exit 1
+fi
+
+python3 - << 'PY' "${business_body}" "${max_business_metrics_ms}" "${business_latency_ms}"
+import json
+import sys
+
+body = sys.argv[1]
+max_ms = int(sys.argv[2])
+latency_ms = int(sys.argv[3])
+
+try:
+    data = json.loads(body)
+except Exception as exc:
+    print(f"FAIL: business metrics payload is not valid JSON: {exc}")
+    sys.exit(1)
+
+if data.get("degraded") is not False:
+    print(f"FAIL: business metrics degraded flag is {data.get('degraded')}")
+    sys.exit(1)
+
+if latency_ms > max_ms:
+    print(f"FAIL: business metrics latency too high: {latency_ms}ms > {max_ms}ms")
+    sys.exit(1)
+
+print("PASS: business metrics degraded=false and latency threshold respected")
+PY
 
 if [[ "${run_stripe_check}" == "1" ]]; then
     echo "Running Stripe end-to-end check"
