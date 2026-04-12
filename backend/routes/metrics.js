@@ -4,17 +4,39 @@ const express = require('express')
 const router = express.Router()
 const { getPool, query } = require('../db')
 const { computeTrustScore } = require('../lib/trustScore')
+const { incMetricsDegradedTotal, incMetricsQueryTimeoutTotal } = require('../lib/runtimeMetrics')
 
 const METRICS_QUERY_TIMEOUT_MS = 8000
 
-const safeMetricQuery = async (text, values = []) => {
-  const timeoutP = new Promise((_, reject) =>
-    setTimeout(
-      () => reject(new Error(`Query timed out after ${METRICS_QUERY_TIMEOUT_MS}ms`)),
-      METRICS_QUERY_TIMEOUT_MS,
-    ),
-  )
-  return Promise.race([getPool().query({ text, values }), timeoutP])
+const safeMetricQuery = async (label, text, values = []) => {
+  const startedAt = Date.now()
+  let timeoutHandle
+  const timeoutP = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      const err = new Error(`Query timed out after ${METRICS_QUERY_TIMEOUT_MS}ms`)
+      err.code = 'METRICS_QUERY_TIMEOUT'
+      err.label = label
+      reject(err)
+    }, METRICS_QUERY_TIMEOUT_MS)
+  })
+
+  try {
+    return await Promise.race([getPool().query({ text, values }), timeoutP])
+  } catch (err) {
+    if (err && err.code === 'METRICS_QUERY_TIMEOUT') {
+      incMetricsQueryTimeoutTotal()
+      console.error(JSON.stringify({
+        event: 'metrics_query_timeout',
+        endpoint: '/api/metrics/business',
+        label,
+        timeoutMs: METRICS_QUERY_TIMEOUT_MS,
+        elapsedMs: Date.now() - startedAt,
+      }))
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
 }
 
 const settledValue = (result, fallback) => {
@@ -29,75 +51,65 @@ const settledValue = (result, fallback) => {
  */
 router.get('/business', async (req, res) => {
   try {
-    const [
-      usersRes,
-      companiesRes,
-      certifiedRes,
-      alertsRes,
-      avgScoreRes,
-      revenueRes,
-      snapshotRes,
-    ] = await Promise.allSettled([
-      safeMetricQuery('SELECT COUNT(*) FROM users'),
-      safeMetricQuery('SELECT COUNT(*) FROM companies'),
-      safeMetricQuery('SELECT COUNT(*) FROM companies WHERE certification_level > 0'),
-      safeMetricQuery('SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE'),
+    const [businessRes, snapshotRes] = await Promise.allSettled([
       safeMetricQuery(
-        "SELECT ROUND(AVG(score), 1) AS avg FROM trust_scores WHERE computed_at > NOW() - INTERVAL '7 days'",
+        'business_aggregates',
+        `SELECT
+           (SELECT COUNT(*) FROM users) AS users_total,
+           (SELECT COUNT(*) FROM companies) AS companies_total,
+           (SELECT COUNT(*) FROM companies WHERE certification_level > 0) AS certified_total,
+           (SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE) AS fraud_alerts_active,
+           (SELECT ROUND(AVG(score), 1)
+              FROM trust_scores
+             WHERE computed_at > NOW() - INTERVAL '7 days') AS avg_trust_score,
+           (SELECT COALESCE(SUM(
+             CASE certification_level
+               WHEN 1 THEN 490
+               WHEN 2 THEN 990
+               WHEN 3 THEN 2490
+               ELSE 0
+             END
+           ), 0)
+              FROM companies
+             WHERE certification_level > 0) AS revenue_total_usd`,
       ),
-      safeMetricQuery(`
-        SELECT COALESCE(SUM(
-          CASE certification_level
-            WHEN 1 THEN 490
-            WHEN 2 THEN 990
-            WHEN 3 THEN 2490
-            ELSE 0
-          END
-        ), 0) AS total
-        FROM companies
-        WHERE certification_level > 0
-      `),
       safeMetricQuery(
+        'latest_snapshot',
         `SELECT users_count, companies_count, certified_count, fraud_alerts_count,
                 avg_trust_score, revenue_total, snapshot_at
-         FROM metrics_snapshot
-         ORDER BY id DESC
-         LIMIT 1`,
+           FROM metrics_snapshot
+          ORDER BY id DESC
+          LIMIT 1`,
       ),
     ])
 
-    const degraded = [
-      usersRes,
-      companiesRes,
-      certifiedRes,
-      alertsRes,
-      avgScoreRes,
-      revenueRes,
-      snapshotRes,
-    ].some((r) => r.status === 'rejected')
+    const degraded = [businessRes, snapshotRes].some((r) => r.status === 'rejected')
 
     if (degraded) {
-      const failed = [usersRes, companiesRes, certifiedRes, alertsRes, avgScoreRes, revenueRes, snapshotRes]
+      incMetricsDegradedTotal()
+      const failed = [businessRes, snapshotRes]
         .map((r, idx) => ({ r, idx }))
         .filter(({ r }) => r.status === 'rejected')
         .map(({ r, idx }) => `q${idx + 1}:${r.reason?.message || String(r.reason)}`)
       console.error('Business metrics degraded response:', failed.join(' | '))
     }
 
-    const users = settledValue(usersRes, { rows: [{ count: '0' }] })
-    const companies = settledValue(companiesRes, { rows: [{ count: '0' }] })
-    const certified = settledValue(certifiedRes, { rows: [{ count: '0' }] })
-    const alerts = settledValue(alertsRes, { rows: [{ count: '0' }] })
-    const avgScore = settledValue(avgScoreRes, { rows: [{ avg: 0 }] })
-    const revenue = settledValue(revenueRes, { rows: [{ total: 0 }] })
+    const business = settledValue(businessRes, { rows: [{
+      users_total: '0',
+      companies_total: '0',
+      certified_total: '0',
+      fraud_alerts_active: '0',
+      avg_trust_score: 0,
+      revenue_total_usd: 0,
+    }] })
     const snapshot = settledValue(snapshotRes, { rows: [] })
 
-    const usersTotal = parseInt(users.rows[0].count, 10)
-    const companiesTotal = parseInt(companies.rows[0].count, 10)
-    const certifiedTotal = parseInt(certified.rows[0].count, 10)
-    const fraudAlerts = parseInt(alerts.rows[0].count, 10)
-    const avgTrustScore = parseFloat(avgScore.rows[0].avg || 0)
-    const revenueTotal = parseFloat(revenue.rows[0].total)
+    const usersTotal = parseInt(business.rows[0].users_total, 10)
+    const companiesTotal = parseInt(business.rows[0].companies_total, 10)
+    const certifiedTotal = parseInt(business.rows[0].certified_total, 10)
+    const fraudAlerts = parseInt(business.rows[0].fraud_alerts_active, 10)
+    const avgTrustScore = parseFloat(business.rows[0].avg_trust_score || 0)
+    const revenueTotal = parseFloat(business.rows[0].revenue_total_usd || 0)
     const prev = snapshot.rows[0] || null
 
     res.json({

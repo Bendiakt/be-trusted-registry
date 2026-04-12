@@ -7,6 +7,7 @@ const http = require('http')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
 const { checkFraud } = require('./lib/fraudDetection')
+const { getRuntimeMetrics } = require('./lib/runtimeMetrics')
 const metricsRouter = require('./routes/metrics')
 const { query, initDb } = require('./db')
 
@@ -334,6 +335,7 @@ app.get('/metrics', (req, res) => {
   const mem = process.memoryUsage()
   const avgLatencyMs = requestCount > 0 ? totalLatency / requestCount : 0
   const errorRatePct = requestCount > 0 ? (errorCount / requestCount) * 100 : 0
+  const runtimeMetrics = getRuntimeMetrics()
 
   const lines = [
     '# HELP process_uptime_seconds Total uptime of the process in seconds',
@@ -355,6 +357,14 @@ app.get('/metrics', (req, res) => {
     '# HELP http_error_rate_percent Percentage of requests that resulted in an error',
     '# TYPE http_error_rate_percent gauge',
     `http_error_rate_percent ${errorRatePct.toFixed(4)}`,
+    '',
+    '# HELP metrics_degraded_total Total number of degraded /api/metrics/business responses',
+    '# TYPE metrics_degraded_total counter',
+    `metrics_degraded_total ${runtimeMetrics.metricsDegradedTotal}`,
+    '',
+    '# HELP metrics_query_timeout_total Total number of query timeouts while computing metrics',
+    '# TYPE metrics_query_timeout_total counter',
+    `metrics_query_timeout_total ${runtimeMetrics.metricsQueryTimeoutTotal}`,
     '',
     '# HELP process_resident_memory_bytes Resident set size memory usage in bytes',
     '# TYPE process_resident_memory_bytes gauge',
@@ -378,12 +388,15 @@ app.get('/metrics/json', (req, res) => {
   const mem = process.memoryUsage()
   const avgLatencyMs = requestCount > 0 ? totalLatency / requestCount : 0
   const errorRatePct = requestCount > 0 ? (errorCount / requestCount) * 100 : 0
+  const runtimeMetrics = getRuntimeMetrics()
 
   res.json({
     timestamp: new Date().toISOString(),
     uptime_ms: Date.now() - startTime,
     requests_total: requestCount,
     errors_total: errorCount,
+    metrics_degraded_total: runtimeMetrics.metricsDegradedTotal,
+    metrics_query_timeout_total: runtimeMetrics.metricsQueryTimeoutTotal,
     latency_avg_ms: parseFloat(avgLatencyMs.toFixed(3)),
     error_rate_percent: parseFloat(errorRatePct.toFixed(4)),
     memory: {
@@ -403,26 +416,39 @@ const wss = new WebSocketServer({ server, path: '/ws/metrics' })
 
 const getBusinessMetrics = async () => {
   try {
-    const [usersRes, companiesRes, certifiedRes, alertsRes, avgScoreRes, revenueRes] = await Promise.all([
-      query('SELECT COUNT(*) FROM users'),
-      query('SELECT COUNT(*) FROM companies'),
-      query('SELECT COUNT(*) FROM companies WHERE certification_level > 0'),
-      query('SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE'),
-      query("SELECT ROUND(AVG(score), 1) AS avg FROM trust_scores WHERE computed_at > NOW() - INTERVAL '7 days'"),
-      query(`SELECT COALESCE(SUM(CASE certification_level WHEN 1 THEN 490 WHEN 2 THEN 990 WHEN 3 THEN 2490 ELSE 0 END), 0) AS total FROM companies WHERE certification_level > 0`),
-    ])
-    const usersTotal = parseInt(usersRes.rows[0].count, 10)
-    const companiesTotal = parseInt(companiesRes.rows[0].count, 10)
-    const certifiedTotal = parseInt(certifiedRes.rows[0].count, 10)
+    const combined = await query(
+      `SELECT
+         (SELECT COUNT(*) FROM users) AS users_total,
+         (SELECT COUNT(*) FROM companies) AS companies_total,
+         (SELECT COUNT(*) FROM companies WHERE certification_level > 0) AS certified_total,
+         (SELECT COUNT(*) FROM fraud_alerts WHERE resolved = FALSE) AS fraud_alerts_active,
+         (SELECT ROUND(AVG(score), 1)
+            FROM trust_scores
+           WHERE computed_at > NOW() - INTERVAL '7 days') AS avg_trust_score,
+         (SELECT COALESCE(SUM(
+           CASE certification_level
+             WHEN 1 THEN 490
+             WHEN 2 THEN 990
+             WHEN 3 THEN 2490
+             ELSE 0
+           END
+         ), 0)
+            FROM companies
+           WHERE certification_level > 0) AS revenue_total_usd`,
+    )
+    const row = combined.rows[0] || {}
+    const usersTotal = parseInt(row.users_total || '0', 10)
+    const companiesTotal = parseInt(row.companies_total || '0', 10)
+    const certifiedTotal = parseInt(row.certified_total || '0', 10)
     return {
       timestamp: new Date().toISOString(),
       users_total: usersTotal,
       companies_total: companiesTotal,
       certified_total: certifiedTotal,
       cert_rate_pct: companiesTotal > 0 ? Math.round((certifiedTotal / companiesTotal) * 100) : 0,
-      fraud_alerts_active: parseInt(alertsRes.rows[0].count, 10),
-      avg_trust_score: parseFloat(avgScoreRes.rows[0].avg || 0),
-      revenue_total_usd: parseFloat(revenueRes.rows[0].total),
+      fraud_alerts_active: parseInt(row.fraud_alerts_active || '0', 10),
+      avg_trust_score: parseFloat(row.avg_trust_score || 0),
+      revenue_total_usd: parseFloat(row.revenue_total_usd || 0),
       requests_total: requestCount,
     }
   } catch (e) {
@@ -456,7 +482,7 @@ const startServer = async () => {
       await initDb()
       console.log('Database initialized')
     } catch (dbErr) {
-      console.error('Database init error (non-fatal):', dbErr.message)
+      console.error('Database init error (non-fatal):', dbErr.code || '', dbErr.message || String(dbErr))
     }
 
     // Broadcast business metrics every 10 s to all connected WS clients.
