@@ -25,8 +25,19 @@ shift
 if [[ "$cmd" == "up" ]]; then
   has_service=0
   has_env=0
+  next_is_service=0
   for arg in "$@"; do
-    [[ "$arg" == "-s" || "$arg" == "--service" ]] && has_service=1
+    if [[ "$next_is_service" == "1" ]]; then
+      # Hard block: never allow deploying application code to the Postgres service.
+      if [[ "${arg,,}" == "postgres" || "${arg,,}" == "postgres-ssl" ]]; then
+        echo "ERROR: Blocked attempt to deploy application code to the '${arg}' service." >&2
+        echo "       The Postgres service must only use its official Docker image." >&2
+        echo "       If you need to restore the DB, use scripts/postgres-restore.sh." >&2
+        exit 1
+      fi
+      next_is_service=0
+    fi
+    [[ "$arg" == "-s" || "$arg" == "--service" ]] && has_service=1 && next_is_service=1
     [[ "$arg" == "-e" || "$arg" == "--environment" ]] && has_env=1
   done
 
