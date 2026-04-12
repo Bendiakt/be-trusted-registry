@@ -482,7 +482,7 @@ const startServer = async () => {
       await initDb()
       console.log('Database initialized')
     } catch (dbErr) {
-      console.error('Database init error (non-fatal):', dbErr.message)
+      console.error('Database init error (non-fatal):', dbErr.code || '', dbErr.message || String(dbErr))
     }
 
     // Broadcast business metrics every 10 s to all connected WS clients.
