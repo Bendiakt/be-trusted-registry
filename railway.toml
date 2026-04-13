@@ -10,7 +10,7 @@
 # configurés via le "Root Directory" de chaque service Railway.
 
 [build]
-builder = "NIXPACKS"
+builder = "RAILPACK"
 buildCommand = "npm install"
 
 [env]
