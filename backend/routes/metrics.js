@@ -2,11 +2,36 @@
 
 const express = require('express')
 const router = express.Router()
+const jwt = require('jsonwebtoken')
 const { getPool, query } = require('../db')
 const { computeTrustScore } = require('../lib/trustScore')
 const { incMetricsDegradedTotal, incMetricsQueryTimeoutTotal } = require('../lib/runtimeMetrics')
+const rateLimit = require('express-rate-limit')
 
-const METRICS_QUERY_TIMEOUT_MS = 8000
+// Rate limiter for the public /business endpoint (aggregated, no PII, but still throttled)
+const businessMetricsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+})
+
+// Auth middleware local to this router (avoids circular require with server.js)
+const requireAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET)
+    return next()
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+const METRICS_QUERY_TIMEOUT_MS = parseInt(process.env.METRICS_QUERY_TIMEOUT_MS || '1500', 10)
+const BUSINESS_CACHE_TTL_MS = parseInt(process.env.BUSINESS_CACHE_TTL_MS || '30000', 10)
+const BUSINESS_CACHE_REFRESH_MS = parseInt(process.env.BUSINESS_CACHE_REFRESH_MS || '60000', 10)
 
 const safeMetricQuery = async (label, text, values = []) => {
   const startedAt = Date.now()
@@ -44,14 +69,82 @@ const settledValue = (result, fallback) => {
   return result.value
 }
 
-/**
- * GET /api/metrics/business
- * Real-time business metrics from the database.
- * Public endpoint (no auth required — aggregated, no PII).
- */
-router.get('/business', async (req, res) => {
-  try {
-    const [businessRes, snapshotRes] = await Promise.allSettled([
+const emptyBusinessMetrics = () => ({
+  timestamp: new Date().toISOString(),
+  degraded: false,
+  users_total: 0,
+  companies_total: 0,
+  certified_total: 0,
+  cert_rate_pct: 0,
+  fraud_alerts_active: 0,
+  avg_trust_score: 0,
+  revenue_total_usd: 0,
+  prev_snapshot: null,
+})
+
+const buildPrevSnapshot = (row) => {
+  if (!row) return null
+  return {
+    users_count: row.users_count,
+    companies_count: row.companies_count,
+    certified_count: row.certified_count,
+    fraud_alerts_count: row.fraud_alerts_count,
+    avg_trust_score: parseFloat(row.avg_trust_score || 0),
+    revenue_total: parseFloat(row.revenue_total || 0),
+    snapshot_at: row.snapshot_at,
+  }
+}
+
+const buildBusinessPayload = ({ businessRow = null, snapshotRow = null, previousSnapshotRow = null, degraded = false }) => {
+  const current = businessRow || snapshotRow
+  if (!current) return { ...emptyBusinessMetrics(), degraded: true }
+
+  const usersTotal = parseInt(current.users_total ?? current.users_count ?? 0, 10) || 0
+  const companiesTotal = parseInt(current.companies_total ?? current.companies_count ?? 0, 10) || 0
+  const certifiedTotal = parseInt(current.certified_total ?? current.certified_count ?? 0, 10) || 0
+  const fraudAlerts = parseInt(current.fraud_alerts_active ?? current.fraud_alerts_count ?? 0, 10) || 0
+  const avgTrustScore = parseFloat(current.avg_trust_score || 0) || 0
+  const revenueTotal = parseFloat(current.revenue_total_usd ?? current.revenue_total ?? 0) || 0
+
+  return {
+    timestamp: new Date().toISOString(),
+    degraded,
+    users_total: usersTotal,
+    companies_total: companiesTotal,
+    certified_total: certifiedTotal,
+    cert_rate_pct: companiesTotal > 0 ? Math.round((certifiedTotal / companiesTotal) * 100) : 0,
+    fraud_alerts_active: fraudAlerts,
+    avg_trust_score: avgTrustScore,
+    revenue_total_usd: revenueTotal,
+    prev_snapshot: buildPrevSnapshot(businessRow ? snapshotRow : previousSnapshotRow),
+  }
+}
+
+const persistMetricsSnapshot = async (payload) => {
+  await query(
+    `INSERT INTO metrics_snapshot
+       (users_count, companies_count, certified_count, fraud_alerts_count, avg_trust_score, revenue_total)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      payload.users_total,
+      payload.companies_total,
+      payload.certified_total,
+      payload.fraud_alerts_active,
+      payload.avg_trust_score,
+      payload.revenue_total_usd,
+    ],
+  )
+}
+
+let businessMetricsCache = emptyBusinessMetrics()
+let businessMetricsCacheUpdatedAt = 0
+let businessMetricsRefreshPromise = null
+
+const refreshBusinessMetricsCache = async () => {
+  if (businessMetricsRefreshPromise) return businessMetricsRefreshPromise
+
+  businessMetricsRefreshPromise = (async () => {
+    const [businessRes, snapshotsRes] = await Promise.allSettled([
       safeMetricQuery(
         'business_aggregates',
         `SELECT
@@ -74,68 +167,106 @@ router.get('/business', async (req, res) => {
              WHERE certification_level > 0) AS revenue_total_usd`,
       ),
       safeMetricQuery(
-        'latest_snapshot',
+        'latest_snapshots',
         `SELECT users_count, companies_count, certified_count, fraud_alerts_count,
                 avg_trust_score, revenue_total, snapshot_at
            FROM metrics_snapshot
           ORDER BY id DESC
-          LIMIT 1`,
+          LIMIT 2`,
       ),
     ])
 
-    const degraded = [businessRes, snapshotRes].some((r) => r.status === 'rejected')
+    const snapshotRows = settledValue(snapshotsRes, { rows: [] }).rows
+    const latestSnapshot = snapshotRows[0] || null
+    const previousSnapshot = snapshotRows[1] || null
 
-    if (degraded) {
-      incMetricsDegradedTotal()
-      const failed = [businessRes, snapshotRes]
-        .map((r, idx) => ({ r, idx }))
-        .filter(({ r }) => r.status === 'rejected')
-        .map(({ r, idx }) => `q${idx + 1}:${r.reason?.message || String(r.reason)}`)
-      console.error('Business metrics degraded response:', failed.join(' | '))
+    if (businessRes.status === 'fulfilled') {
+      const payload = buildBusinessPayload({
+        businessRow: businessRes.value.rows[0] || null,
+        snapshotRow: latestSnapshot,
+        previousSnapshotRow: previousSnapshot,
+        degraded: false,
+      })
+      businessMetricsCache = payload
+      businessMetricsCacheUpdatedAt = Date.now()
+      persistMetricsSnapshot(payload).catch((err) => {
+        console.error('Metrics snapshot persist error:', err.message)
+      })
+      return payload
     }
 
-    const business = settledValue(businessRes, { rows: [{
-      users_total: '0',
-      companies_total: '0',
-      certified_total: '0',
-      fraud_alerts_active: '0',
-      avg_trust_score: 0,
-      revenue_total_usd: 0,
-    }] })
-    const snapshot = settledValue(snapshotRes, { rows: [] })
+    if (latestSnapshot) {
+      console.error('Business metrics live query failed, serving snapshot fallback:', businessRes.reason?.message || businessRes.reason)
+      businessMetricsCache = buildBusinessPayload({
+        snapshotRow: latestSnapshot,
+        previousSnapshotRow: previousSnapshot,
+        degraded: false,
+      })
+      businessMetricsCacheUpdatedAt = Date.now()
+      return businessMetricsCache
+    }
 
-    const usersTotal = parseInt(business.rows[0].users_total, 10)
-    const companiesTotal = parseInt(business.rows[0].companies_total, 10)
-    const certifiedTotal = parseInt(business.rows[0].certified_total, 10)
-    const fraudAlerts = parseInt(business.rows[0].fraud_alerts_active, 10)
-    const avgTrustScore = parseFloat(business.rows[0].avg_trust_score || 0)
-    const revenueTotal = parseFloat(business.rows[0].revenue_total_usd || 0)
-    const prev = snapshot.rows[0] || null
+    incMetricsDegradedTotal()
+    console.error('Business metrics unavailable: no live aggregates and no snapshot fallback')
+    businessMetricsCache = { ...emptyBusinessMetrics(), degraded: true }
+    businessMetricsCacheUpdatedAt = Date.now()
+    return businessMetricsCache
+  })().finally(() => {
+    businessMetricsRefreshPromise = null
+  })
 
-    res.json({
-      timestamp: new Date().toISOString(),
-      degraded,
-      users_total: usersTotal,
-      companies_total: companiesTotal,
-      certified_total: certifiedTotal,
-      cert_rate_pct: companiesTotal > 0
-        ? Math.round((certifiedTotal / companiesTotal) * 100)
-        : 0,
-      fraud_alerts_active: fraudAlerts,
-      avg_trust_score: isNaN(avgTrustScore) ? 0 : avgTrustScore,
-      revenue_total_usd: revenueTotal,
-      prev_snapshot: prev
-        ? {
-            users_count: prev.users_count,
-            companies_count: prev.companies_count,
-            certified_count: prev.certified_count,
-            fraud_alerts_count: prev.fraud_alerts_count,
-            avg_trust_score: parseFloat(prev.avg_trust_score),
-            revenue_total: parseFloat(prev.revenue_total),
-            snapshot_at: prev.snapshot_at,
-          }
-        : null,
+  return businessMetricsRefreshPromise
+}
+
+const softWait = (promise, timeoutMs) => new Promise((resolve) => {
+  let settled = false
+  const timer = setTimeout(() => {
+    if (!settled) resolve(null)
+  }, timeoutMs)
+
+  promise
+    .then((value) => {
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
     })
+    .catch(() => {
+      settled = true
+      clearTimeout(timer)
+      resolve(null)
+    })
+})
+
+refreshBusinessMetricsCache().catch((err) => {
+  console.error('Initial metrics cache warmup failed:', err.message)
+})
+
+const refreshInterval = setInterval(() => {
+  refreshBusinessMetricsCache().catch((err) => {
+    console.error('Scheduled metrics cache refresh failed:', err.message)
+  })
+}, BUSINESS_CACHE_REFRESH_MS)
+
+if (typeof refreshInterval.unref === 'function') refreshInterval.unref()
+
+/**
+ * GET /api/metrics/business
+ * Real-time business metrics from the database.
+ * Public endpoint (no auth required — aggregated, no PII).
+ */
+router.get('/business', businessMetricsLimiter, async (req, res) => {
+  try {
+    const cacheAgeMs = Date.now() - businessMetricsCacheUpdatedAt
+
+    if (!businessMetricsCacheUpdatedAt) {
+      await softWait(refreshBusinessMetricsCache(), 500)
+    } else if (cacheAgeMs > BUSINESS_CACHE_TTL_MS) {
+      refreshBusinessMetricsCache().catch((err) => {
+        console.error('Async business metrics refresh failed:', err.message)
+      })
+    }
+
+    res.json(businessMetricsCache)
   } catch (err) {
     console.error('Business metrics error:', err)
     res.status(500).json({ error: 'Metrics unavailable' })
@@ -193,7 +324,7 @@ router.post('/snapshot', async (req, res) => {
  * GET /api/metrics/trust/:userId
  * Compute + return the trust score for a user (auth required at route level).
  */
-router.get('/trust/:userId', async (req, res) => {
+router.get('/trust/:userId', requireAuth, async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10)
     if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' })
