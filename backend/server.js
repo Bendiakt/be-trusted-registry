@@ -1,3 +1,4 @@
+require('./instrument.js')
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
@@ -6,6 +7,7 @@ const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const rateLimit = require('express-rate-limit')
 const http = require('http')
+const Sentry = require('@sentry/node')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
 const { checkFraud } = require('./lib/fraudDetection')
@@ -33,13 +35,6 @@ app.use(cors({
   },
   credentials: true,
 }))
-
-app.use((err, req, res, next) => {
-  if (err && err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ error: 'CORS origin denied' })
-  }
-  return next(err)
-})
 
 // --- Metrics counters (initialised at startup) ---
 const startTime = Date.now()
@@ -462,6 +457,10 @@ app.get('/api/verify/:id', async (req, res) => {
   }
 })
 
+app.get('/debug-sentry', function mainHandler(req, res) {
+  throw new Error('My first Sentry error!')
+})
+
 app.get('/api/pac/missions', auth, async (req, res) => {
   try {
     if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
@@ -668,6 +667,16 @@ app.get('/metrics/json', (req, res) => {
     node_version: process.version,
     environment: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'unknown',
   })
+})
+
+// Must be registered after all controllers and before custom error middleware.
+Sentry.setupExpressErrorHandler(app)
+
+app.use((err, req, res, next) => {
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS origin denied' })
+  }
+  return next(err)
 })
 
 const PORT = process.env.PORT || 8080
