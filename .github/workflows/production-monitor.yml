@@ -1,0 +1,42 @@
+name: Production Monitor
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      run_stripe_check:
+        description: 'Run Stripe checkout session validation (live/test/any mode from script env)'
+        required: false
+        default: false
+        type: boolean
+      monitor_insecure_tls:
+        description: 'Use curl --insecure (for local TLS issues only)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: production-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Monitor production API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run production monitor script
+        env:
+          BACKEND_URL: https://be-trusted-registry-production.up.railway.app
+          MAX_HEALTH_MS: '1500'
+          MAX_BUSINESS_METRICS_MS: '1000'
+          CURL_MAX_TIME: '15'
+          CURL_RETRY_COUNT: '2'
+          RUN_STRIPE_CHECK: ${{ github.event_name == 'workflow_dispatch' && inputs.run_stripe_check || '0' }}
+          MONITOR_INSECURE_TLS: ${{ github.event_name == 'workflow_dispatch' && inputs.monitor_insecure_tls || '0' }}
+        run: |
+          bash scripts/monitor-prod.sh
