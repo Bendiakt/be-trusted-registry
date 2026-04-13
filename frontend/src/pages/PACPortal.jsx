@@ -8,30 +8,39 @@ export default function PACPortal() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [tab, setTab] = useState('missions')
   const navigate = useNavigate()
-  const token = localStorage.getItem('token')
 
   useEffect(() => {
-    api.get('/api/pac/missions', { headers: { Authorization: `Bearer ${token}` } })
+    api.get('/api/pac/missions')
       .then(res => setMissions(res.data)).catch(() => {})
+    api.get('/api/pac/profile')
+      .then(res => { if (res.data && Object.keys(res.data).length > 0) setProfile(p => ({ ...p, ...res.data })) })
+      .catch(() => {})
   }, [])
 
   const saveProfile = async (e) => {
     e.preventDefault()
     try {
-      await api.post('/api/pac/profile', profile, { headers: { Authorization: `Bearer ${token}` } })
+      await api.post('/api/pac/profile', profile)
       setMsg({ text: 'Profile saved successfully', type: 'success' })
     } catch { setMsg({ text: 'Error saving profile', type: 'error' }) }
   }
 
   const acceptMission = async (id) => {
     try {
-      await api.post(`/api/pac/missions/${id}/accept`, {}, { headers: { Authorization: `Bearer ${token}` } })
+      await api.post(`/api/pac/missions/${id}/accept`, {})
       setMsg({ text: 'Mission accepted!', type: 'success' })
       setMissions(prev => prev.map(m => m.id === id ? { ...m, status: 'assigned' } : m))
     } catch { setMsg({ text: 'Error accepting mission', type: 'error' }) }
   }
 
-  const logout = () => { localStorage.clear(); navigate('/login') }
+  const logout = async () => {
+    const refreshToken = localStorage.getItem('refreshToken')
+    try {
+      await api.post('/api/auth/logout', { refreshToken })
+    } catch { /* best-effort */ }
+    localStorage.clear()
+    navigate('/login')
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#0e0e0e', fontFamily: 'Inter,sans-serif' }}>
