@@ -457,10 +457,6 @@ app.get('/api/verify/:id', async (req, res) => {
   }
 })
 
-app.get('/debug-sentry', function mainHandler(req, res) {
-  throw new Error('My first Sentry error!')
-})
-
 app.get('/api/pac/missions', auth, async (req, res) => {
   try {
     if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
