@@ -4,6 +4,22 @@ const Stripe = require('stripe')
 const { query } = require('../db')
 const { checkFraud } = require('../lib/fraudDetection')
 
+const levelFromPlanId = (planId) => {
+  const map = { level1: 1, level2: 2, level3: 3 }
+  return map[planId] || null
+}
+
+const sendPaymentConfirmationEmail = async ({ email, amountCents, level }) => {
+  if (!email) return
+  // Placeholder integration point (SES/SendGrid/Resend). We keep it non-blocking.
+  console.log(JSON.stringify({
+    event: 'payment.email.queued',
+    email,
+    amountUsd: (amountCents || 0) / 100,
+    level,
+  }))
+}
+
 let _stripe = null
 const getStripe = () => {
   if (!_stripe) {
@@ -26,7 +42,7 @@ const PLANS = {
 
 router.post('/create-checkout-session', async (req, res) => {
   try {
-    const { planId } = req.body
+    const { planId, certificationId } = req.body
     const plan = PLANS[planId]
     if (!plan) return res.status(400).json({ error: 'Invalid plan' })
 
@@ -51,8 +67,28 @@ router.post('/create-checkout-session', async (req, res) => {
       mode: 'payment',
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&plan=${planId}`,
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
-      metadata: { planId, companyId: resolvedCompanyId },
+      metadata: {
+        planId,
+        companyId: resolvedCompanyId,
+        userId: String(req.user.id),
+        certificationId: certificationId ? String(certificationId) : '',
+      },
+      customer_email: req.user.email || undefined,
     })
+
+    await query(
+      `INSERT INTO payments (user_id, company_id, stripe_session_id, amount_cents, currency, plan_id, status, certification_id)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+       ON CONFLICT (stripe_session_id)
+       DO UPDATE SET
+         amount_cents = EXCLUDED.amount_cents,
+         currency = EXCLUDED.currency,
+         plan_id = EXCLUDED.plan_id,
+         certification_id = EXCLUDED.certification_id,
+         updated_at = NOW()`,
+      [req.user.id, parseInt(resolvedCompanyId, 10), session.id, plan.price, 'usd', planId, certificationId || null]
+    )
+
     res.json({ url: session.url })
   } catch (err) {
     console.error('Stripe error:', err.message, err.code, err.type)
@@ -111,7 +147,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object
-      const { planId, companyId } = session.metadata || {}
+      const { planId, companyId, certificationId, userId } = session.metadata || {}
+      const planLevel = levelFromPlanId(planId)
       console.log(JSON.stringify({
         event: 'stripe.payment.confirmed',
         message: 'webhook event received',
@@ -123,32 +160,78 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         currency: session.currency,
       }))
 
+      const resolvedCompanyId = companyId ? parseInt(companyId, 10) : null
+      const resolvedUserId = userId ? parseInt(userId, 10) : null
+
+      await query(
+        `UPDATE payments
+         SET status = 'completed',
+             stripe_payment_intent_id = $1,
+             updated_at = NOW()
+         WHERE stripe_session_id = $2`,
+        [session.payment_intent ? String(session.payment_intent) : null, session.id]
+      )
+
+      if (!resolvedCompanyId || !planLevel) {
+        return res.json({ received: true })
+      }
+
+      let effectiveCertificationId = certificationId ? parseInt(certificationId, 10) : null
+      if (effectiveCertificationId) {
+        await query(
+          `UPDATE certifications
+           SET status = 'submitted',
+               payment_confirmed = TRUE,
+               level = GREATEST(level, $1),
+               updated_at = NOW()
+           WHERE id = $2`,
+          [planLevel, effectiveCertificationId]
+        )
+      } else {
+        const createdCert = await query(
+          `INSERT INTO certifications (company_id, level, status, payment_confirmed)
+           VALUES ($1, $2, 'submitted', TRUE)
+           RETURNING id`,
+          [resolvedCompanyId, planLevel]
+        )
+        effectiveCertificationId = createdCert.rows[0].id
+      }
+
+      await query(
+        `UPDATE payments
+         SET certification_id = COALESCE(certification_id, $1),
+             updated_at = NOW()
+         WHERE stripe_session_id = $2`,
+        [effectiveCertificationId, session.id]
+      )
+
       let companyUserId = null
 
       // Update company certification level
-      if (companyId) {
-        const levelMap = { level1: 1, level2: 2, level3: 3 }
-        const newLevel = levelMap[planId]
-        if (newLevel) {
-          await query(
-            `UPDATE companies
-             SET certification_level = GREATEST(certification_level, $1),
-                 updated_at = NOW()
-             WHERE id = $2`,
-            [newLevel, parseInt(companyId, 10)]
-          )
+      await query(
+        `UPDATE companies
+         SET certification_level = GREATEST(certification_level, $1),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [planLevel, resolvedCompanyId]
+      )
 
-          const companyResult = await query('SELECT user_id FROM companies WHERE id = $1 LIMIT 1', [parseInt(companyId, 10)])
-          companyUserId = companyResult.rows[0]?.user_id || null
+      const companyResult = await query('SELECT user_id FROM companies WHERE id = $1 LIMIT 1', [resolvedCompanyId])
+      companyUserId = companyResult.rows[0]?.user_id || resolvedUserId || null
 
-          console.log(JSON.stringify({
-            event: 'company.certification.upgraded',
-            companyId,
-            certificationLevel: newLevel,
-            stripeEventId: event.id,
-          }))
-        }
-      }
+      console.log(JSON.stringify({
+        event: 'company.certification.upgraded',
+        companyId: resolvedCompanyId,
+        certificationLevel: planLevel,
+        certificationId: effectiveCertificationId,
+        stripeEventId: event.id,
+      }))
+
+      await sendPaymentConfirmationEmail({
+        email: session.customer_details?.email || session.customer_email || null,
+        amountCents: session.amount_total || 0,
+        level: planLevel,
+      })
 
       // Stripe Radar + dispute risk signals (if payment_intent is available)
       let stripeRiskLevel = null
@@ -181,10 +264,54 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         console.error('Stripe fraud check error:', fraudErr.message)
       })
     }
+
+    if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object
+      await query(
+        `UPDATE payments
+         SET status = 'failed',
+             stripe_payment_intent_id = $1,
+             updated_at = NOW()
+         WHERE stripe_payment_intent_id = $1 OR stripe_session_id = $2`,
+        [String(pi.id), pi.metadata?.checkout_session_id || '']
+      )
+    }
+
+    if (event.type === 'charge.refunded') {
+      const charge = event.data.object
+      await query(
+        `UPDATE payments
+         SET status = 'refunded',
+             updated_at = NOW()
+         WHERE stripe_payment_intent_id = $1`,
+        [String(charge.payment_intent || '')]
+      )
+    }
+
     res.json({ received: true })
   } catch (err) {
     console.error('Webhook processing error:', err.message)
     res.status(500).send('Webhook processing failed')
+  }
+})
+
+router.get('/stats', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const stats = await query('SELECT * FROM revenue_stats LIMIT 1')
+    const row = stats.rows[0] || {
+      revenue_total_cents: 0,
+      revenue_total_usd: 0,
+      payments_completed: 0,
+    }
+    res.json({
+      revenue_total_cents: parseInt(row.revenue_total_cents || '0', 10),
+      revenue_total_usd: parseFloat(row.revenue_total_usd || 0),
+      payments_completed: parseInt(row.payments_completed || '0', 10),
+    })
+  } catch (err) {
+    console.error('Payments stats error:', err.message)
+    res.status(500).json({ error: 'Failed to load payment stats' })
   }
 })
 

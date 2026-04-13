@@ -3,6 +3,8 @@ const express = require('express')
 const cors = require('cors')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
+const rateLimit = require('express-rate-limit')
 const http = require('http')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
@@ -66,7 +68,7 @@ app.use((req, res, next) => {
 
 const jsonMiddleware = express.json()
 app.use((req, res, next) => {
-  if (req.originalUrl === '/api/payments/webhook') return next()
+  if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/stripe/webhook') return next()
   return jsonMiddleware(req, res, next)
 })
 
@@ -75,11 +77,72 @@ if (!SECRET) {
   throw new Error('Missing JWT_SECRET environment variable')
 }
 
-const auth = (req, res, next) => {
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || SECRET
+if (!process.env.JWT_REFRESH_SECRET) {
+  console.warn('JWT_REFRESH_SECRET is missing; falling back to JWT_SECRET')
+}
+
+const hashToken = (value) => crypto.createHash('sha256').update(String(value)).digest('hex')
+
+const issueAccessToken = (user) => {
+  const jti = crypto.randomUUID()
+  const token = jwt.sign(
+    { jti, id: user.id, role: user.role, name: user.name, email: user.email },
+    SECRET,
+    { expiresIn: '7d' }
+  )
+  return { token, jti }
+}
+
+const issueRefreshToken = (user) => {
+  const jti = crypto.randomUUID()
+  const token = jwt.sign(
+    { jti, id: user.id, type: 'refresh' },
+    REFRESH_SECRET,
+    { expiresIn: '30d' }
+  )
+  return { token, jti }
+}
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registration attempts. Try again later.' },
+})
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    return `${req.ip || 'unknown'}:${email}`
+  },
+  message: { error: 'Too many login attempts. Try again later.' },
+})
+
+const auth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1]
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
-  try { req.user = jwt.verify(token, SECRET); next() }
-  catch { res.status(401).json({ error: 'Invalid token' }) }
+  try {
+    const decoded = jwt.verify(token, SECRET)
+    if (decoded?.jti) {
+      const blacklisted = await query(
+        'SELECT 1 FROM token_blacklist WHERE jti = $1 AND expires_at > NOW() LIMIT 1',
+        [decoded.jti]
+      )
+      if (blacklisted.rows.length > 0) {
+        return res.status(401).json({ error: 'Token revoked' })
+      }
+    }
+    req.user = decoded
+    return next()
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
 }
 
 const mapCompanyRow = (row) => {
@@ -115,7 +178,11 @@ const mapMissionRow = (row) => {
 
 const { router: paymentsRouter } = require('./routes/payments')
 app.post('/api/payments/create-checkout-session', auth)
+app.get('/api/payments/stats', auth)
+app.post('/api/stripe/create-checkout-session', auth)
+app.get('/api/stripe/stats', auth)
 app.use('/api/payments', paymentsRouter)
+app.use('/api/stripe', paymentsRouter)
 app.use('/api/metrics', metricsRouter)
 
 // Immutable audit trail helper — fire-and-forget (never blocks response)
@@ -127,7 +194,7 @@ const logAudit = (userId, action, resource, ip, payload) => {
   ).catch(e => console.error('audit_log write failed:', e.message))
 }
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
   try {
     const { name, email, password, role } = req.body
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
@@ -150,7 +217,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body
     const userResult = await query('SELECT id, name, email, password, role FROM users WHERE email = $1 LIMIT 1', [email])
@@ -160,19 +227,140 @@ app.post('/api/auth/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) return res.status(400).json({ error: 'Invalid credentials' })
 
-  const token = jwt.sign({ id: user.id, role: user.role, name: user.name, email: user.email }, SECRET, { expiresIn: '7d' })
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
-  logAudit(user.id, 'user_login', 'users', req.ip, { email })
+    const { token, jti } = issueAccessToken(user)
+    const { token: refreshToken } = issueRefreshToken(user)
+    const refreshDecoded = jwt.decode(refreshToken)
+
+    await query(
+      `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, to_timestamp($3))`,
+      [user.id, hashToken(refreshToken), refreshDecoded.exp]
+    )
+
+    res.json({
+      token,
+      refreshToken,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    })
+    logAudit(user.id, 'user_login', 'users', req.ip, { email, jti })
   } catch (err) {
     console.error('Login error:', err.message)
     res.status(500).json({ error: 'Login failed' })
   }
 })
 
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.body?.refreshToken
+    if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' })
+
+    const payload = jwt.verify(refreshToken, REFRESH_SECRET)
+    if (payload.type !== 'refresh') return res.status(401).json({ error: 'Invalid refresh token' })
+
+    const stored = await query(
+      `SELECT id, user_id
+       FROM refresh_tokens
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()
+       LIMIT 1`,
+      [hashToken(refreshToken)]
+    )
+    if (stored.rows.length === 0) return res.status(401).json({ error: 'Refresh token revoked or expired' })
+
+    await query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1', [stored.rows[0].id])
+
+    const userResult = await query(
+      'SELECT id, name, email, role FROM users WHERE id = $1 LIMIT 1',
+      [stored.rows[0].user_id]
+    )
+    const user = userResult.rows[0]
+    if (!user) return res.status(401).json({ error: 'User not found' })
+
+    const { token } = issueAccessToken(user)
+    const { token: newRefreshToken } = issueRefreshToken(user)
+    const newRefreshDecoded = jwt.decode(newRefreshToken)
+    await query(
+      `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, to_timestamp($3))`,
+      [user.id, hashToken(newRefreshToken), newRefreshDecoded.exp]
+    )
+
+    return res.json({ token, refreshToken: newRefreshToken })
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid refresh token' })
+  }
+})
+
+app.post('/api/auth/logout', auth, async (req, res) => {
+  try {
+    const accessToken = req.headers.authorization?.split(' ')[1]
+    const refreshToken = req.body?.refreshToken || null
+    const decoded = jwt.verify(accessToken, SECRET)
+
+    if (decoded?.jti && decoded?.exp) {
+      await query(
+        `INSERT INTO token_blacklist (jti, user_id, expires_at)
+         VALUES ($1, $2, to_timestamp($3))
+         ON CONFLICT (jti) DO NOTHING`,
+        [decoded.jti, decoded.id || null, decoded.exp]
+      )
+    }
+
+    if (refreshToken) {
+      await query(
+        `UPDATE refresh_tokens
+         SET revoked_at = NOW()
+         WHERE token_hash = $1 AND user_id = $2`,
+        [hashToken(refreshToken), decoded.id]
+      )
+    }
+
+    await query('DELETE FROM token_blacklist WHERE expires_at <= NOW()')
+    await query('DELETE FROM refresh_tokens WHERE expires_at <= NOW()')
+
+    return res.json({ message: 'Logged out' })
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+})
+
 app.get('/api/companies', auth, async (req, res) => {
   try {
-    const result = await query('SELECT * FROM companies ORDER BY id DESC')
-    res.json(result.rows.map(mapCompanyRow))
+    const page = Math.max(parseInt(req.query.page || '1', 10) || 1, 1)
+    const requestedLimit = parseInt(req.query.limit || '20', 10) || 20
+    const limit = Math.min(Math.max(requestedLimit, 1), 100)
+    const offset = (page - 1) * limit
+    const search = String(req.query.search || '').trim()
+
+    let rowsResult
+    let totalResult
+    if (search) {
+      const like = `%${search}%`
+      rowsResult = await query(
+        `SELECT * FROM companies
+         WHERE company_name ILIKE $1 OR name ILIKE $1 OR country ILIKE $1 OR sector ILIKE $1
+         ORDER BY id DESC
+         LIMIT $2 OFFSET $3`,
+        [like, limit, offset]
+      )
+      totalResult = await query(
+        `SELECT COUNT(*)::int AS total FROM companies
+         WHERE company_name ILIKE $1 OR name ILIKE $1 OR country ILIKE $1 OR sector ILIKE $1`,
+        [like]
+      )
+    } else {
+      rowsResult = await query(
+        'SELECT * FROM companies ORDER BY id DESC LIMIT $1 OFFSET $2',
+        [limit, offset]
+      )
+      totalResult = await query('SELECT COUNT(*)::int AS total FROM companies')
+    }
+
+    const total = totalResult.rows[0]?.total || 0
+    const pages = Math.max(Math.ceil(total / limit), 1)
+    res.json({
+      data: rowsResult.rows.map(mapCompanyRow),
+      pagination: { page, limit, total, pages },
+    })
   } catch (err) {
     console.error('List companies error:', err.message)
     res.status(500).json({ error: 'Failed to load companies' })
