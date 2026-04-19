@@ -29,14 +29,14 @@ export default function Dashboard() {
     const role = localStorage.getItem('role')
     if (!token) { navigate('/login'); return }
     if (role === 'pac') { navigate('/pac'); return }
-    fetchProfile(token)
+    fetchProfile()
     const params = new URLSearchParams(window.location.search)
     if (params.get('payment') === 'success') setTab('overview')
   }, [])
 
-  const fetchProfile = async (token) => {
+  const fetchProfile = async () => {
     try {
-      const res = await api.get('/api/companies/me', { headers: { Authorization: 'Bearer ' + token } })
+      const res = await api.get('/api/companies/me')
       setCompany(res.data.company)
       setUser(res.data.user)
     } catch {
@@ -48,8 +48,7 @@ export default function Dashboard() {
     setPaymentError('')
     setCheckoutPlanId(planId)
     try {
-      const token = localStorage.getItem('token')
-      const res = await api.post('/api/payments/create-checkout-session', { planId }, { headers: { Authorization: 'Bearer ' + token } })
+      const res = await api.post('/api/payments/create-checkout-session', { planId })
       window.location.href = res.data.url
     } catch (err) {
       setPaymentError(err.response?.data?.error || 'Payment initialization failed. Please try again.')
@@ -58,7 +57,11 @@ export default function Dashboard() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const refreshToken = localStorage.getItem('refreshToken')
+    try {
+      await api.post('/api/auth/logout', { refreshToken })
+    } catch { /* server-side revocation best-effort */ }
     localStorage.clear()
     navigate('/login')
   }
@@ -212,8 +215,7 @@ function RegisterCompanyForm({ company, onSaved }) {
     e.preventDefault()
     setSaving(true); setMsg('')
     try {
-      const token = localStorage.getItem('token')
-      const res = await api.post('/api/companies/register', form, { headers: { Authorization: 'Bearer ' + token } })
+      const res = await api.post('/api/companies/register', form)
       setMsg('Saved successfully')
       onSaved(res.data.company)
     } catch (err) {
