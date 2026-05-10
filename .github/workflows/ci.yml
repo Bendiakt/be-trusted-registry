@@ -143,6 +143,46 @@ jobs:
           print("PASS: railway.toml integrity OK")
           PY
 
+      - name: Validate backend/railway.toml has node server.js
+        run: |
+          python3 - << 'PY'
+          import sys
+
+          with open("backend/railway.toml") as f:
+              content = f.read()
+
+          errors = []
+
+          # Backend start command must invoke node server.js
+          if 'node server.js' not in content:
+              errors.append("FAIL: backend/railway.toml startCommand does not contain 'node server.js'")
+
+          if errors:
+              for e in errors:
+                  print(e, file=sys.stderr)
+              sys.exit(1)
+
+          print("PASS: backend/railway.toml integrity OK")
+          PY
+
+      - name: Validate frontend/railway.toml exists and is valid TOML
+        run: |
+          python3 - << 'PY'
+          import sys, tomllib
+
+          try:
+              with open("frontend/railway.toml", "rb") as f:
+                  data = tomllib.load(f)
+          except FileNotFoundError:
+              print("FAIL: frontend/railway.toml does not exist", file=sys.stderr)
+              sys.exit(1)
+          except Exception as e:
+              print(f"FAIL: frontend/railway.toml is not valid TOML: {e}", file=sys.stderr)
+              sys.exit(1)
+
+          print("PASS: frontend/railway.toml exists and is valid TOML")
+          PY
+
       - name: Verify .railwayignore blocks sensitive paths
         run: |
           python3 - << 'PY'
