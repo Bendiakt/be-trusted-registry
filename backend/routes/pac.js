@@ -208,7 +208,7 @@ router.get('/missions/:id/pdf', auth, pacReadLimiter, async (req, res) => {
 
     const pageH = 841.89
     doc.rect(0, pageH - 30, W, 30).fill('#111111')
-    doc.fontSize(7).fillColor('#555555').font('Helvetica').text(`© ${now.getFullYear()} MyDD · mydd.io`, M, pageH - 19)
+    doc.fontSize(7).fillColor('#555555').font('Helvetica').text(`© ${now.getFullYear()} MyDD · mydd.work`, M, pageH - 19)
     doc.fontSize(7).fillColor('#444444').font('Helvetica').text(`REPORT-${String(m.id).padStart(6, '0')} · Confidential`, 0, pageH - 19, { align: 'right', width: W - M })
     doc.end()
   } catch (err) {

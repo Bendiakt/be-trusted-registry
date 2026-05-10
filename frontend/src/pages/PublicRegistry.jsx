@@ -30,7 +30,7 @@ export default function PublicRegistry() {
   const [q, setQ]                 = useState('')
 
   useEffect(() => {
-    const BASE = 'https://mydd.io'
+    const BASE = 'https://mydd.work'
     document.title = 'B&E Trusted Registry — Certified Supplier Directory'
     ;[
       ['meta[name="description"]',        { name: 'description',        content: 'Browse and verify certified suppliers on the B&E Trusted Registry. Instant due-diligence verification for global trade.' }],

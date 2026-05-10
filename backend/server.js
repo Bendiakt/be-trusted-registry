@@ -7,7 +7,6 @@ const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const rateLimit = require('express-rate-limit')
 const http = require('http')
-const Sentry = require('@sentry/node')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
 const { checkFraud } = require('./lib/fraudDetection')
@@ -903,7 +902,7 @@ app.get('/api/pac/missions/:id/pdf', auth, async (req, res) => {
     const pageH = 841.89
     doc.rect(0, pageH - 30, W, 30).fill('#111111')
     doc.fontSize(7).fillColor('#555555').font('Helvetica')
-       .text(`© ${now.getFullYear()} B&E Consult FZCO · mydd.io`, M, pageH - 19)
+       .text(`© ${now.getFullYear()} B&E Consult FZCO · mydd.work`, M, pageH - 19)
     doc.fontSize(7).fillColor('#444444').font('Helvetica')
        .text(`REPORT-${String(m.id).padStart(6, '0')} · Confidential`, 0, pageH - 19, { align: 'right', width: W - M })
 
@@ -1062,7 +1061,7 @@ app.patch('/api/admin/missions/:id/status', auth, requireAdmin, async (req, res)
 
 // ─── Sitemap.xml — dynamic, includes all certified company verify pages ───────
 app.get('/sitemap.xml', async (req, res) => {
-  const FRONTEND = process.env.FRONTEND_URL || 'https://mydd.io'
+  const FRONTEND = process.env.FRONTEND_URL || 'https://mydd.work'
   const STATIC = ['', '/registry', '/login', '/register']
   try {
     const result = await query(
@@ -1101,7 +1100,7 @@ app.get('/sitemap.xml', async (req, res) => {
 
 // ─── robots.txt ───────────────────────────────────────────────────────────────
 app.get('/robots.txt', (req, res) => {
-  const FRONTEND = process.env.FRONTEND_URL || 'https://mydd.io'
+  const FRONTEND = process.env.FRONTEND_URL || 'https://mydd.work'
   res.set('Content-Type', 'text/plain')
   res.send(`User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${FRONTEND}/sitemap.xml\n`)
 })
@@ -1356,7 +1355,7 @@ app.patch('/api/admin/companies/:id/level', auth, requireAdmin, async (req, res)
       query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
         .then(({ rows }) => {
           if (!rows.length) return
-          const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.io'
+          const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
           sendCertGranted({
             email:       rows[0].email,
             name:        rows[0].name,
@@ -1766,7 +1765,7 @@ const startServer = async () => {
               AND u.email IS NOT NULL`
         )
         if (!result.rows.length) return
-        const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.io'
+        const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
         for (const row of result.rows) {
           await sendRenewalReminder({
             email:       row.email,

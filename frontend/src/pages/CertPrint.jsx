@@ -180,7 +180,7 @@ export default function CertPrint() {
             <div style={{ color: '#555', fontSize: '0.62rem', fontFamily: 'Inter,sans-serif', letterSpacing: '0.05em' }}>
               © {now.getFullYear()} B&amp;E Consult FZCO · Dubai Silicon Oasis, UAE
             </div>
-            <div style={{ color: '#555', fontSize: '0.62rem', fontFamily: 'Inter,sans-serif' }}>mydd.io</div>
+            <div style={{ color: '#555', fontSize: '0.62rem', fontFamily: 'Inter,sans-serif' }}>mydd.work</div>
           </div>
         </div>
       </div>

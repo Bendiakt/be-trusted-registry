@@ -4,7 +4,7 @@
 // Set RESEND_API_KEY in Railway Variables to activate.
 // If the key is missing, emails are logged as JSON (no crash, no block).
 
-const FROM_ADDRESS = process.env.RESEND_FROM || 'MyDD <noreply@mydd.io>'
+const FROM_ADDRESS = process.env.RESEND_FROM || 'MyDD <noreply@mydd.work>'
 
 const LEVEL_NAMES = {
   1: 'Level 1 — Document Verification',
@@ -84,11 +84,11 @@ const sendPaymentConfirmation = async ({ email, amountCents, level, companyName 
       </table>
       <p style="color:#aaa;font-size:0.85rem;margin:0">
         Your certificate will appear in the B&amp;E Trusted Registry within 24 hours.<br>
-        Questions? Reply to this email or contact <a href="mailto:support@mydd.io" style="color:#b8972a">support@mydd.io</a>.
+        Questions? Reply to this email or contact <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>.
       </p>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>
@@ -126,7 +126,7 @@ const sendWelcome = async ({ email, name }) => {
       <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
         Your account is ready. Start by registering your company profile and select a certification plan.
       </p>
-      <a href="${process.env.FRONTEND_URL || 'https://mydd.io'}/dashboard"
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/dashboard"
          style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
         Go to Dashboard
       </a>
@@ -243,7 +243,7 @@ const sendMissionAssigned = async ({ email, name, companyName, location, fee, mi
           <td style="padding:8px 0;text-align:right;color:#b8972a"><strong>$${fee || 500} USD</strong></td>
         </tr>
       </table>
-      <a href="${process.env.FRONTEND_URL || 'https://mydd.io'}/pac"
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/pac"
          style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
         View in PAC Portal
       </a>
@@ -308,7 +308,7 @@ const sendMissionCompleted = async ({ email, name, companyName, outcome, mission
       <p style="color:#aaa;font-size:0.85rem;margin:0 0 24px">
         The B&amp;E team will review the report and update your certification status within 24 hours.
       </p>
-      <a href="${process.env.FRONTEND_URL || 'https://mydd.io'}/dashboard"
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/dashboard"
          style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
         View Dashboard
       </a>
@@ -374,11 +374,11 @@ const sendRenewalReminder = async ({ email, name, companyName, level, expiresAt,
       </a>
       <p style="color:#555;font-size:0.8rem;margin-top:16px;line-height:1.5">
         After expiry your company will be removed from the public B&amp;E Registry until renewed.<br>
-        Questions? <a href="mailto:support@mydd.io" style="color:#b8972a">support@mydd.io</a>
+        Questions? <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>
       </p>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>
@@ -431,7 +431,7 @@ const sendEmailVerification = async ({ email, name, verifyUrl }) => {
       </p>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>
@@ -451,7 +451,7 @@ const sendCertGranted = async ({ email, name, companyName, level, verifyUrl }) =
   if (!email) return
 
   const levelName = LEVEL_NAMES[level] || `Level ${level}`
-  const baseUrl   = process.env.FRONTEND_URL || 'https://mydd.io'
+  const baseUrl   = process.env.FRONTEND_URL || 'https://mydd.work'
   const badgeUrl  = `${baseUrl}/api/badge/${encodeURIComponent(companyName || 'company')}.svg`
   const embedSnippet = `&lt;img src="${badgeUrl}" alt="B&amp;E Certified" width="280" height="72"&gt;`
 
@@ -497,11 +497,11 @@ const sendCertGranted = async ({ email, name, companyName, level, verifyUrl }) =
 
       <p style="color:#aaa;font-size:0.85rem;margin:0;line-height:1.6">
         Your certificate and embeddable badge are now live. Share the verify link with your trade partners to instantly prove your due-diligence status.<br><br>
-        Questions? <a href="mailto:support@mydd.io" style="color:#b8972a">support@mydd.io</a>
+        Questions? <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>
       </p>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>
@@ -561,11 +561,11 @@ const sendCertExpired = async ({ email, name, companyName, level, renewUrl }) =>
         Renew Certification →
       </a>
       <p style="color:#555;font-size:0.8rem;margin-top:16px;line-height:1.5">
-        Questions? <a href="mailto:support@mydd.io" style="color:#b8972a">support@mydd.io</a>
+        Questions? <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>
       </p>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>
@@ -611,7 +611,7 @@ const sendOnboardingD1 = async ({ email, name, dashboardUrl }) => {
       </a>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>
@@ -663,7 +663,7 @@ const sendOnboardingD3 = async ({ email, name, companyName, pricingUrl }) => {
       </a>
     </td></tr>
     <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
-      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.io" style="color:#555">mydd.io</a>
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a>
     </td></tr>
   </table>
 </body>

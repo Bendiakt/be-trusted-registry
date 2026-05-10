@@ -273,7 +273,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, asyn
         query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
           .then(({ rows }) => {
             if (!rows.length) return
-            const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.io'
+            const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
             sendCertGranted({ email: rows[0].email, name: rows[0].name, companyName: company.company_name, level, verifyUrl: `${frontendUrl}/verify/${companyId}` }).catch(() => {})
           }).catch(() => {})
       } else {
