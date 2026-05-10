@@ -1,0 +1,506 @@
+{
+  "brand": {
+    "name": "MyDD",
+    "tagline": "尽职调查平台 · B&E Consult 出品",
+    "tagline_short": "官方供应商认证核查",
+    "powered": "技术支持：B&E Consult FZCO · 迪拜硅绿洲，阿联酋"
+  },
+  "nav": {
+    "logout": "退出登录",
+    "login": "登录",
+    "pac_portal": "PAC 专员门户",
+    "registry": "B&E 可信注册中心"
+  },
+  "landing": {
+    "cta_start": "立即认证",
+    "cta_login": "登录",
+    "cta_registry": "搜索注册库",
+    "nav_registry": "搜索注册库",
+    "hero": {
+      "badge": "国际供应商认证",
+      "title_1": "您的供应商，",
+      "title_highlight": "已核实。",
+      "title_2": "您的信任，值得托付。",
+      "subtitle": "MyDD 是一个尽职调查注册平台，通过 3 个等级对供应商进行认证——从文件审核到 PAC 专员现场审查。全球贸易商信赖之选。"
+    },
+    "stats": {
+      "cert_levels": "认证等级",
+      "certified_companies": "认证供应商",
+      "languages": "支持语言",
+      "verification": "核查周期"
+    },
+    "features": {
+      "title": "全面守护您的供应链安全",
+      "subtitle": "三级认证体系、实时核查，以及全球 PAC 专员网络。",
+      "level1_title": "一级认证 — 文件审核",
+      "level1_desc": "由 B&E 分析师审核并确认法律文件、营业执照及注册证明。",
+      "level2_title": "二级认证 — 全面 KYC",
+      "level2_desc": "完整 KYC、实际控制人识别、AML 合规筛查及风险评分。",
+      "level3_title": "三级认证 — 现场审查",
+      "level3_desc": "由认证 PAC 专员赴供应商现场开展实地审计。",
+      "global_title": "全球覆盖",
+      "global_desc": "在中东、非洲、亚洲、欧洲等主要贸易通道均有认证 PAC 专员。",
+      "realtime_title": "实时核查",
+      "realtime_desc": "公开核查徽章位于 /verify/:id，买家可在数秒内确认认证状态。",
+      "secure_title": "不可篡改的审计记录",
+      "secure_desc": "每一认证步骤均有记录，防篡改审计日志，全程可追溯。"
+    },
+    "how": {
+      "title": "认证流程",
+      "subtitle": "4 步从注册到获得认证徽章。",
+      "step1_title": "注册您的企业",
+      "step1_desc": "创建账户并填写企业资料：行业、国家及简介。",
+      "step2_title": "选择认证等级",
+      "step2_desc": "选择铜牌、银牌或金牌，通过 Stripe 安全支付。按年订阅。",
+      "step3_title": "完成尽职调查",
+      "step3_desc": "提交所需文件。三级认证需 PAC 专员安排现场访问。",
+      "step4_title": "领取认证徽章",
+      "step4_desc": "您的认证将显示在 B&E 可信注册中心。将公开核查链接分享给买家。"
+    },
+    "plans": {
+      "title": "透明定价",
+      "subtitle": "年度认证，无隐藏费用，随时可取消。",
+      "popular": "最受欢迎",
+      "per_year": "/ 年",
+      "bronze_f1": "注册库收录",
+      "bronze_f2": "认证徽章",
+      "bronze_f3": "文件核查",
+      "silver_f1": "铜牌全部权益",
+      "silver_f2": "全面 KYC 验证",
+      "silver_f3": "优先收录",
+      "silver_f4": "B&E 审计报告",
+      "gold_f1": "银牌全部权益",
+      "gold_f2": "PAC 现场审计",
+      "gold_f3": "注册库顶部展示",
+      "gold_f4": "专属客户经理",
+      "gold_f5": "PAC 门户访问权限"
+    },
+    "cta_banner": {
+      "title": "准备好赢得买家信任了吗？",
+      "subtitle": "加入已在 B&E 可信注册中心认证的企业行列。24 小时内完成首次认证。"
+    }
+  },
+  "login": {
+    "title": "登录",
+    "email": "电子邮箱",
+    "password": "密码",
+    "submit": "登 录",
+    "submitting": "登录中…",
+    "no_account": "还没有账号？",
+    "register_link": "立即注册",
+    "error_default": "登录失败。"
+  },
+  "register": {
+    "title": "创建账户",
+    "full_name": "姓名 / 公司名称",
+    "email": "电子邮箱",
+    "password": "密码",
+    "role_label": "我的注册身份…",
+    "roles": {
+      "company_label": "企业",
+      "company_desc": "为您的公司申请认证",
+      "trader_label": "贸易商",
+      "trader_desc": "核查您的供应商",
+      "pac_label": "PAC 专员",
+      "pac_desc": "开展现场审查"
+    },
+    "submit": "创建账户",
+    "submitting": "创建中…",
+    "already_registered": "已有账户？",
+    "sign_in": "立即登录",
+    "error_default": "注册失败"
+  },
+  "dashboard": {
+    "tabs": {
+      "overview": "概览",
+      "register": "注册公司",
+      "pricing": "价格与升级",
+      "metrics": "数据指标",
+      "documents": "Documents"
+    },
+    "overview": {
+      "cert_level": "认证等级",
+      "registry_status": "注册状态",
+      "verification": "核查状态",
+      "status_active": "活跃",
+      "status_not_registered": "未注册",
+      "status_verified": "已核实",
+      "status_pending": "待处理",
+      "cert_none": "无",
+      "cert_validity": "认证有效期",
+      "cert_valid_until": "有效期至",
+      "cert_expiring": "将于以下天数后到期：",
+      "cert_expired": "认证已过期，请续期",
+      "days": "天",
+      "view_cert": "查看证书",
+      "copy_link": "复制链接",
+      "copied": "已复制！",
+      "get_certified_title": "申请认证",
+      "get_certified_desc": "选择认证等级，入驻 B&E 可信注册中心，获得已认证贸易商的采购机会。",
+      "view_plans": "查看认证方案",
+      "renew": "↻ 立即续期",
+      "print_cert": "打印 / PDF"
+    },
+    "cert_levels": {
+      "0": "未认证",
+      "1": "铜牌认证",
+      "2": "银牌认证",
+      "3": "金牌认证"
+    },
+    "company_form": {
+      "title": "公司资料",
+      "company_name": "公司名称",
+      "industry": "行业",
+      "industry_placeholder": "例如：制造业、贸易",
+      "country": "国家",
+      "description": "公司简介",
+      "save": "保存资料",
+      "saving": "保存中…",
+      "saved": "企业资料保存成功",
+      "sector": "行业/板块",
+      "sector_placeholder": "例如：制造业、贸易、农业",
+      "country_placeholder": "例如：阿联酋",
+      "website": "网站",
+      "description_placeholder": "简要描述贵公司的业务、产品和市场…"
+    },
+    "pricing": {
+      "title": "认证方案",
+      "subtitle": "年度认证，有效期 12 个月，一次性付款。",
+      "complete_profile": "请先完善公司资料",
+      "complete_profile_desc": "保存公司资料后即可结账付款。",
+      "most_popular": "最受欢迎",
+      "per_year": "/年",
+      "get_certified": "申请认证",
+      "current_plan": "当前方案",
+      "redirecting": "跳转中…",
+      "plans": {
+        "level1_name": "铜牌认证",
+        "level1_price": "$490",
+        "level1_f1": "基础注册中心列表",
+        "level1_f2": "认证徽章",
+        "level1_f3": "邮箱验证",
+        "level1_f4": "有效期 12 个月",
+        "level2_name": "银牌认证",
+        "level2_price": "$990",
+        "level2_f1": "包含铜牌全部权益",
+        "level2_f2": "文件核查",
+        "level2_f3": "优先排名",
+        "level2_f4": "B&E 审计报告",
+        "level2_f5": "有效期 12 个月",
+        "level3_name": "金牌认证",
+        "level3_price": "$2,490",
+        "level3_f1": "包含银牌全部权益",
+        "level3_f2": "现场审查",
+        "level3_f3": "注册中心置顶排名",
+        "level3_f4": "专属客户经理",
+        "level3_f5": "PAC 门户访问权限",
+        "level3_f6": "有效期 12 个月"
+      }
+    },
+    "onboarding": {
+      "title": "开始使用",
+      "step_account": "账户已创建",
+      "step_profile": "公司资料",
+      "step_certified": "认证"
+    },
+    "billing": "账单",
+    "verify_email": {
+      "title": "请验证您的邮箱",
+      "desc": "查看收件箱中的验证链接以确认您的账户。",
+      "resend": "重新发送",
+      "sent": "邮件已发送！"
+    },
+    "documents": {
+      "title": "Certification Documents",
+      "subtitle": "Upload supporting documents for your certification review.",
+      "drop_zone": "Drop files here or click to browse",
+      "uploading": "Uploading…",
+      "type_label": "Type:",
+      "type_general": "General",
+      "type_id": "Identity",
+      "type_financial": "Financial",
+      "type_legal": "Legal",
+      "empty": "No documents uploaded yet.",
+      "register_first": "Please register your company profile before uploading documents."
+    }
+  },
+  "pac": {
+    "portal": "PAC 专员门户",
+    "tabs": {
+      "missions": "可接任务",
+      "profile": "我的资料"
+    },
+    "missions": {
+      "status_title": "我的状态",
+      "active": "进行中任务",
+      "available": "可接任务",
+      "completed": "已完成",
+      "no_missions": "暂无可接任务",
+      "no_missions_desc": "当企业申请三级认证时，现场审查请求将在此显示。",
+      "fee": "酬劳",
+      "accept": "接受",
+      "assigned": "已接单",
+      "mission_accepted": "任务已接受！",
+      "error_accept": "接受任务失败",
+      "submit_report": "检查报告",
+      "submit_report_btn": "提交报告",
+      "cancel_report": "取消",
+      "report_text": "报告",
+      "report_text_placeholder": "详细描述您的发现、观察和建议…",
+      "outcome": "结果",
+      "outcome_pass": "通过",
+      "outcome_fail": "不通过",
+      "outcome_conditional": "有条件通过",
+      "mission_completed": "报告提交成功！",
+      "error_complete": "提交报告时出错",
+      "completed_badge": "已完成",
+      "completed_on": "完成于",
+      "view_report": "查看报告",
+      "back_to_missions": "返回任务"
+    },
+    "profile": {
+      "title": "PAC 专员资料",
+      "full_name": "姓名",
+      "location": "国家 / 城市",
+      "location_placeholder": "例如：迪拜，阿联酋",
+      "languages": "语言能力",
+      "languages_placeholder": "例如：英语、法语、阿拉伯语",
+      "certifications": "资质证书",
+      "certifications_placeholder": "例如：ISO 9001、AML、CAMS",
+      "bio": "简介 / 专长",
+      "bio_placeholder": "请描述您的专业领域、覆盖行业及过往任务…",
+      "save": "保存资料",
+      "saved": "资料保存成功",
+      "error": "保存失败"
+    }
+  },
+  "verify": {
+    "subtitle": "官方供应商认证核查",
+    "verifying": "核查中…",
+    "not_found": "未找到该公司，或尚未在 MyDD 注册。",
+    "status": "状态",
+    "cert_level": "认证等级",
+    "badge": "徽章",
+    "verified_by": "核查机构",
+    "sign_in_prompt": "您是企业用户？",
+    "sign_in_link": "登录 MyDD →",
+    "badges": {
+      "0_label": "未认证",
+      "0_desc": "该企业尚未完成 MyDD 认证。",
+      "1_label": "一级认证 — 文件已核实",
+      "1_desc": "法律文件已由 MyDD 分析师审核并确认。",
+      "2_label": "二级认证 — KYC 已验证",
+      "2_desc": "完整 KYC、实际控制人核查及反洗钱合规已确认。",
+      "3_label": "三级认证 — 现场已审查",
+      "3_desc": "已由认证 PAC 专员完成现场实地审查。"
+    },
+    "download_cert": "⊞ 打印 / PDF",
+    "website": "网站",
+    "embed_badge": "将此徽章嵌入您的网站",
+    "share_linkedin": "Share on LinkedIn"
+  },
+  "forgot_password": {
+    "title": "忘记密码",
+    "subtitle": "输入您的邮箱以接收重置链接",
+    "email": "邮箱",
+    "submit": "发送重置链接",
+    "submitting": "发送中…",
+    "success": "若该邮箱已注册，您将很快收到重置链接。",
+    "back_to_login": "返回登录",
+    "error_default": "请求失败，请重试。"
+  },
+  "reset_password": {
+    "title": "重置密码",
+    "new_password": "新密码",
+    "confirm_password": "确认密码",
+    "submit": "重置密码",
+    "submitting": "重置中…",
+    "success": "密码已重置，您现在可以登录。",
+    "error_mismatch": "两次输入的密码不一致。",
+    "error_expired": "此重置链接无效或已过期。",
+    "error_default": "重置失败，请重试。",
+    "back_to_login": "返回登录"
+  },
+  "trader": {
+    "portal_title": "供应商注册库",
+    "portal_subtitle": "搜索 B&E 可信注册库中的认证供应商",
+    "search_placeholder": "按公司、国家或行业搜索…",
+    "filter_level": "最低等级",
+    "all_levels": "全部等级",
+    "filter_country": "国家",
+    "all_countries": "全部国家",
+    "no_results": "没有符合条件的认证企业。",
+    "cert_level": "等级",
+    "view_cert": "查看证书",
+    "copy_link": "复制链接",
+    "copied": "已复制！",
+    "results_count": "条结果",
+    "loading": "加载中…",
+    "error": "注册库加载失败。",
+    "empty_title": "暂无认证供应商",
+    "empty_desc": "率先获得认证，或调整搜索条件。",
+    "empty_cta": "立即认证"
+  },
+  "admin": {
+    "title": "管理后台",
+    "tabs": {
+      "overview": "概览",
+      "users": "用户",
+      "companies": "企业",
+      "missions": "任务"
+    },
+    "stats": {
+      "total_users": "总用户数",
+      "new_30d": "新增（30天）",
+      "total_companies": "企业数",
+      "certified": "已认证",
+      "revenue": "收入"
+    },
+    "search_placeholder": "搜索…",
+    "users": {
+      "title": "用户管理",
+      "email": "邮箱",
+      "name": "姓名",
+      "role": "角色",
+      "joined": "注册时间",
+      "last_login": "最近登录",
+      "never": "从未登录"
+    },
+    "companies": {
+      "title": "企业管理",
+      "name": "企业名称",
+      "email": "邮箱",
+      "country": "国家",
+      "sector": "行业",
+      "level": "等级",
+      "status": "Status",
+      "set_level": "设置等级",
+      "suspend": "Suspend",
+      "unsuspend": "Unsuspend",
+      "suspend_title": "Suspend company",
+      "suspend_confirm": "You are about to suspend",
+      "suspend_reason_placeholder": "Reason for suspension (optional)",
+      "confirm_suspend": "Confirm Suspension"
+    },
+    "missions": {
+      "title": "PAC 任务",
+      "company": "企业",
+      "location": "地点",
+      "status": "状态",
+      "assigned_to": "负责人",
+      "fee": "酬劳",
+      "created": "创建时间",
+      "outcome": "结果",
+      "report": "报告",
+      "cancel_mission": "取消",
+      "reopen_mission": "重新开放"
+    },
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "已保存",
+    "no_data": "暂无记录。",
+    "cancel": "Cancel"
+  },
+  "metrics": {
+    "title": "业务指标",
+    "loading": "加载中…",
+    "fetching": "正在从数据库获取数据…",
+    "updated": "更新时间",
+    "live": "实时",
+    "polling": "轮询",
+    "vs_snapshot": "与上次快照对比",
+    "sections": {
+      "registry": "注册中心概览",
+      "trust_fraud": "信任与欺诈",
+      "activity": "平台活动"
+    },
+    "kpis": {
+      "users": "总用户数",
+      "companies": "企业数",
+      "certified": "已认证",
+      "cert_rate_subtitle": "认证率",
+      "revenue": "收入",
+      "requests": "HTTP 请求数",
+      "since_restart": "自上次重启",
+      "data_as_of": "数据截至"
+    },
+    "trust": {
+      "avg_score": "平均信任评分",
+      "indicators": "基于 27 项指标",
+      "fraud_alerts": "欺诈警报",
+      "fraud_clear": "无异常",
+      "fraud_active": "活跃",
+      "cert_rate": "认证率",
+      "low_risk": "低风险",
+      "medium_risk": "中等风险",
+      "high_risk": "高风险",
+      "rules": {
+        "disposable_email": "临时邮箱",
+        "no_company_profile": "无公司资料",
+        "rapid_profile_change": "频繁变更",
+        "ip_multi_account": "同 IP 多账号"
+      }
+    }
+  },
+  "not_found": {
+    "title": "页面未找到",
+    "description": "您查找的页面不存在或已被移动。",
+    "go_home": "返回主页"
+  },
+  "cert_print": {
+    "print_pdf": "打印 / 保存为 PDF",
+    "copy_link": "复制验证链接"
+  },
+  "cookie": {
+    "title": "我们使用Cookie",
+    "desc": "我们使用必要的Cookie来运行MyDD，不含任何跟踪或广告Cookie。",
+    "learn_more": "了解更多",
+    "accept": "接受",
+    "decline": "拒绝"
+  },
+  "verify_email": {
+    "verifying": "正在验证邮箱…",
+    "success_title": "邮箱已验证！",
+    "success_desc": "您的账户现已完全激活，可以访问所有功能。",
+    "error_title": "验证失败",
+    "error_desc": "此链接无效或已过期，请从仪表板重新请求。",
+    "go_dashboard": "前往仪表板",
+    "missing_token": "未找到验证令牌。",
+    "invalid_token": "无效或已过期的令牌。"
+  },
+  "upsell": {
+    "next_step": "Next step",
+    "per_year": "per year",
+    "register_first": "Register your company profile first",
+    "lvl0": {
+      "title": "Start your certification journey",
+      "subtitle": "Join the B&E Trusted Registry and stand out in global trade.",
+      "cta": "View Certification Plans"
+    },
+    "l0": {
+      "perk1": "Listed in the global B&E Registry",
+      "perk2": "Embeddable trust badge for your website",
+      "perk3": "Verified supplier status"
+    },
+    "lvl1": {
+      "title": "Upgrade to Level 2 — KYC Full Validation",
+      "subtitle": "Strengthen trust with KYC validation and beneficial owner screening.",
+      "cta": "Upgrade to Silver"
+    },
+    "l1": {
+      "perk1": "KYC & UBO identity screening",
+      "perk2": "Higher trust score in the Registry",
+      "perk3": "Silver badge on your profile"
+    },
+    "lvl2": {
+      "title": "Upgrade to Level 3 — Physical Site Inspection",
+      "subtitle": "The highest level of trust. A certified PAC agent visits your facilities.",
+      "cta": "Upgrade to Gold"
+    },
+    "l2": {
+      "perk1": "PAC agent physical site inspection",
+      "perk2": "Gold badge — maximum credibility",
+      "perk3": "Featured placement in Registry search"
+    }
+  }
+}

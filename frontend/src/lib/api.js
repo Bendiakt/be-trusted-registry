@@ -40,6 +40,11 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
+    // Never redirect unauthenticated users away from public endpoints
+    const PUBLIC_PREFIXES = ['/api/registry', '/api/verify/']
+    const isPublicEndpoint = PUBLIC_PREFIXES.some(p => original.url?.includes(p))
+    if (isPublicEndpoint) return Promise.reject(error)
+
     const refreshToken = localStorage.getItem('refreshToken')
     if (!refreshToken) {
       localStorage.clear()

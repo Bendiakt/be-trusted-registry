@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // ---------------------------------------------------------------------------
 // Animated number counter hook (requestAnimationFrame, 800ms ease-out)
@@ -37,7 +38,7 @@ const useAnimatedValue = (target, duration = 800) => {
 // ---------------------------------------------------------------------------
 // Individual KPI card
 // ---------------------------------------------------------------------------
-const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, delta }) => {
+const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, delta, vsLabel }) => {
   const animated = useAnimatedValue(
     typeof value === 'number' ? value : parseFloat(value) || 0,
   )
@@ -78,7 +79,7 @@ const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, de
       )}
       {delta !== undefined && (
         <div style={{ color: deltaColor, fontSize: '0.7rem', marginTop: '0.25rem', fontWeight: '600' }}>
-          {deltaIcon} {Math.abs(delta)} vs. last snapshot
+          {deltaIcon} {Math.abs(delta)} {vsLabel}
         </div>
       )}
     </div>
@@ -88,11 +89,11 @@ const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, de
 // ---------------------------------------------------------------------------
 // Trust score gauge (0-100)
 // ---------------------------------------------------------------------------
-const TrustGauge = ({ score }) => {
+const TrustGauge = ({ score, lowRisk, medRisk, highRisk }) => {
   const animated = useAnimatedValue(score || 0)
   const pct = Math.min(Math.max(animated, 0), 100)
   const color = pct >= 70 ? '#4CAF50' : pct >= 40 ? '#f39c12' : '#e74c3c'
-  const label = pct >= 70 ? 'LOW RISK' : pct >= 40 ? 'MEDIUM RISK' : 'HIGH RISK'
+  const label = pct >= 70 ? lowRisk : pct >= 40 ? medRisk : highRisk
 
   return (
     <div style={{ textAlign: 'center' }}>
@@ -123,7 +124,7 @@ const TrustGauge = ({ score }) => {
 // ---------------------------------------------------------------------------
 // Fraud alerts badge
 // ---------------------------------------------------------------------------
-const AlertsBadge = ({ count }) => {
+const AlertsBadge = ({ count, clearLabel, activeLabel }) => {
   const color = count === 0 ? '#4CAF50' : count < 5 ? '#f39c12' : '#e74c3c'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -134,7 +135,7 @@ const AlertsBadge = ({ count }) => {
         animation: count > 0 ? 'pulse 2s infinite' : 'none',
       }} />
       <span style={{ color, fontWeight: '700', fontSize: '0.8rem' }}>
-        {count === 0 ? 'CLEAR' : `${count} ACTIVE`}
+        {count === 0 ? clearLabel : `${count} ${activeLabel}`}
       </span>
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
     </div>
@@ -144,7 +145,7 @@ const AlertsBadge = ({ count }) => {
 // ---------------------------------------------------------------------------
 // Connection status indicator
 // ---------------------------------------------------------------------------
-const StatusDot = ({ live }) => (
+const StatusDot = ({ live, liveLabel, pollingLabel }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
     <div style={{
       width: '7px', height: '7px', borderRadius: '50%',
@@ -153,7 +154,7 @@ const StatusDot = ({ live }) => (
       animation: live ? 'pulse 2.5s infinite' : 'none',
     }} />
     <span style={{ color: '#555', fontSize: '0.7rem', letterSpacing: '0.05em' }}>
-      {live ? 'LIVE' : 'POLLING'}
+      {live ? liveLabel : pollingLabel}
     </span>
   </div>
 )
@@ -162,6 +163,7 @@ const StatusDot = ({ live }) => (
 // Main MetricsDashboard component
 // ---------------------------------------------------------------------------
 export default function MetricsDashboard() {
+  const { t } = useTranslation()
   const [metrics, setMetrics] = useState(null)
   const [wsLive, setWsLive] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -247,22 +249,29 @@ export default function MetricsDashboard() {
     return metrics[curKey] - (prev[key] || 0)
   }
 
+  const fraudRules = [
+    { label: t('metrics.trust.rules.disposable_email'),      rule: 'disposable_email' },
+    { label: t('metrics.trust.rules.no_company_profile'),    rule: 'no_company_profile' },
+    { label: t('metrics.trust.rules.rapid_profile_change'),  rule: 'rapid_profile_change' },
+    { label: t('metrics.trust.rules.ip_multi_account'),      rule: 'ip_multi_account' },
+  ]
+
   return (
     <div style={{ fontFamily: 'sans-serif', color: '#eee' }}>
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <div>
-          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#eee' }}>Business Metrics</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#eee' }}>{t('metrics.title')}</div>
           <div style={{ color: '#444', fontSize: '0.75rem', marginTop: '0.15rem' }}>
-            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading…'}
+            {lastUpdated ? `${t('metrics.updated')} ${lastUpdated.toLocaleTimeString()}` : t('metrics.loading')}
           </div>
         </div>
-        <StatusDot live={wsLive} />
+        <StatusDot live={wsLive} liveLabel={t('metrics.live')} pollingLabel={t('metrics.polling')} />
       </div>
 
       {!metrics && (
         <div style={{ color: '#444', fontSize: '0.875rem', padding: '2rem', textAlign: 'center' }}>
-          Fetching data from database…
+          {t('metrics.fetching')}
         </div>
       )}
 
@@ -270,64 +279,72 @@ export default function MetricsDashboard() {
         <>
           {/* KPI grid — top row */}
           <div style={{ ...G.section }}>
-            <div style={{ ...G.sectionTitle }}>Registry Overview</div>
+            <div style={{ ...G.sectionTitle }}>{t('metrics.sections.registry')}</div>
             <div style={{ ...G.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               <KpiCard
-                label="Total Users"
+                label={t('metrics.kpis.users')}
                 value={metrics.users_total}
                 color="#C9A84C"
                 delta={delta('users_count', 'users_total')}
+                vsLabel={t('metrics.vs_snapshot')}
               />
               <KpiCard
-                label="Companies"
+                label={t('metrics.kpis.companies')}
                 value={metrics.companies_total}
                 color="#4a90e2"
                 delta={delta('companies_count', 'companies_total')}
+                vsLabel={t('metrics.vs_snapshot')}
               />
               <KpiCard
-                label="Certified"
+                label={t('metrics.kpis.certified')}
                 value={metrics.certified_total}
                 color="#4CAF50"
-                subtitle={`${metrics.cert_rate_pct}% certification rate`}
+                subtitle={`${metrics.cert_rate_pct}% ${t('metrics.kpis.cert_rate_subtitle')}`}
                 delta={delta('certified_count', 'certified_total')}
+                vsLabel={t('metrics.vs_snapshot')}
               />
               <KpiCard
-                label="Revenue"
+                label={t('metrics.kpis.revenue')}
                 value={metrics.revenue_total_usd}
                 format="currency"
                 color="#C9A84C"
                 delta={prev ? metrics.revenue_total_usd - parseFloat(prev.revenue_total || 0) : undefined}
+                vsLabel={t('metrics.vs_snapshot')}
               />
             </div>
           </div>
 
           {/* Trust + Fraud row */}
           <div style={{ ...G.section }}>
-            <div style={{ ...G.sectionTitle }}>Trust &amp; Fraud</div>
+            <div style={{ ...G.sectionTitle }}>{t('metrics.sections.trust_fraud')}</div>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
 
               {/* Trust score gauge */}
               <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '1.25rem', flex: '0 1 200px', textAlign: 'center' }}>
                 <div style={{ color: '#666', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                  Avg Trust Score
+                  {t('metrics.trust.avg_score')}
                 </div>
-                <TrustGauge score={parseFloat(metrics.avg_trust_score) || 0} />
-                <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.5rem' }}>Based on 27 indicators</div>
+                <TrustGauge
+                  score={parseFloat(metrics.avg_trust_score) || 0}
+                  lowRisk={t('metrics.trust.low_risk')}
+                  medRisk={t('metrics.trust.medium_risk')}
+                  highRisk={t('metrics.trust.high_risk')}
+                />
+                <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.5rem' }}>{t('metrics.trust.indicators')}</div>
               </div>
 
               {/* Fraud alerts card */}
               <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '1.25rem', flex: '1' }}>
                 <div style={{ color: '#666', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                  Fraud Alerts
+                  {t('metrics.trust.fraud_alerts')}
                 </div>
-                <AlertsBadge count={metrics.fraud_alerts_active} />
+                <AlertsBadge
+                  count={metrics.fraud_alerts_active}
+                  clearLabel={t('metrics.trust.fraud_clear')}
+                  activeLabel={t('metrics.trust.fraud_active')}
+                />
                 <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  {[
-                    { label: 'Disposable email', rule: 'disposable_email' },
-                    { label: 'No company profile', rule: 'no_company_profile' },
-                    { label: 'Rapid changes', rule: 'rapid_profile_change' },
-                    { label: 'IP multi-account', rule: 'ip_multi_account' },
-                  ].map(r => (
+                  {fraudRules.map(r => (
                     <div key={r.rule} style={{ background: '#111', borderRadius: '6px', padding: '0.4rem 0.6rem', fontSize: '0.7rem', color: '#555' }}>
                       {r.label}
                     </div>
@@ -338,7 +355,7 @@ export default function MetricsDashboard() {
               {/* Certification rate */}
               <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '1.25rem', flex: '0 1 180px' }}>
                 <div style={{ color: '#666', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                  Cert. Rate
+                  {t('metrics.trust.cert_rate')}
                 </div>
                 <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#4CAF50', marginBottom: '0.25rem' }}>
                   {metrics.cert_rate_pct}%
@@ -359,18 +376,19 @@ export default function MetricsDashboard() {
 
           {/* Requests + timestamp */}
           <div style={{ ...G.section }}>
-            <div style={{ ...G.sectionTitle }}>Platform Activity</div>
+            <div style={{ ...G.sectionTitle }}>{t('metrics.sections.activity')}</div>
             <div style={{ ...G.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               {metrics.requests_total !== undefined && (
                 <KpiCard
-                  label="HTTP Requests"
+                  label={t('metrics.kpis.requests')}
                   value={metrics.requests_total}
                   color="#888"
-                  subtitle="since last restart"
+                  subtitle={t('metrics.kpis.since_restart')}
+                  vsLabel={t('metrics.vs_snapshot')}
                 />
               )}
               <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '1.25rem' }}>
-                <div style={{ color: '#666', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Data as of</div>
+                <div style={{ color: '#666', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{t('metrics.kpis.data_as_of')}</div>
                 <div style={{ color: '#555', fontSize: '0.8rem' }}>
                   {new Date(metrics.timestamp).toLocaleString()}
                 </div>
