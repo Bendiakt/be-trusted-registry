@@ -1,13 +1,7 @@
-[build]
-builder = "NIXPACKS"
-buildCommand = "cd frontend && npm install && npm run build && cd ../backend && npm install"
-
-[env]
-NODE_VERSION = "22.12.0"
-
-[deploy]
-startCommand = "cd backend && node server.js"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
+# This project uses separate railway.toml files for each service:
+# - backend/railway.toml for the Node.js/Express backend
+# - frontend/railway.toml for the React/Vite frontend
+#
+# Each Railway service should be configured with its Root Directory:
+# - Backend service: Root Directory = /backend
+# - Frontend service: Root Directory = /frontend
