@@ -1,3 +1,10 @@
+# This project uses separate railway.toml files for each service:
+# - backend/railway.toml for the Node.js/Express backend
+# - frontend/railway.toml for the React/Vite frontend
+#
+# Each Railway service should be configured with its Root Directory:
+# - Backend service: Root Directory = /backend
+# - Frontend service: Root Directory = /frontend
 # Monorepo root config — satisfies CI guard + sert de fallback.
 # Le déploiement réel utilise backend/railway.toml et frontend/railway.toml
 # configurés via le "Root Directory" de chaque service Railway.
