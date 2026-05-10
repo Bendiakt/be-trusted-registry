@@ -5,8 +5,8 @@
  * GET /api/badge/:id      — same, for use without the .svg extension.
  *
  * Usage (embed on supplier website):
- *   <a href="https://mydd.io/verify/123">
- *     <img src="https://mydd.io/api/badge/123.svg" alt="MyDD Certified" height="72">
+ *   <a href="https://mydd.work/verify/123">
+ *     <img src="https://mydd.work/api/badge/123.svg" alt="MyDD Certified" height="72">
  *   </a>
  *
  * No auth required — public endpoint, rate-limited.

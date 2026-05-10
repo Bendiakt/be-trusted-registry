@@ -123,12 +123,12 @@ jobs:
 
           errors = []
 
-          # Build must use Nixpacks (not Docker) — Postgres runs its own image separately
-          if 'builder = "NIXPACKS"' not in content:
-              errors.append("FAIL: railway.toml builder is not NIXPACKS")
+          # Build must use Nixpacks or Railpack (not Docker)
+          if 'builder = "NIXPACKS"' not in content and 'builder = "RAILPACK"' not in content:
+              errors.append("FAIL: railway.toml builder is not NIXPACKS or RAILPACK")
 
-          # Start command must target the backend Node.js server
-          if 'node server.js' not in content:
+          # Start command must target the backend Node.js server (directly or via npm script)
+          if 'node server.js' not in content and 'start:preprod' not in content and 'npm run start' not in content:
               errors.append("FAIL: railway.toml startCommand does not target backend/server.js")
 
           # Health check must point to our API
@@ -155,10 +155,11 @@ jobs:
           if os.path.exists(backend_path):
               with open(backend_path) as f:
                   bc = f.read()
-              if 'builder = "NIXPACKS"' not in bc:
-                  errors.append(f"FAIL: {backend_path} builder is not NIXPACKS")
-              if 'node' not in bc:
-                  errors.append(f"FAIL: {backend_path} startCommand does not reference node")
+              if 'builder = "NIXPACKS"' not in bc and 'builder = "RAILPACK"' not in bc:
+                  errors.append(f"FAIL: {backend_path} builder is not NIXPACKS or RAILPACK")
+              # Accept direct node call or npm script that wraps migration + node
+              if 'node' not in bc and 'npm run start' not in bc:
+                  errors.append(f"FAIL: {backend_path} startCommand does not reference node or npm run start")
               if '/api/health' not in bc:
                   errors.append(f"FAIL: {backend_path} healthcheckPath is not /api/health")
               print(f"PASS: {backend_path} validated")
@@ -170,8 +171,8 @@ jobs:
           if os.path.exists(frontend_path):
               with open(frontend_path) as f:
                   fc = f.read()
-              if 'builder = "NIXPACKS"' not in fc:
-                  errors.append(f"FAIL: {frontend_path} builder is not NIXPACKS")
+              if 'builder = "NIXPACKS"' not in fc and 'builder = "RAILPACK"' not in fc:
+                  errors.append(f"FAIL: {frontend_path} builder is not NIXPACKS or RAILPACK")
               if 'npm run build' not in fc:
                   errors.append(f"FAIL: {frontend_path} buildCommand does not run npm build")
               print(f"PASS: {frontend_path} validated")

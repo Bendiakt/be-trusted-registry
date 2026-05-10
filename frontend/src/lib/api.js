@@ -45,6 +45,7 @@ api.interceptors.response.use(
     const isPublicEndpoint = PUBLIC_PREFIXES.some(p => original.url?.includes(p))
     if (isPublicEndpoint) return Promise.reject(error)
 
+
     const refreshToken = localStorage.getItem('refreshToken')
     if (!refreshToken) {
       localStorage.clear()

@@ -24,6 +24,7 @@ export default function PACPortal() {
     if (!localStorage.getItem('token')) { navigate('/login'); return }
     if (role && role !== 'pac') { navigate(role === 'admin' ? '/admin' : '/dashboard'); return }
 
+
     api.get('/api/pac/missions')
       .then(res => setMissions(res.data)).catch(() => {})
     api.get('/api/pac/profile')

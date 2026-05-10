@@ -455,6 +455,7 @@ export default function Dashboard() {
     }
   }
 
+
   const handleLogout = async () => {
     const refreshToken = localStorage.getItem('refreshToken')
     try {

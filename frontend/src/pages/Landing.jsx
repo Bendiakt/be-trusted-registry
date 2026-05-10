@@ -15,7 +15,7 @@ export default function Landing() {
   }, [])
 
   useEffect(() => {
-    const BASE = 'https://mydd.io'
+    const BASE = 'https://mydd.work'
     document.title = 'MyDD — Certified Supplier Registry by B&E Consult'
     const meta = [
       { name: 'description',        content: 'MyDD by B&E Consult is the trusted supplier certification registry for global trade. Verify suppliers instantly with Level 1-3 due-diligence certifications.' },

@@ -70,7 +70,7 @@ export default function Verify() {
           '@type': 'EducationalOccupationalCredential',
           name: `B&E MyDD ${LEVEL_NAMES[data.level] || `Level ${data.level}`} Certification`,
           credentialCategory: 'certification',
-          recognizedBy: { '@type': 'Organization', name: 'B&E Consult FZCO', url: 'https://mydd.io' },
+          recognizedBy: { '@type': 'Organization', name: 'B&E Consult FZCO', url: 'https://mydd.work' },
         },
       }),
     }

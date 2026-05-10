@@ -226,7 +226,7 @@ export default function MissionReport() {
           {/* Footer */}
           <div style={{ background: '#111', padding: '0.85rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ color: '#555', fontSize: '0.6rem', fontFamily: 'Inter,sans-serif', letterSpacing: '0.05em' }}>
-              © {now.getFullYear()} B&amp;E Consult FZCO · mydd.io
+              © {now.getFullYear()} B&amp;E Consult FZCO · mydd.work
             </div>
             <div style={{ color: '#444', fontSize: '0.6rem', fontFamily: 'Inter,sans-serif' }}>
               REPORT-{String(mission.id).padStart(6, '0')} · Confidential

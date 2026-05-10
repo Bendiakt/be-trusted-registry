@@ -11,6 +11,7 @@ const { notifyUser }             = require('../lib/wsNotify')
 const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
         sendCertRevoked }        = require('../lib/mailer')
+const { isBlockedCompany }       = require('../lib/blocklist')
 
 // ── Rate limiters ────────────────────────────────────────────────────────────
 // Admin reads: generous since admins are few and trusted
@@ -250,6 +251,14 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, asyn
     )
     if (!result.rows.length) return res.status(404).json({ error: 'Company not found' })
     const company = result.rows[0]
+
+    // Prevent certification of the platform operator's own entities
+    if (level > 0 && isBlockedCompany(company.company_name)) {
+      // Roll back — set level back to 0 silently
+      await query('UPDATE companies SET certification_level = 0, updated_at = NOW() WHERE id = $1', [companyId])
+      return res.status(403).json({ error: 'This company cannot be certified on this platform.' })
+    }
+
     logAudit(req.user.id, 'admin_set_cert_level', 'companies', req.ip, { companyId, level })
 
     if (company.user_id) {
@@ -264,7 +273,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, asyn
         query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
           .then(({ rows }) => {
             if (!rows.length) return
-            const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.io'
+            const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
             sendCertGranted({ email: rows[0].email, name: rows[0].name, companyName: company.company_name, level, verifyUrl: `${frontendUrl}/verify/${companyId}` }).catch(() => {})
           }).catch(() => {})
       } else {

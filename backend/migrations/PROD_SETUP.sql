@@ -279,4 +279,23 @@ CREATE INDEX IF NOT EXISTS idx_documents_status  ON documents(status);
 
 INSERT INTO schema_migrations (version) VALUES ('010_documents') ON CONFLICT (version) DO NOTHING;
 
+-- ─── 011: In-app notifications ────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id         SERIAL      PRIMARY KEY,
+  user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type       TEXT        NOT NULL DEFAULT 'info',
+  title      TEXT        NOT NULL,
+  body       TEXT,
+  link       TEXT,
+  read_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, created_at DESC)
+  WHERE read_at IS NULL;
+
+INSERT INTO schema_migrations (version) VALUES ('011_notifications') ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
