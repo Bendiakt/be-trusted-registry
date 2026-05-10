@@ -10,7 +10,6 @@ const { mapCompanyRow }      = require('../lib/mappers')
 const { logAudit }           = require('../lib/audit')
 const { checkFraud }         = require('../lib/fraudDetection')
 const { computeTrustScore }  = require('../lib/trustScore')
-const { isBlockedCompany }   = require('../lib/blocklist')
 
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
@@ -142,7 +141,6 @@ router.post('/register', auth, companyWriteLimiter, async (req, res) => {
 
     const companyName = String(name).trim().slice(0, 200)
     if (companyName.length < 2) return res.status(400).json({ error: 'Company name too short' })
-    if (isBlockedCompany(companyName)) return res.status(403).json({ error: 'This company cannot be registered or certified on this platform.' })
 
     const clean = (v, max = 100) => (v || '').toString().trim().slice(0, max) || null
     // Store industry and sector independently — sector preferred, fallback to industry
