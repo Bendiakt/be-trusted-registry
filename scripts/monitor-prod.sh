@@ -7,10 +7,27 @@ max_ms="${MAX_HEALTH_MS:-1500}"
 max_business_metrics_ms="${MAX_BUSINESS_METRICS_MS:-1000}"
 run_stripe_check="${RUN_STRIPE_CHECK:-1}"
 stripe_check_mode="${STRIPE_CHECK_MODE:-live}"
+curl_max_time="${CURL_MAX_TIME:-15}"
+curl_retry_count="${CURL_RETRY_COUNT:-2}"
+monitor_insecure_tls="${MONITOR_INSECURE_TLS:-0}"
+
+curl_opts=(
+    --silent
+    --show-error
+    --max-time "${curl_max_time}"
+    --retry "${curl_retry_count}"
+    --retry-all-errors
+    --retry-delay 1
+)
+
+if [[ "${monitor_insecure_tls}" == "1" ]]; then
+    curl_opts+=(--insecure)
+fi
 
 echo "Monitoring target: ${backend}"
+echo "Curl opts: max_time=${curl_max_time}s retries=${curl_retry_count} insecure_tls=${monitor_insecure_tls}"
 
-health_with_time="$(curl -sS -w "\n%{http_code} %{time_total}" "${backend}/api/health")"
+health_with_time="$(curl "${curl_opts[@]}" -w "\n%{http_code} %{time_total}" "${backend}/api/health")"
 health_body="$(echo "${health_with_time}" | head -n 1)"
 status_line="$(echo "${health_with_time}" | tail -n 1)"
 http_code="$(echo "${status_line}" | awk '{print $1}')"
@@ -70,7 +87,7 @@ PY
 echo "PASS: production monitoring baseline is healthy"
 
 echo "Checking readiness probe"
-ready_http="$(curl -sS -o /tmp/monitor_ready_body.txt -w "%{http_code}" "${backend}/api/health/ready")"
+ready_http="$(curl "${curl_opts[@]}" -o /tmp/monitor_ready_body.txt -w "%{http_code}" "${backend}/api/health/ready")"
 ready_body="$(cat /tmp/monitor_ready_body.txt)"
 echo "Readiness HTTP: ${ready_http}  body: ${ready_body}"
 if [[ "${ready_http}" != "200" ]]; then
@@ -90,7 +107,7 @@ print("PASS: readiness probe reports ready=true, db=ok")
 PY
 
 echo "Checking business metrics endpoint"
-business_with_time="$(curl -sS -w "\n%{http_code} %{time_total}" "${backend}/api/metrics/business")"
+business_with_time="$(curl "${curl_opts[@]}" -w "\n%{http_code} %{time_total}" "${backend}/api/metrics/business")"
 business_body="$(echo "${business_with_time}" | head -n 1)"
 business_status_line="$(echo "${business_with_time}" | tail -n 1)"
 business_http_code="$(echo "${business_status_line}" | awk '{print $1}')"
@@ -139,7 +156,7 @@ if [[ "${run_stripe_check}" == "1" ]]; then
     email="monitor-$(date +%s)-$RANDOM@test.io"
     password="MonPass123"
 
-    register_resp="$(curl -sS -X POST "${backend}/api/auth/register" \
+    register_resp="$(curl "${curl_opts[@]}" -X POST "${backend}/api/auth/register" \
         -H "Content-Type: application/json" \
         -d "{\"name\":\"Monitor Bot\",\"email\":\"${email}\",\"password\":\"${password}\",\"role\":\"company\"}")"
 
@@ -163,7 +180,7 @@ print(f"FAIL: register response unexpected: {resp}")
 sys.exit(1)
 PY
 
-    login_resp="$(curl -sS -X POST "${backend}/api/auth/login" \
+    login_resp="$(curl "${curl_opts[@]}" -X POST "${backend}/api/auth/login" \
         -H "Content-Type: application/json" \
         -d "{\"email\":\"${email}\",\"password\":\"${password}\"}")"
 
@@ -181,7 +198,7 @@ PY
     fi
     echo "PASS: token acquired"
 
-    company_resp="$(curl -sS -X POST "${backend}/api/companies/register" \
+    company_resp="$(curl "${curl_opts[@]}" -X POST "${backend}/api/companies/register" \
         -H "Authorization: Bearer ${token}" \
         -H "Content-Type: application/json" \
         -d '{"name":"Monitor Co","industry":"services","country":"SN","description":"Monitoring profile"}')"
@@ -202,7 +219,7 @@ print(f"FAIL: company profile response unexpected: {resp}")
 sys.exit(1)
 PY
 
-    checkout_resp="$(curl -sS -X POST "${backend}/api/payments/create-checkout-session" \
+    checkout_resp="$(curl "${curl_opts[@]}" -X POST "${backend}/api/payments/create-checkout-session" \
         -H "Authorization: Bearer ${token}" \
         -H "Content-Type: application/json" \
         -d '{"planId":"level1"}')"

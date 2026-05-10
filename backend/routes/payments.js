@@ -3,21 +3,11 @@ const router = express.Router()
 const Stripe = require('stripe')
 const { query } = require('../db')
 const { checkFraud } = require('../lib/fraudDetection')
+const { sendPaymentConfirmation } = require('../lib/mailer')
 
 const levelFromPlanId = (planId) => {
   const map = { level1: 1, level2: 2, level3: 3 }
   return map[planId] || null
-}
-
-const sendPaymentConfirmationEmail = async ({ email, amountCents, level }) => {
-  if (!email) return
-  // Placeholder integration point (SES/SendGrid/Resend). We keep it non-blocking.
-  console.log(JSON.stringify({
-    event: 'payment.email.queued',
-    email,
-    amountUsd: (amountCents || 0) / 100,
-    level,
-  }))
 }
 
 let _stripe = null
@@ -207,14 +197,29 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
       let companyUserId = null
 
-      // Update company certification level
+      // Update company certification level + mark verified + store Stripe customer_id
       await query(
         `UPDATE companies
          SET certification_level = GREATEST(certification_level, $1),
+             verified_at = COALESCE(verified_at, NOW()),
+             stripe_customer_id = COALESCE(stripe_customer_id, $3),
              updated_at = NOW()
          WHERE id = $2`,
-        [planLevel, resolvedCompanyId]
+        [planLevel, resolvedCompanyId, session.customer || null]
       )
+
+      // Stamp certification with granted_at and expires_at (1 year)
+      if (effectiveCertificationId) {
+        await query(
+          `UPDATE certifications
+           SET status = 'active',
+               granted_at = COALESCE(granted_at, NOW()),
+               expires_at = COALESCE(expires_at, NOW() + INTERVAL '1 year'),
+               updated_at = NOW()
+           WHERE id = $1`,
+          [effectiveCertificationId]
+        )
+      }
 
       const companyResult = await query('SELECT user_id FROM companies WHERE id = $1 LIMIT 1', [resolvedCompanyId])
       companyUserId = companyResult.rows[0]?.user_id || resolvedUserId || null
@@ -227,10 +232,32 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         stripeEventId: event.id,
       }))
 
-      await sendPaymentConfirmationEmail({
+      const companyNameResult = await query('SELECT name, country FROM companies WHERE id = $1 LIMIT 1', [resolvedCompanyId])
+      const companyRow = companyNameResult.rows[0] || {}
+
+      // Level 3: auto-create a PAC site inspection mission (one per company max)
+      if (planLevel === 3) {
+        await query(
+          `INSERT INTO missions (company_id, company_name, location, type, description, status, fee_usd)
+           SELECT $1, $2, $3, 'site_inspection', $4, 'available', 500
+           WHERE NOT EXISTS (
+             SELECT 1 FROM missions WHERE company_id = $1 AND type = 'site_inspection'
+           )`,
+          [
+            resolvedCompanyId,
+            companyRow.name || null,
+            companyRow.country || null,
+            `Site inspection for Level 3 certification — ${companyRow.name || 'company #' + resolvedCompanyId}`,
+          ]
+        ).catch((e) => console.error('Mission auto-create error:', e.message))
+        console.log(JSON.stringify({ event: 'mission.created', companyId: resolvedCompanyId, level: 3 }))
+      }
+
+      await sendPaymentConfirmation({
         email: session.customer_details?.email || session.customer_email || null,
         amountCents: session.amount_total || 0,
         level: planLevel,
+        companyName: companyRow.name || null,
       })
 
       // Stripe Radar + dispute risk signals (if payment_intent is available)
@@ -312,6 +339,52 @@ router.get('/stats', async (req, res) => {
   } catch (err) {
     console.error('Payments stats error:', err.message)
     res.status(500).json({ error: 'Failed to load payment stats' })
+  }
+})
+
+// POST /api/payments/portal — Stripe Customer Portal for billing history & receipts
+router.post('/portal', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const stripe = getStripe()
+
+    // Look up stripe_customer_id stored on their company
+    const companyResult = await query(
+      'SELECT stripe_customer_id FROM companies WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    )
+    let customerId = companyResult.rows[0]?.stripe_customer_id
+
+    // Fallback: search Stripe by email
+    if (!customerId && req.user.email) {
+      const customers = await stripe.customers.list({ email: req.user.email, limit: 1 })
+      if (customers.data.length) {
+        customerId = customers.data[0].id
+        // Persist for next time
+        if (companyResult.rows[0]) {
+          await query(
+            'UPDATE companies SET stripe_customer_id = $1 WHERE user_id = $2',
+            [customerId, req.user.id]
+          ).catch(() => {})
+        }
+      }
+    }
+
+    if (!customerId) {
+      return res.status(404).json({ error: 'No billing account found. Complete a payment first.' })
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer:   customerId,
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`,
+    })
+    res.json({ url: session.url })
+  } catch (err) {
+    console.error('Billing portal error:', err.message)
+    if (err.type === 'StripeInvalidRequestError') {
+      return res.status(400).json({ error: 'Billing portal unavailable. Please contact support.' })
+    }
+    res.status(500).json({ error: 'Failed to open billing portal' })
   }
 })
 

@@ -1,0 +1,506 @@
+{
+  "brand": {
+    "name": "MyDD",
+    "tagline": "My Due Diligence · por B&E Consult",
+    "tagline_short": "Verificação oficial de fornecedores",
+    "powered": "Desenvolvido por B&E Consult FZCO · Dubai Silicon Oasis, EAU"
+  },
+  "nav": {
+    "logout": "Sair",
+    "login": "Entrar",
+    "pac_portal": "Portal do Agente PAC",
+    "registry": "REGISTRO DE CONFIANÇA B&E"
+  },
+  "landing": {
+    "cta_start": "Certificar-me",
+    "cta_login": "Entrar",
+    "cta_registry": "Buscar no Registro",
+    "nav_registry": "Buscar no Registro",
+    "hero": {
+      "badge": "Certificação Internacional de Fornecedores",
+      "title_1": "Seus fornecedores,",
+      "title_highlight": "verificados.",
+      "title_2": "Sua confiança, conquistada.",
+      "subtitle": "MyDD é o registro de due diligence que certifica fornecedores em 3 níveis — da análise documental à inspeção presencial por um agente PAC certificado. Confiado por traders do mundo inteiro."
+    },
+    "stats": {
+      "cert_levels": "Níveis de certificação",
+      "certified_companies": "Fornecedores certificados",
+      "languages": "Idiomas",
+      "verification": "Prazo de verificação"
+    },
+    "features": {
+      "title": "Tudo o que você precisa para confiar na sua cadeia de fornecimento",
+      "subtitle": "Três níveis de certificação, verificação em tempo real e uma rede global de agentes PAC.",
+      "level1_title": "Nível 1 — Análise documental",
+      "level1_desc": "Documentos legais, registro e licenças comerciais revisados e validados pelos analistas da B&E.",
+      "level2_title": "Nível 2 — KYC completo",
+      "level2_desc": "KYC completo, identificação de beneficiários finais, conformidade AML e pontuação de risco.",
+      "level3_title": "Nível 3 — Inspeção in loco",
+      "level3_desc": "Auditoria física realizada por um agente PAC certificado nas instalações do fornecedor.",
+      "global_title": "Cobertura global",
+      "global_desc": "Agentes PAC certificados nos principais corredores comerciais: Oriente Médio, África, Ásia, Europa.",
+      "realtime_title": "Verificação em tempo real",
+      "realtime_desc": "Selo de verificação público em /verify/:id. Compradores confirmam a certificação em segundos.",
+      "secure_title": "Trilha de auditoria imutável",
+      "secure_desc": "Cada etapa da certificação é registrada. Log de auditoria inviolável com rastreabilidade completa."
+    },
+    "how": {
+      "title": "Como funciona a certificação",
+      "subtitle": "Do cadastro ao selo certificado em 4 passos.",
+      "step1_title": "Cadastre sua empresa",
+      "step1_desc": "Crie sua conta e preencha o perfil da empresa: setor, país e descrição.",
+      "step2_title": "Escolha um nível de certificação",
+      "step2_desc": "Selecione Bronze, Prata ou Ouro e pague com segurança via Stripe. Assinatura anual.",
+      "step3_title": "Conclua o processo de due diligence",
+      "step3_desc": "Envie os documentos exigidos. Para o Nível 3, um agente PAC agenda uma visita presencial.",
+      "step4_title": "Receba seu selo",
+      "step4_desc": "Sua certificação aparece no Registro de Confiança B&E. Compartilhe seu link de verificação público com compradores."
+    },
+    "plans": {
+      "title": "Preços transparentes",
+      "subtitle": "Certificação anual. Sem taxas ocultas. Cancele quando quiser.",
+      "popular": "MAIS POPULAR",
+      "per_year": "/ ano",
+      "bronze_f1": "Listagem no registro",
+      "bronze_f2": "Selo de certificação",
+      "bronze_f3": "Verificação documental",
+      "silver_f1": "Tudo do Bronze",
+      "silver_f2": "Validação KYC completa",
+      "silver_f3": "Listagem prioritária",
+      "silver_f4": "Relatório de auditoria B&E",
+      "gold_f1": "Tudo da Prata",
+      "gold_f2": "Auditoria PAC presencial",
+      "gold_f3": "Posição de destaque no registro",
+      "gold_f4": "Gerente de conta dedicado",
+      "gold_f5": "Acesso ao portal PAC"
+    },
+    "cta_banner": {
+      "title": "Pronto para conquistar a confiança dos seus compradores?",
+      "subtitle": "Junte-se às empresas já certificadas no Registro de Confiança B&E. Obtenha sua primeira certificação em menos de 24 horas."
+    }
+  },
+  "login": {
+    "title": "Entrar",
+    "email": "E-mail",
+    "password": "Senha",
+    "submit": "ENTRAR",
+    "submitting": "Entrando…",
+    "no_account": "Não tem conta?",
+    "register_link": "Cadastre-se aqui",
+    "error_default": "Falha ao entrar."
+  },
+  "register": {
+    "title": "Criar sua conta",
+    "full_name": "Nome completo / Empresa",
+    "email": "E-mail",
+    "password": "Senha",
+    "role_label": "Estou me cadastrando como…",
+    "roles": {
+      "company_label": "Empresa",
+      "company_desc": "Certifique sua empresa",
+      "trader_label": "Comerciante",
+      "trader_desc": "Verifique seus fornecedores",
+      "pac_label": "Agente PAC",
+      "pac_desc": "Realize inspeções in loco"
+    },
+    "submit": "CRIAR CONTA",
+    "submitting": "Criando conta…",
+    "already_registered": "Já está cadastrado?",
+    "sign_in": "Entrar",
+    "error_default": "Falha no cadastro"
+  },
+  "dashboard": {
+    "tabs": {
+      "overview": "Visão geral",
+      "register": "Registrar empresa",
+      "pricing": "Planos e atualização",
+      "metrics": "Métricas",
+      "documents": "Documents"
+    },
+    "overview": {
+      "cert_level": "Nível de certificação",
+      "registry_status": "Status no registro",
+      "verification": "Verificação",
+      "status_active": "Ativo",
+      "status_not_registered": "Não registrado",
+      "status_verified": "Verificado",
+      "status_pending": "Pendente",
+      "cert_none": "Nenhum",
+      "cert_validity": "Validade da certificação",
+      "cert_valid_until": "Válido até",
+      "cert_expiring": "Expira em",
+      "cert_expired": "Certificação expirada — renove agora",
+      "days": "dias",
+      "view_cert": "Ver Certificado",
+      "copy_link": "Copiar link",
+      "copied": "Copiado!",
+      "get_certified_title": "Obtenha sua certificação",
+      "get_certified_desc": "Escolha um nível de certificação para aparecer no Registro de Confiança B&E e acessar compradores verificados.",
+      "view_plans": "Ver planos de certificação",
+      "renew": "↻ Renovar agora",
+      "print_cert": "Imprimir / PDF"
+    },
+    "cert_levels": {
+      "0": "Não certificado",
+      "1": "Certificação Bronze",
+      "2": "Certificação Prata",
+      "3": "Certificação Ouro"
+    },
+    "company_form": {
+      "title": "Perfil da empresa",
+      "company_name": "Nome da empresa",
+      "industry": "Setor",
+      "industry_placeholder": "ex. Manufatura, Comércio",
+      "country": "País",
+      "description": "Descrição",
+      "save": "Salvar perfil",
+      "saving": "Salvando…",
+      "saved": "Perfil salvo com sucesso",
+      "sector": "Setor / Indústria",
+      "sector_placeholder": "ex. Fabricação, Comércio, Agricultura",
+      "country_placeholder": "ex. Emirados Árabes Unidos",
+      "website": "Website",
+      "description_placeholder": "Descreva brevemente as atividades, produtos e mercados da sua empresa…"
+    },
+    "pricing": {
+      "title": "Planos de certificação",
+      "subtitle": "Certificação anual válida por 12 meses. Pagamento único.",
+      "complete_profile": "Complete seu perfil de empresa primeiro",
+      "complete_profile_desc": "O pagamento é habilitado após salvar o perfil da empresa.",
+      "most_popular": "MAIS POPULAR",
+      "per_year": "/ano",
+      "get_certified": "Certificar-me",
+      "current_plan": "Plano atual",
+      "redirecting": "Redirecionando…",
+      "plans": {
+        "level1_name": "Certificação Bronze",
+        "level1_price": "US$490",
+        "level1_f1": "Listagem básica no registro",
+        "level1_f2": "Selo de certificação",
+        "level1_f3": "Verificação por e-mail",
+        "level1_f4": "Válido por 12 meses",
+        "level2_name": "Certificação Prata",
+        "level2_price": "US$990",
+        "level2_f1": "Tudo do Bronze",
+        "level2_f2": "Verificação de documentos",
+        "level2_f3": "Listagem prioritária",
+        "level2_f4": "Relatório de auditoria B&E",
+        "level2_f5": "Válido por 12 meses",
+        "level3_name": "Certificação Ouro",
+        "level3_price": "US$2.490",
+        "level3_f1": "Tudo da Prata",
+        "level3_f2": "Auditoria in loco",
+        "level3_f3": "Posição de destaque",
+        "level3_f4": "Gerente de conta dedicado",
+        "level3_f5": "Acesso ao portal PAC",
+        "level3_f6": "Válido por 12 meses"
+      }
+    },
+    "onboarding": {
+      "title": "Começando",
+      "step_account": "Conta criada",
+      "step_profile": "Perfil da empresa",
+      "step_certified": "Certificação"
+    },
+    "billing": "Faturação",
+    "verify_email": {
+      "title": "Por favor verifique o seu e-mail",
+      "desc": "Verifique a sua caixa de entrada para confirmar a sua conta.",
+      "resend": "Reenviar e-mail",
+      "sent": "E-mail enviado!"
+    },
+    "documents": {
+      "title": "Certification Documents",
+      "subtitle": "Upload supporting documents for your certification review.",
+      "drop_zone": "Drop files here or click to browse",
+      "uploading": "Uploading…",
+      "type_label": "Type:",
+      "type_general": "General",
+      "type_id": "Identity",
+      "type_financial": "Financial",
+      "type_legal": "Legal",
+      "empty": "No documents uploaded yet.",
+      "register_first": "Please register your company profile before uploading documents."
+    }
+  },
+  "pac": {
+    "portal": "Portal do Agente PAC",
+    "tabs": {
+      "missions": "Missões disponíveis",
+      "profile": "Meu perfil"
+    },
+    "missions": {
+      "status_title": "Seu status",
+      "active": "Missões ativas",
+      "available": "Disponíveis",
+      "completed": "Concluídas",
+      "no_missions": "Nenhuma missão disponível",
+      "no_missions_desc": "Novas solicitações de inspeção aparecerão aqui quando empresas solicitarem a certificação Nível 3.",
+      "fee": "honorário",
+      "accept": "Aceitar",
+      "assigned": "Atribuída",
+      "mission_accepted": "Missão aceita!",
+      "error_accept": "Erro ao aceitar a missão",
+      "submit_report": "Relatório de inspeção",
+      "submit_report_btn": "Enviar relatório",
+      "cancel_report": "Cancelar",
+      "report_text": "Relatório",
+      "report_text_placeholder": "Descreva suas descobertas, observações e recomendações em detalhes…",
+      "outcome": "Resultado",
+      "outcome_pass": "Aprovado",
+      "outcome_fail": "Reprovado",
+      "outcome_conditional": "Condicional",
+      "mission_completed": "Relatório enviado com sucesso!",
+      "error_complete": "Erro ao enviar o relatório",
+      "completed_badge": "Concluída",
+      "completed_on": "Concluída em",
+      "view_report": "Ver relatório",
+      "back_to_missions": "Voltar às missões"
+    },
+    "profile": {
+      "title": "Perfil do Agente PAC",
+      "full_name": "Nome completo",
+      "location": "País / Cidade",
+      "location_placeholder": "ex. Dubai, EAU",
+      "languages": "Idiomas",
+      "languages_placeholder": "ex. Inglês, Francês, Árabe",
+      "certifications": "Certificações",
+      "certifications_placeholder": "ex. ISO 9001, AML, CAMS",
+      "bio": "Bio / Experiência",
+      "bio_placeholder": "Descreva sua experiência, setores cobertos, missões anteriores…",
+      "save": "SALVAR PERFIL",
+      "saved": "Perfil salvo com sucesso",
+      "error": "Erro ao salvar o perfil"
+    }
+  },
+  "verify": {
+    "subtitle": "Verificação oficial de fornecedor",
+    "verifying": "Verificando…",
+    "not_found": "Empresa não encontrada ou não registrada no MyDD.",
+    "status": "Status",
+    "cert_level": "Nível de certificação",
+    "badge": "Selo",
+    "verified_by": "Verificado por",
+    "sign_in_prompt": "É uma empresa?",
+    "sign_in_link": "Entrar no MyDD →",
+    "badges": {
+      "0_label": "NÃO CERTIFICADO",
+      "0_desc": "Esta empresa ainda não concluiu a certificação MyDD.",
+      "1_label": "NÍVEL 1 — DOCUMENTOS VERIFICADOS",
+      "1_desc": "Documentos legais revisados e validados por analistas da MyDD.",
+      "2_label": "NÍVEL 2 — KYC VALIDADO",
+      "2_desc": "KYC completo, verificação de beneficiários finais e conformidade AML confirmados.",
+      "3_label": "NÍVEL 3 — LOCAL INSPECIONADO",
+      "3_desc": "Inspeção física concluída por agente PAC certificado."
+    },
+    "download_cert": "⊞ Imprimir / PDF",
+    "website": "Website",
+    "embed_badge": "Incorporar este selo no seu site",
+    "share_linkedin": "Share on LinkedIn"
+  },
+  "forgot_password": {
+    "title": "Esqueci minha senha",
+    "subtitle": "Insira seu e-mail para receber o link de redefinição",
+    "email": "E-mail",
+    "submit": "Enviar link de redefinição",
+    "submitting": "Enviando…",
+    "success": "Se este e-mail estiver cadastrado, você receberá um link de redefinição em breve.",
+    "back_to_login": "Voltar ao login",
+    "error_default": "A solicitação falhou. Tente novamente."
+  },
+  "reset_password": {
+    "title": "Redefinir senha",
+    "new_password": "Nova senha",
+    "confirm_password": "Confirmar senha",
+    "submit": "Redefinir senha",
+    "submitting": "Redefinindo…",
+    "success": "Senha redefinida com sucesso. Você já pode entrar.",
+    "error_mismatch": "As senhas não coincidem.",
+    "error_expired": "Este link é inválido ou expirou.",
+    "error_default": "A redefinição falhou. Tente novamente.",
+    "back_to_login": "Voltar ao login"
+  },
+  "trader": {
+    "portal_title": "Registro de Fornecedores",
+    "portal_subtitle": "Pesquise fornecedores certificados no Registro Confiável B&E",
+    "search_placeholder": "Pesquisar por empresa, país, setor…",
+    "filter_level": "Nível mínimo",
+    "all_levels": "Todos os níveis",
+    "filter_country": "País",
+    "all_countries": "Todos os países",
+    "no_results": "Nenhuma empresa certificada corresponde à sua pesquisa.",
+    "cert_level": "Nível",
+    "view_cert": "Ver Certificado",
+    "copy_link": "Copiar link",
+    "copied": "Copiado!",
+    "results_count": "resultados encontrados",
+    "loading": "Carregando registro…",
+    "error": "Falha ao carregar o registro.",
+    "empty_title": "Sem fornecedores certificados ainda",
+    "empty_desc": "Seja o primeiro a se certificar, ou ajuste seus filtros de pesquisa.",
+    "empty_cta": "Certificar-se"
+  },
+  "admin": {
+    "title": "Painel de Administração",
+    "tabs": {
+      "overview": "Visão geral",
+      "users": "Usuários",
+      "companies": "Empresas",
+      "missions": "Missões"
+    },
+    "stats": {
+      "total_users": "Total de usuários",
+      "new_30d": "Novos (30d)",
+      "total_companies": "Empresas",
+      "certified": "Certificadas",
+      "revenue": "Receita"
+    },
+    "search_placeholder": "Pesquisar…",
+    "users": {
+      "title": "Gerenciamento de Usuários",
+      "email": "E-mail",
+      "name": "Nome",
+      "role": "Função",
+      "joined": "Cadastrado em",
+      "last_login": "Último acesso",
+      "never": "Nunca"
+    },
+    "companies": {
+      "title": "Gerenciamento de Empresas",
+      "name": "Empresa",
+      "email": "E-mail",
+      "country": "País",
+      "sector": "Setor",
+      "level": "Nível",
+      "status": "Status",
+      "set_level": "Definir nível",
+      "suspend": "Suspend",
+      "unsuspend": "Unsuspend",
+      "suspend_title": "Suspend company",
+      "suspend_confirm": "You are about to suspend",
+      "suspend_reason_placeholder": "Reason for suspension (optional)",
+      "confirm_suspend": "Confirm Suspension"
+    },
+    "missions": {
+      "title": "Missões PAC",
+      "company": "Empresa",
+      "location": "Local",
+      "status": "Status",
+      "assigned_to": "Atribuída a",
+      "fee": "Honorário",
+      "created": "Criada em",
+      "outcome": "Resultado",
+      "report": "Relatório",
+      "cancel_mission": "Cancelar",
+      "reopen_mission": "Reabrir"
+    },
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saved": "Salvo",
+    "no_data": "Nenhum registro encontrado.",
+    "cancel": "Cancel"
+  },
+  "metrics": {
+    "title": "Métricas de negócio",
+    "loading": "Carregando…",
+    "fetching": "Buscando dados do banco de dados…",
+    "updated": "Atualizado",
+    "live": "AO VIVO",
+    "polling": "POLLING",
+    "vs_snapshot": "vs. último instantâneo",
+    "sections": {
+      "registry": "Visão geral do registro",
+      "trust_fraud": "Confiança e fraude",
+      "activity": "Atividade da plataforma"
+    },
+    "kpis": {
+      "users": "Total de usuários",
+      "companies": "Empresas",
+      "certified": "Certificadas",
+      "cert_rate_subtitle": "taxa de certificação",
+      "revenue": "Receita",
+      "requests": "Requisições HTTP",
+      "since_restart": "desde a última reinicialização",
+      "data_as_of": "Dados até"
+    },
+    "trust": {
+      "avg_score": "Pontuação média de confiança",
+      "indicators": "Baseado em 27 indicadores",
+      "fraud_alerts": "Alertas de fraude",
+      "fraud_clear": "SEM ALERTAS",
+      "fraud_active": "ATIVAS",
+      "cert_rate": "Taxa cert.",
+      "low_risk": "RISCO BAIXO",
+      "medium_risk": "RISCO MÉDIO",
+      "high_risk": "RISCO ALTO",
+      "rules": {
+        "disposable_email": "E-mail descartável",
+        "no_company_profile": "Sem perfil de empresa",
+        "rapid_profile_change": "Alterações rápidas",
+        "ip_multi_account": "Multi-conta por IP"
+      }
+    }
+  },
+  "not_found": {
+    "title": "Página não encontrada",
+    "description": "A página que você procura não existe ou foi movida.",
+    "go_home": "Voltar ao início"
+  },
+  "cert_print": {
+    "print_pdf": "Imprimir / Salvar PDF",
+    "copy_link": "Copiar link de verificação"
+  },
+  "cookie": {
+    "title": "Usamos cookies",
+    "desc": "Usamos cookies essenciais para que o MyDD funcione. Sem rastreamento ou publicidade.",
+    "learn_more": "Saiba mais",
+    "accept": "Aceitar",
+    "decline": "Recusar"
+  },
+  "verify_email": {
+    "verifying": "A verificar o e-mail…",
+    "success_title": "E-mail verificado!",
+    "success_desc": "A sua conta está totalmente ativa.",
+    "error_title": "Verificação falhou",
+    "error_desc": "Este link é inválido ou expirou.",
+    "go_dashboard": "Ir para o painel",
+    "missing_token": "Token de verificação não encontrado.",
+    "invalid_token": "Token inválido ou expirado."
+  },
+  "upsell": {
+    "next_step": "Next step",
+    "per_year": "per year",
+    "register_first": "Register your company profile first",
+    "lvl0": {
+      "title": "Start your certification journey",
+      "subtitle": "Join the B&E Trusted Registry and stand out in global trade.",
+      "cta": "View Certification Plans"
+    },
+    "l0": {
+      "perk1": "Listed in the global B&E Registry",
+      "perk2": "Embeddable trust badge for your website",
+      "perk3": "Verified supplier status"
+    },
+    "lvl1": {
+      "title": "Upgrade to Level 2 — KYC Full Validation",
+      "subtitle": "Strengthen trust with KYC validation and beneficial owner screening.",
+      "cta": "Upgrade to Silver"
+    },
+    "l1": {
+      "perk1": "KYC & UBO identity screening",
+      "perk2": "Higher trust score in the Registry",
+      "perk3": "Silver badge on your profile"
+    },
+    "lvl2": {
+      "title": "Upgrade to Level 3 — Physical Site Inspection",
+      "subtitle": "The highest level of trust. A certified PAC agent visits your facilities.",
+      "cta": "Upgrade to Gold"
+    },
+    "l2": {
+      "perk1": "PAC agent physical site inspection",
+      "perk2": "Gold badge — maximum credibility",
+      "perk3": "Featured placement in Registry search"
+    }
+  }
+}
