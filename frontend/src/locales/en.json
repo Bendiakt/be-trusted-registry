@@ -1,0 +1,502 @@
+{
+  "brand": {
+    "name": "MyDD",
+    "tagline": "My Due Diligence · by B&E Consult",
+    "tagline_short": "Official Supplier Verification",
+    "powered": "Powered by B&E Consult FZCO · Dubai Silicon Oasis, UAE"
+  },
+  "nav": {
+    "logout": "Logout",
+    "login": "Sign In",
+    "pac_portal": "PAC Agent Portal",
+    "registry": "B&E TRUSTED REGISTRY"
+  },
+  "landing": {
+    "cta_start": "Get Certified",
+    "cta_login": "Sign In",
+    "cta_registry": "Search Registry",
+    "nav_registry": "Search Registry",
+    "hero": {
+      "badge": "International Supplier Certification",
+      "title_1": "Your suppliers,",
+      "title_highlight": "verified.",
+      "title_2": "Your trust, earned.",
+      "subtitle": "MyDD is the due-diligence registry that certifies suppliers across 3 levels — from document review to on-site PAC inspection. Trusted by traders worldwide."
+    },
+    "stats": {
+      "cert_levels": "Certification Levels",
+      "certified_companies": "Certified Suppliers",
+      "languages": "Languages",
+      "verification": "Verification turnaround"
+    },
+    "features": {
+      "title": "Everything you need to trust your supply chain",
+      "subtitle": "Three certification tiers, real-time verification, and a global PAC agent network.",
+      "level1_title": "Level 1 — Document Review",
+      "level1_desc": "Legal documents, registration, and business licenses reviewed and validated by B&E analysts.",
+      "level2_title": "Level 2 — Full KYC",
+      "level2_desc": "Complete KYC, UBO identification, AML compliance screening, and risk scoring.",
+      "level3_title": "Level 3 — Site Inspection",
+      "level3_desc": "Physical on-site audit conducted by a certified PAC agent at the supplier's premises.",
+      "global_title": "Global Coverage",
+      "global_desc": "Certified PAC agents in every major trade corridor. Middle East, Africa, Asia, Europe.",
+      "realtime_title": "Real-time Verification",
+      "realtime_desc": "Public verification badge at /verify/:id. Buyers confirm certification in seconds.",
+      "secure_title": "Immutable Audit Trail",
+      "secure_desc": "Every certification step is logged. Tamper-proof audit log with full traceability."
+    },
+    "how": {
+      "title": "How certification works",
+      "subtitle": "From registration to certified badge in 4 steps.",
+      "step1_title": "Register your company",
+      "step1_desc": "Create your account, fill in your company profile with industry, country, and description.",
+      "step2_title": "Choose a certification level",
+      "step2_desc": "Select Bronze, Silver, or Gold and pay securely via Stripe. Annual subscription.",
+      "step3_title": "Complete due diligence",
+      "step3_desc": "Submit required documents. For Level 3, a PAC agent schedules an on-site visit.",
+      "step4_title": "Receive your badge",
+      "step4_desc": "Your certification appears in the B&E Trusted Registry. Share your public verification link with buyers."
+    },
+    "plans": {
+      "title": "Transparent pricing",
+      "subtitle": "Annual certification. No hidden fees. Cancel anytime.",
+      "popular": "MOST POPULAR",
+      "per_year": "/ year",
+      "bronze_f1": "Registry listing",
+      "bronze_f2": "Certification badge",
+      "bronze_f3": "Document verification",
+      "silver_f1": "Everything in Bronze",
+      "silver_f2": "Full KYC validation",
+      "silver_f3": "Priority listing",
+      "silver_f4": "B&E Audit report",
+      "gold_f1": "Everything in Silver",
+      "gold_f2": "On-site PAC audit",
+      "gold_f3": "Top registry placement",
+      "gold_f4": "Dedicated account manager",
+      "gold_f5": "PAC portal access"
+    },
+    "cta_banner": {
+      "title": "Ready to build trust with your buyers?",
+      "subtitle": "Join companies already certified in the B&E Trusted Registry. Get your first certification in under 24 hours."
+    }
+  },
+  "login": {
+    "title": "Sign In",
+    "email": "Email",
+    "password": "Password",
+    "submit": "SIGN IN",
+    "submitting": "Signing in…",
+    "no_account": "No account?",
+    "register_link": "Register here",
+    "error_default": "Login failed."
+  },
+  "register": {
+    "title": "Create your account",
+    "full_name": "Full Name / Company",
+    "email": "Email",
+    "password": "Password",
+    "role_label": "I am registering as…",
+    "roles": {
+      "company_label": "Company",
+      "company_desc": "Get your company certified",
+      "trader_label": "Trader",
+      "trader_desc": "Verify your suppliers",
+      "pac_label": "PAC Agent",
+      "pac_desc": "Conduct site inspections"
+    },
+    "submit": "CREATE ACCOUNT",
+    "submitting": "Creating account…",
+    "already_registered": "Already registered?",
+    "sign_in": "Sign in",
+    "error_default": "Registration failed"
+  },
+  "dashboard": {
+    "tabs": {
+      "overview": "Overview",
+      "register": "Register Company",
+      "pricing": "Pricing & Upgrade",
+      "metrics": "Metrics",
+      "documents": "Documents"
+    },
+    "overview": {
+      "cert_level": "Certification Level",
+      "registry_status": "Registry Status",
+      "verification": "Verification",
+      "status_active": "Active",
+      "status_not_registered": "Not Registered",
+      "status_verified": "Verified",
+      "status_pending": "Pending",
+      "cert_none": "None",
+      "cert_validity": "Certification Validity",
+      "cert_valid_until": "Valid until",
+      "cert_expiring": "Expires in",
+      "cert_expired": "Certification expired — please renew",
+      "days": "days",
+      "view_cert": "View Certificate",
+      "copy_link": "Copy Link",
+      "copied": "Copied!",
+      "get_certified_title": "Get Certified",
+      "get_certified_desc": "Choose a certification level to appear in the B&E Trusted Registry and unlock supplier access from verified traders.",
+      "view_plans": "View Certification Plans",
+      "renew": "↻ Renew Now",
+      "print_cert": "Print / PDF"
+    },
+    "cert_levels": {
+      "0": "Unverified",
+      "1": "Bronze Certified",
+      "2": "Silver Certified",
+      "3": "Gold Certified"
+    },
+    "company_form": {
+      "title": "Company Profile",
+      "company_name": "Company Name",
+      "sector": "Sector / Industry",
+      "sector_placeholder": "e.g. Manufacturing, Trading, Agriculture",
+      "country": "Country",
+      "country_placeholder": "e.g. United Arab Emirates",
+      "website": "Website",
+      "description": "Description",
+      "description_placeholder": "Briefly describe your company's activities, products, and markets…",
+      "save": "Save Profile",
+      "saving": "Saving…",
+      "saved": "Profile saved successfully"
+    },
+    "pricing": {
+      "title": "Certification Plans",
+      "subtitle": "Annual certification valid for 12 months. One-time payment.",
+      "complete_profile": "Complete your company profile first",
+      "complete_profile_desc": "Checkout is enabled after saving your company profile in the Register Company tab.",
+      "most_popular": "MOST POPULAR",
+      "per_year": "/yr",
+      "get_certified": "Get Certified",
+      "current_plan": "Current Plan",
+      "redirecting": "Redirecting…",
+      "plans": {
+        "level1_name": "Bronze Certification",
+        "level1_price": "$490",
+        "level1_f1": "Basic registry listing",
+        "level1_f2": "Certification badge",
+        "level1_f3": "Email verification",
+        "level1_f4": "Valid 12 months",
+        "level2_name": "Silver Certification",
+        "level2_price": "$990",
+        "level2_f1": "Everything in Bronze",
+        "level2_f2": "Document verification",
+        "level2_f3": "Priority listing",
+        "level2_f4": "B&E Audit report",
+        "level2_f5": "Valid 12 months",
+        "level3_name": "Gold Certification",
+        "level3_price": "$2,490",
+        "level3_f1": "Everything in Silver",
+        "level3_f2": "On-site audit",
+        "level3_f3": "Top registry placement",
+        "level3_f4": "Dedicated account manager",
+        "level3_f5": "PAC portal access",
+        "level3_f6": "Valid 12 months"
+      }
+    },
+    "onboarding": {
+      "title": "Getting started",
+      "step_account": "Account created",
+      "step_profile": "Company profile",
+      "step_certified": "Certification"
+    },
+    "billing": "Billing",
+    "verify_email": {
+      "title": "Please verify your email",
+      "desc": "Check your inbox for a verification link to confirm your account.",
+      "resend": "Resend email",
+      "sent": "Email sent!"
+    },
+    "documents": {
+      "title": "Certification Documents",
+      "subtitle": "Upload supporting documents for your certification review.",
+      "drop_zone": "Drop files here or click to browse",
+      "uploading": "Uploading…",
+      "type_label": "Type:",
+      "type_general": "General",
+      "type_id": "Identity",
+      "type_financial": "Financial",
+      "type_legal": "Legal",
+      "empty": "No documents uploaded yet.",
+      "register_first": "Please register your company profile before uploading documents."
+    }
+  },
+  "pac": {
+    "portal": "PAC Agent Portal",
+    "tabs": {
+      "missions": "Available Missions",
+      "profile": "My Profile"
+    },
+    "missions": {
+      "status_title": "Your Status",
+      "active": "Active Missions",
+      "available": "Available",
+      "completed": "Completed",
+      "no_missions": "No missions available yet",
+      "no_missions_desc": "New site inspection requests will appear here when companies apply for Level 3 certification.",
+      "fee": "fee",
+      "accept": "Accept",
+      "assigned": "Assigned",
+      "mission_accepted": "Mission accepted!",
+      "error_accept": "Error accepting mission",
+      "submit_report": "Inspection Report",
+      "submit_report_btn": "Submit Report",
+      "cancel_report": "Cancel",
+      "report_text": "Report",
+      "report_text_placeholder": "Describe your findings, observations, and recommendations in detail…",
+      "outcome": "Outcome",
+      "outcome_pass": "Pass",
+      "outcome_fail": "Fail",
+      "outcome_conditional": "Conditional",
+      "mission_completed": "Report submitted successfully!",
+      "error_complete": "Error submitting report",
+      "completed_badge": "Completed",
+      "completed_on": "Completed on",
+      "view_report": "View Report",
+      "back_to_missions": "Back to Missions"
+    },
+    "profile": {
+      "title": "PAC Agent Profile",
+      "full_name": "Full Name",
+      "location": "Country / City",
+      "location_placeholder": "e.g. Dubai, UAE",
+      "languages": "Languages",
+      "languages_placeholder": "e.g. English, French, Arabic",
+      "certifications": "Certifications",
+      "certifications_placeholder": "e.g. ISO 9001, AML, CAMS",
+      "bio": "Bio / Expertise",
+      "bio_placeholder": "Describe your expertise, sectors covered, past missions…",
+      "save": "SAVE PROFILE",
+      "saved": "Profile saved successfully",
+      "error": "Error saving profile"
+    }
+  },
+  "verify": {
+    "subtitle": "Official Supplier Verification",
+    "verifying": "Verifying…",
+    "not_found": "Company not found or not registered in MyDD.",
+    "status": "Status",
+    "cert_level": "Certification Level",
+    "badge": "Badge",
+    "verified_by": "Verified by",
+    "sign_in_prompt": "Are you a company?",
+    "sign_in_link": "Sign in to MyDD →",
+    "download_cert": "⊞ Print / PDF",
+    "website": "Website",
+    "badges": {
+      "0_label": "NOT CERTIFIED",
+      "0_desc": "This company has not yet completed MyDD certification.",
+      "1_label": "LEVEL 1 — DOCUMENT VERIFIED",
+      "1_desc": "Legal documents reviewed and validated by MyDD analysts.",
+      "2_label": "LEVEL 2 — KYC VALIDATED",
+      "2_desc": "Full KYC, UBO verification and AML compliance confirmed.",
+      "3_label": "LEVEL 3 — SITE INSPECTED",
+      "3_desc": "Physical site inspection completed by a certified PAC agent."
+    },
+    "embed_badge": "Embed this badge on your website",
+    "share_linkedin": "Share on LinkedIn"
+  },
+  "forgot_password": {
+    "title": "Forgot Password",
+    "subtitle": "Enter your email to receive a reset link",
+    "email": "Email",
+    "submit": "Send Reset Link",
+    "submitting": "Sending…",
+    "success": "If this email is registered, you'll receive a reset link shortly.",
+    "back_to_login": "Back to login",
+    "error_default": "Request failed. Please try again."
+  },
+  "reset_password": {
+    "title": "Reset Password",
+    "new_password": "New Password",
+    "confirm_password": "Confirm Password",
+    "submit": "Reset Password",
+    "submitting": "Resetting…",
+    "success": "Password reset successfully. You can now sign in.",
+    "error_mismatch": "Passwords do not match.",
+    "error_expired": "This reset link is invalid or expired.",
+    "error_default": "Reset failed. Please try again.",
+    "back_to_login": "Back to login"
+  },
+  "trader": {
+    "portal_title": "Supplier Registry",
+    "portal_subtitle": "Search certified suppliers in the B&E Trusted Registry",
+    "search_placeholder": "Search by company, country, sector…",
+    "filter_level": "Min. level",
+    "all_levels": "All levels",
+    "filter_country": "Country",
+    "all_countries": "All countries",
+    "no_results": "No certified companies match your search.",
+    "cert_level": "Level",
+    "view_cert": "View Certificate",
+    "results_count": "results found",
+    "loading": "Loading registry…",
+    "error": "Failed to load registry.",
+    "empty_title": "No certified suppliers yet",
+    "empty_desc": "Be the first to get certified, or adjust your search filters.",
+    "empty_cta": "Get Certified"
+  },
+  "admin": {
+    "title": "Admin Panel",
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users",
+      "companies": "Companies",
+      "missions": "Missions"
+    },
+    "stats": {
+      "total_users": "Total Users",
+      "new_30d": "New (30d)",
+      "total_companies": "Companies",
+      "certified": "Certified",
+      "revenue": "Revenue"
+    },
+    "search_placeholder": "Search…",
+    "users": {
+      "title": "User Management",
+      "email": "Email",
+      "name": "Name",
+      "role": "Role",
+      "joined": "Joined",
+      "last_login": "Last Login",
+      "never": "Never"
+    },
+    "companies": {
+      "title": "Company Management",
+      "name": "Company",
+      "email": "Email",
+      "country": "Country",
+      "sector": "Sector",
+      "level": "Level",
+      "status": "Status",
+      "set_level": "Set Level",
+      "suspend": "Suspend",
+      "unsuspend": "Unsuspend",
+      "suspend_title": "Suspend company",
+      "suspend_confirm": "You are about to suspend",
+      "suspend_reason_placeholder": "Reason for suspension (optional)",
+      "confirm_suspend": "Confirm Suspension"
+    },
+    "missions": {
+      "title": "PAC Missions",
+      "company": "Company",
+      "location": "Location",
+      "status": "Status",
+      "assigned_to": "Assigned To",
+      "fee": "Fee",
+      "created": "Created",
+      "outcome": "Outcome",
+      "report": "Report",
+      "cancel_mission": "Cancel",
+      "reopen_mission": "Reopen"
+    },
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "no_data": "No records found.",
+    "cancel": "Cancel"
+  },
+  "not_found": {
+    "title": "Page not found",
+    "description": "The page you're looking for doesn't exist or has been moved.",
+    "go_home": "Back to Home"
+  },
+  "cert_print": {
+    "print_pdf": "Print / Save PDF",
+    "copy_link": "Copy Verification Link"
+  },
+  "metrics": {
+    "title": "Business Metrics",
+    "loading": "Loading…",
+    "fetching": "Fetching data from database…",
+    "updated": "Updated",
+    "live": "LIVE",
+    "polling": "POLLING",
+    "vs_snapshot": "vs. last snapshot",
+    "sections": {
+      "registry": "Registry Overview",
+      "trust_fraud": "Trust & Fraud",
+      "activity": "Platform Activity"
+    },
+    "kpis": {
+      "users": "Total Users",
+      "companies": "Companies",
+      "certified": "Certified",
+      "cert_rate_subtitle": "certification rate",
+      "revenue": "Revenue",
+      "requests": "HTTP Requests",
+      "since_restart": "since last restart",
+      "data_as_of": "Data as of"
+    },
+    "trust": {
+      "avg_score": "Avg Trust Score",
+      "indicators": "Based on 27 indicators",
+      "fraud_alerts": "Fraud Alerts",
+      "fraud_clear": "CLEAR",
+      "fraud_active": "ACTIVE",
+      "cert_rate": "Cert. Rate",
+      "low_risk": "LOW RISK",
+      "medium_risk": "MEDIUM RISK",
+      "high_risk": "HIGH RISK",
+      "rules": {
+        "disposable_email": "Disposable email",
+        "no_company_profile": "No company profile",
+        "rapid_profile_change": "Rapid changes",
+        "ip_multi_account": "IP multi-account"
+      }
+    }
+  },
+  "cookie": {
+    "title": "We use cookies",
+    "desc": "We use essential cookies to make MyDD work. No tracking or advertising cookies.",
+    "learn_more": "Learn more",
+    "accept": "Accept",
+    "decline": "Decline"
+  },
+  "verify_email": {
+    "verifying": "Verifying your email…",
+    "success_title": "Email verified!",
+    "success_desc": "Your account is fully active. You can now access all features.",
+    "error_title": "Verification failed",
+    "error_desc": "This link is invalid or has expired. Request a new one from your Dashboard.",
+    "go_dashboard": "Go to Dashboard",
+    "missing_token": "No verification token found.",
+    "invalid_token": "Invalid or expired token. Please request a new one."
+  },
+  "upsell": {
+    "next_step": "Next step",
+    "per_year": "per year",
+    "register_first": "Register your company profile first",
+    "lvl0": {
+      "title": "Start your certification journey",
+      "subtitle": "Join the B&E Trusted Registry and stand out in global trade.",
+      "cta": "View Certification Plans"
+    },
+    "l0": {
+      "perk1": "Listed in the global B&E Registry",
+      "perk2": "Embeddable trust badge for your website",
+      "perk3": "Verified supplier status"
+    },
+    "lvl1": {
+      "title": "Upgrade to Level 2 — KYC Full Validation",
+      "subtitle": "Strengthen trust with KYC validation and beneficial owner screening.",
+      "cta": "Upgrade to Silver"
+    },
+    "l1": {
+      "perk1": "KYC & UBO identity screening",
+      "perk2": "Higher trust score in the Registry",
+      "perk3": "Silver badge on your profile"
+    },
+    "lvl2": {
+      "title": "Upgrade to Level 3 — Physical Site Inspection",
+      "subtitle": "The highest level of trust. A certified PAC agent visits your facilities.",
+      "cta": "Upgrade to Gold"
+    },
+    "l2": {
+      "perk1": "PAC agent physical site inspection",
+      "perk2": "Gold badge — maximum credibility",
+      "perk3": "Featured placement in Registry search"
+    }
+  }
+}
