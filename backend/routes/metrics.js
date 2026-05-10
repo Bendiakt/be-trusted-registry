@@ -17,12 +17,22 @@ const businessMetricsLimiter = rateLimit({
   message: { error: 'Too many requests.' },
 })
 
-// Auth middleware local to this router (avoids circular require with server.js)
-const requireAuth = (req, res, next) => {
+// Auth middleware local to this router — includes blacklist check (matches server.js auth guard)
+const requireAuth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1]
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    if (decoded?.jti) {
+      const blacklisted = await query(
+        'SELECT 1 FROM token_blacklist WHERE jti = $1 AND expires_at > NOW() LIMIT 1',
+        [decoded.jti],
+      )
+      if (blacklisted.rows.length > 0) {
+        return res.status(401).json({ error: 'Token revoked' })
+      }
+    }
+    req.user = decoded
     return next()
   } catch {
     return res.status(401).json({ error: 'Invalid token' })

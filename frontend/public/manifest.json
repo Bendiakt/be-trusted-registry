@@ -1,0 +1,29 @@
+{
+  "name": "MyDD Registry",
+  "short_name": "MyDD",
+  "description": "The trusted supplier certification registry for global trade.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#C9A84C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search Registry",
+      "short_name": "Registry",
+      "description": "Browse certified suppliers",
+      "url": "/registry",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ],
+  "categories": ["business", "finance"],
+  "lang": "en"
+}

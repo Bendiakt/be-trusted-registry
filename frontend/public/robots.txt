@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /pac
+Disallow: /trader
+Disallow: /api/
+
+Sitemap: https://mydd.io/sitemap.xml

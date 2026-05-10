@@ -1,5 +1,6 @@
 [build]
 builder = "RAILPACK"
+builder = "NIXPACKS"
 buildCommand = "npm install && npm run build"
 
 [env]

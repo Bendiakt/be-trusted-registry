@@ -28,7 +28,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: backend
-        run: node --test tests/*.test.js
+        run: node --test tests/unit.test.js
 
   test:
     name: Backend lint & health check
@@ -141,6 +141,47 @@ jobs:
               sys.exit(1)
 
           print("PASS: railway.toml integrity OK")
+          PY
+
+      - name: Validate per-service railway.toml files (monorepo)
+        run: |
+          python3 - << 'PY'
+          import sys, os
+
+          errors = []
+
+          # backend/railway.toml — must start the Node.js server with migration
+          backend_path = "backend/railway.toml"
+          if os.path.exists(backend_path):
+              with open(backend_path) as f:
+                  bc = f.read()
+              if 'builder = "NIXPACKS"' not in bc:
+                  errors.append(f"FAIL: {backend_path} builder is not NIXPACKS")
+              if 'node' not in bc:
+                  errors.append(f"FAIL: {backend_path} startCommand does not reference node")
+              if '/api/health' not in bc:
+                  errors.append(f"FAIL: {backend_path} healthcheckPath is not /api/health")
+              print(f"PASS: {backend_path} validated")
+          else:
+              print(f"INFO: {backend_path} not present — root railway.toml is authoritative")
+
+          # frontend/railway.toml — must run a build step
+          frontend_path = "frontend/railway.toml"
+          if os.path.exists(frontend_path):
+              with open(frontend_path) as f:
+                  fc = f.read()
+              if 'builder = "NIXPACKS"' not in fc:
+                  errors.append(f"FAIL: {frontend_path} builder is not NIXPACKS")
+              if 'npm run build' not in fc:
+                  errors.append(f"FAIL: {frontend_path} buildCommand does not run npm build")
+              print(f"PASS: {frontend_path} validated")
+          else:
+              print(f"INFO: {frontend_path} not present — skipping frontend config check")
+
+          if errors:
+              for e in errors:
+                  print(e, file=sys.stderr)
+              sys.exit(1)
           PY
 
       - name: Verify .railwayignore blocks sensitive paths

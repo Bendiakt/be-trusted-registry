@@ -1,0 +1,506 @@
+{
+  "brand": {
+    "name": "MyDD",
+    "tagline": "العناية الواجبة · بواسطة B&E Consult",
+    "tagline_short": "التحقق الرسمي من الموردين",
+    "powered": "مدعوم من B&E Consult FZCO · دبي سيليكون أواسيس، الإمارات"
+  },
+  "nav": {
+    "logout": "تسجيل الخروج",
+    "login": "تسجيل الدخول",
+    "pac_portal": "بوابة وكيل PAC",
+    "registry": "سجل الثقة B&E"
+  },
+  "landing": {
+    "cta_start": "احصل على الاعتماد",
+    "cta_login": "تسجيل الدخول",
+    "cta_registry": "البحث في السجل",
+    "nav_registry": "البحث في السجل",
+    "hero": {
+      "badge": "اعتماد دولي للموردين",
+      "title_1": "موردوك،",
+      "title_highlight": "موثّقون.",
+      "title_2": "ثقتك، مكتسبة.",
+      "subtitle": "MyDD هو سجل العناية الواجبة الذي يعتمد الموردين عبر 3 مستويات — من مراجعة الوثائق إلى التفتيش الميداني بواسطة وكيل PAC معتمد. موثوق به من قِبَل التجار في جميع أنحاء العالم."
+    },
+    "stats": {
+      "cert_levels": "مستويات الاعتماد",
+      "certified_companies": "موردون معتمدون",
+      "languages": "لغة",
+      "verification": "وقت التحقق"
+    },
+    "features": {
+      "title": "كل ما تحتاجه للثقة بسلسلة التوريد",
+      "subtitle": "ثلاثة مستويات للاعتماد، تحقق في الوقت الفعلي، وشبكة عالمية من وكلاء PAC.",
+      "level1_title": "المستوى 1 — مراجعة الوثائق",
+      "level1_desc": "مراجعة وتحقق من الوثائق القانونية وشهادات التسجيل والرخص التجارية بواسطة محللي B&E.",
+      "level2_title": "المستوى 2 — KYC كامل",
+      "level2_desc": "KYC شامل، تحديد المستفيدين الفعليين، فحص الامتثال لمعايير AML، وتقييم المخاطر.",
+      "level3_title": "المستوى 3 — تفتيش ميداني",
+      "level3_desc": "تدقيق فعلي على أرض الواقع يُجريه وكيل PAC معتمد في مقر المورد.",
+      "global_title": "تغطية عالمية",
+      "global_desc": "وكلاء PAC معتمدون في جميع ممرات التجارة الكبرى: الشرق الأوسط، أفريقيا، آسيا، أوروبا.",
+      "realtime_title": "تحقق في الوقت الفعلي",
+      "realtime_desc": "شارة تحقق عامة على /verify/:id. يؤكد المشترون الاعتماد في ثوانٍ.",
+      "secure_title": "سجل مراجعة غير قابل للتلاعب",
+      "secure_desc": "كل خطوة من خطوات الاعتماد مُسجَّلة. سجل تدقيق محمي بالكامل مع إمكانية التتبع الكاملة."
+    },
+    "how": {
+      "title": "كيف تعمل عملية الاعتماد",
+      "subtitle": "من التسجيل إلى شارة الاعتماد في 4 خطوات.",
+      "step1_title": "سجّل شركتك",
+      "step1_desc": "أنشئ حسابك واملأ ملف تعريف شركتك: القطاع، الدولة، والوصف.",
+      "step2_title": "اختر مستوى الاعتماد",
+      "step2_desc": "اختر البرونز أو الفضة أو الذهب وادفع بأمان عبر Stripe. اشتراك سنوي.",
+      "step3_title": "أكمل عملية العناية الواجبة",
+      "step3_desc": "قدّم الوثائق المطلوبة. للمستوى 3، يحدد وكيل PAC موعد زيارة ميدانية.",
+      "step4_title": "استلم شارتك",
+      "step4_desc": "يظهر اعتمادك في سجل الثقة B&E. شارك رابط التحقق العام مع المشترين."
+    },
+    "plans": {
+      "title": "تسعير شفاف",
+      "subtitle": "اعتماد سنوي. بلا رسوم خفية. قابل للإلغاء في أي وقت.",
+      "popular": "الأكثر شيوعاً",
+      "per_year": "/ سنة",
+      "bronze_f1": "إدراج في السجل",
+      "bronze_f2": "شارة الاعتماد",
+      "bronze_f3": "التحقق من الوثائق",
+      "silver_f1": "كل ما في البرونز",
+      "silver_f2": "التحقق الكامل من هوية العميل (KYC)",
+      "silver_f3": "إدراج ذو أولوية",
+      "silver_f4": "تقرير تدقيق B&E",
+      "gold_f1": "كل ما في الفضة",
+      "gold_f2": "تدقيق PAC ميداني",
+      "gold_f3": "صدارة الترتيب في السجل",
+      "gold_f4": "مدير حساب مخصص",
+      "gold_f5": "الوصول إلى بوابة PAC"
+    },
+    "cta_banner": {
+      "title": "هل أنت مستعد لبناء الثقة مع مشتريك؟",
+      "subtitle": "انضم إلى الشركات المعتمدة بالفعل في سجل الثقة B&E. احصل على اعتمادك الأول في أقل من 24 ساعة."
+    }
+  },
+  "login": {
+    "title": "تسجيل الدخول",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "submit": "دخول",
+    "submitting": "جارٍ الدخول…",
+    "no_account": "ليس لديك حساب؟",
+    "register_link": "سجّل هنا",
+    "error_default": "فشل تسجيل الدخول."
+  },
+  "register": {
+    "title": "إنشاء حساب",
+    "full_name": "الاسم الكامل / الشركة",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "role_label": "أسجّل بصفتي…",
+    "roles": {
+      "company_label": "شركة",
+      "company_desc": "احصل على شهادة اعتماد لشركتك",
+      "trader_label": "تاجر",
+      "trader_desc": "تحقق من موردّيك",
+      "pac_label": "وكيل PAC",
+      "pac_desc": "إجراء عمليات تفتيش ميداني"
+    },
+    "submit": "إنشاء الحساب",
+    "submitting": "جارٍ الإنشاء…",
+    "already_registered": "لديك حساب بالفعل؟",
+    "sign_in": "تسجيل الدخول",
+    "error_default": "فشل التسجيل"
+  },
+  "dashboard": {
+    "tabs": {
+      "overview": "نظرة عامة",
+      "register": "تسجيل الشركة",
+      "pricing": "الأسعار والترقية",
+      "metrics": "المقاييس",
+      "documents": "Documents"
+    },
+    "overview": {
+      "cert_level": "مستوى الاعتماد",
+      "registry_status": "حالة السجل",
+      "verification": "التحقق",
+      "status_active": "نشط",
+      "status_not_registered": "غير مسجّل",
+      "status_verified": "موثّق",
+      "status_pending": "قيد الانتظار",
+      "cert_none": "لا يوجد",
+      "cert_validity": "صلاحية الاعتماد",
+      "cert_valid_until": "صالح حتى",
+      "cert_expiring": "ينتهي خلال",
+      "cert_expired": "انتهت صلاحية الاعتماد — يرجى التجديد",
+      "days": "يوم",
+      "view_cert": "عرض الشهادة",
+      "copy_link": "نسخ الرابط",
+      "copied": "تم النسخ!",
+      "get_certified_title": "احصل على اعتمادك",
+      "get_certified_desc": "اختر مستوى الاعتماد للظهور في سجل الثقة B&E والوصول إلى المشترين الموثّقين.",
+      "view_plans": "عرض خطط الاعتماد",
+      "renew": "↻ تجديد الآن",
+      "print_cert": "طباعة / PDF"
+    },
+    "cert_levels": {
+      "0": "غير معتمد",
+      "1": "معتمد برونزي",
+      "2": "معتمد فضي",
+      "3": "معتمد ذهبي"
+    },
+    "company_form": {
+      "title": "ملف الشركة",
+      "company_name": "اسم الشركة",
+      "industry": "القطاع",
+      "industry_placeholder": "مثال: تصنيع، تجارة",
+      "country": "الدولة",
+      "description": "الوصف",
+      "save": "حفظ الملف",
+      "saving": "جارٍ الحفظ…",
+      "saved": "تم حفظ الملف الشخصي بنجاح",
+      "sector": "القطاع / الصناعة",
+      "sector_placeholder": "مثال: التصنيع، التجارة، الزراعة",
+      "country_placeholder": "مثال: الإمارات العربية المتحدة",
+      "website": "الموقع الإلكتروني",
+      "description_placeholder": "اصف باختصار أنشطة شركتك ومنتجاتها وأسواقها…"
+    },
+    "pricing": {
+      "title": "خطط الاعتماد",
+      "subtitle": "اعتماد سنوي صالح لمدة 12 شهراً. دفعة واحدة.",
+      "complete_profile": "أكمل ملف شركتك أولاً",
+      "complete_profile_desc": "يُفعّل الدفع بعد حفظ ملف الشركة.",
+      "most_popular": "الأكثر شيوعاً",
+      "per_year": "/سنة",
+      "get_certified": "احصل على الاعتماد",
+      "current_plan": "الخطة الحالية",
+      "redirecting": "جارٍ التحويل…",
+      "plans": {
+        "level1_name": "اعتماد برونزي",
+        "level1_price": "490$",
+        "level1_f1": "قائمة أساسية في السجل",
+        "level1_f2": "شارة اعتماد",
+        "level1_f3": "التحقق من البريد الإلكتروني",
+        "level1_f4": "صالح 12 شهراً",
+        "level2_name": "اعتماد فضي",
+        "level2_price": "990$",
+        "level2_f1": "كل مزايا البرونزي",
+        "level2_f2": "التحقق من الوثائق",
+        "level2_f3": "قائمة ذات أولوية",
+        "level2_f4": "تقرير تدقيق B&E",
+        "level2_f5": "صالح 12 شهراً",
+        "level3_name": "اعتماد ذهبي",
+        "level3_price": "2,490$",
+        "level3_f1": "كل مزايا الفضي",
+        "level3_f2": "تدقيق ميداني",
+        "level3_f3": "أولوية في السجل",
+        "level3_f4": "مدير حساب مخصص",
+        "level3_f5": "الوصول لبوابة PAC",
+        "level3_f6": "صالح 12 شهراً"
+      }
+    },
+    "onboarding": {
+      "title": "البدء",
+      "step_account": "تم إنشاء الحساب",
+      "step_profile": "ملف الشركة",
+      "step_certified": "الشهادة"
+    },
+    "billing": "الفواتير",
+    "verify_email": {
+      "title": "يرجى التحقق من بريدك الإلكتروني",
+      "desc": "تحقق من صندوق الوارد للتأكيد.",
+      "resend": "إعادة إرسال",
+      "sent": "تم الإرسال!"
+    },
+    "documents": {
+      "title": "Certification Documents",
+      "subtitle": "Upload supporting documents for your certification review.",
+      "drop_zone": "Drop files here or click to browse",
+      "uploading": "Uploading…",
+      "type_label": "Type:",
+      "type_general": "General",
+      "type_id": "Identity",
+      "type_financial": "Financial",
+      "type_legal": "Legal",
+      "empty": "No documents uploaded yet.",
+      "register_first": "Please register your company profile before uploading documents."
+    }
+  },
+  "pac": {
+    "portal": "بوابة وكيل PAC",
+    "tabs": {
+      "missions": "المهام المتاحة",
+      "profile": "ملفي الشخصي"
+    },
+    "missions": {
+      "status_title": "حالتك",
+      "active": "المهام النشطة",
+      "available": "المتاحة",
+      "completed": "المنجزة",
+      "no_missions": "لا توجد مهام متاحة حالياً",
+      "no_missions_desc": "ستظهر طلبات التفتيش الجديدة هنا عندما تتقدم الشركات للاعتماد من المستوى 3.",
+      "fee": "الأتعاب",
+      "accept": "قبول",
+      "assigned": "مُسنَد",
+      "mission_accepted": "تم قبول المهمة!",
+      "error_accept": "خطأ في قبول المهمة",
+      "submit_report": "تقرير التفتيش",
+      "submit_report_btn": "تقديم التقرير",
+      "cancel_report": "إلغاء",
+      "report_text": "التقرير",
+      "report_text_placeholder": "صِف نتائجك وملاحظاتك وتوصياتك بالتفصيل…",
+      "outcome": "النتيجة",
+      "outcome_pass": "ناجح",
+      "outcome_fail": "راسب",
+      "outcome_conditional": "مشروط",
+      "mission_completed": "تم تقديم التقرير بنجاح!",
+      "error_complete": "خطأ في تقديم التقرير",
+      "completed_badge": "مكتملة",
+      "completed_on": "اكتملت في",
+      "view_report": "عرض التقرير",
+      "back_to_missions": "العودة إلى المهام"
+    },
+    "profile": {
+      "title": "ملف وكيل PAC",
+      "full_name": "الاسم الكامل",
+      "location": "الدولة / المدينة",
+      "location_placeholder": "مثال: دبي، الإمارات",
+      "languages": "اللغات",
+      "languages_placeholder": "مثال: الإنجليزية، الفرنسية، العربية",
+      "certifications": "الشهادات",
+      "certifications_placeholder": "مثال: ISO 9001، AML، CAMS",
+      "bio": "السيرة / الخبرة",
+      "bio_placeholder": "صِف خبرتك والقطاعات التي تغطيها والمهام السابقة…",
+      "save": "حفظ الملف",
+      "saved": "تم حفظ الملف بنجاح",
+      "error": "خطأ أثناء الحفظ"
+    }
+  },
+  "verify": {
+    "subtitle": "التحقق الرسمي من الموردين",
+    "verifying": "جارٍ التحقق…",
+    "not_found": "الشركة غير موجودة أو غير مسجّلة في MyDD.",
+    "status": "الحالة",
+    "cert_level": "مستوى الاعتماد",
+    "badge": "الشارة",
+    "verified_by": "موثّق من قِبَل",
+    "sign_in_prompt": "هل أنت شركة؟",
+    "sign_in_link": "سجّل الدخول إلى MyDD ←",
+    "badges": {
+      "0_label": "غير معتمد",
+      "0_desc": "لم تُكمل هذه الشركة اعتماد MyDD بعد.",
+      "1_label": "المستوى 1 — وثائق موثّقة",
+      "1_desc": "تمت مراجعة الوثائق القانونية والتحقق منها من قِبَل محللي MyDD.",
+      "2_label": "المستوى 2 — KYC موثّق",
+      "2_desc": "تم تأكيد الامتثال الكامل لـ KYC والتحقق من المستفيدين الفعليين ومطابقة معايير AML.",
+      "3_label": "المستوى 3 — موقع مُفتَّش",
+      "3_desc": "تم إجراء فحص ميداني من قِبَل وكيل PAC معتمد."
+    },
+    "download_cert": "⊞ طباعة / PDF",
+    "website": "الموقع الإلكتروني",
+    "embed_badge": "تضمين هذه الشارة في موقعك",
+    "share_linkedin": "Share on LinkedIn"
+  },
+  "forgot_password": {
+    "title": "نسيت كلمة المرور",
+    "subtitle": "أدخل بريدك الإلكتروني لاستلام رابط إعادة التعيين",
+    "email": "البريد الإلكتروني",
+    "submit": "إرسال الرابط",
+    "submitting": "جارٍ الإرسال…",
+    "success": "إذا كان هذا البريد مسجّلاً، ستتلقى رابط إعادة تعيين قريباً.",
+    "back_to_login": "العودة إلى تسجيل الدخول",
+    "error_default": "فشل الطلب. يرجى المحاولة مجدداً."
+  },
+  "reset_password": {
+    "title": "إعادة تعيين كلمة المرور",
+    "new_password": "كلمة المرور الجديدة",
+    "confirm_password": "تأكيد كلمة المرور",
+    "submit": "إعادة التعيين",
+    "submitting": "جارٍ الإعادة…",
+    "success": "تمّت إعادة تعيين كلمة المرور. يمكنك الآن تسجيل الدخول.",
+    "error_mismatch": "كلمتا المرور غير متطابقتين.",
+    "error_expired": "هذا الرابط غير صالح أو منتهي الصلاحية.",
+    "error_default": "فشلت إعادة التعيين. يرجى المحاولة مجدداً.",
+    "back_to_login": "العودة إلى تسجيل الدخول"
+  },
+  "trader": {
+    "portal_title": "سجل الموردين",
+    "portal_subtitle": "ابحث عن موردين معتمدين في سجل B&E الموثوق",
+    "search_placeholder": "بحث بالشركة أو الدولة أو القطاع…",
+    "filter_level": "الحدّ الأدنى للمستوى",
+    "all_levels": "جميع المستويات",
+    "filter_country": "الدولة",
+    "all_countries": "جميع الدول",
+    "no_results": "لا توجد شركات معتمدة تطابق بحثك.",
+    "cert_level": "المستوى",
+    "view_cert": "عرض الشهادة",
+    "copy_link": "نسخ الرابط",
+    "copied": "تم النسخ!",
+    "results_count": "نتيجة",
+    "loading": "جارٍ تحميل السجل…",
+    "error": "تعذّر تحميل السجل.",
+    "empty_title": "لا يوجد موردون معتمدون بعد",
+    "empty_desc": "كن أول من يحصل على الاعتماد، أو عدّل مرشحات البحث.",
+    "empty_cta": "احصل على الاعتماد"
+  },
+  "admin": {
+    "title": "لوحة الإدارة",
+    "tabs": {
+      "overview": "نظرة عامة",
+      "users": "المستخدمون",
+      "companies": "الشركات",
+      "missions": "المهام"
+    },
+    "stats": {
+      "total_users": "إجمالي المستخدمين",
+      "new_30d": "جديد (30 يوماً)",
+      "total_companies": "الشركات",
+      "certified": "المعتمدة",
+      "revenue": "الإيرادات"
+    },
+    "search_placeholder": "بحث…",
+    "users": {
+      "title": "إدارة المستخدمين",
+      "email": "البريد الإلكتروني",
+      "name": "الاسم",
+      "role": "الدور",
+      "joined": "تاريخ التسجيل",
+      "last_login": "آخر دخول",
+      "never": "لم يسجّل الدخول"
+    },
+    "companies": {
+      "title": "إدارة الشركات",
+      "name": "الشركة",
+      "email": "البريد الإلكتروني",
+      "country": "الدولة",
+      "sector": "القطاع",
+      "level": "المستوى",
+      "status": "Status",
+      "set_level": "تعيين المستوى",
+      "suspend": "Suspend",
+      "unsuspend": "Unsuspend",
+      "suspend_title": "Suspend company",
+      "suspend_confirm": "You are about to suspend",
+      "suspend_reason_placeholder": "Reason for suspension (optional)",
+      "confirm_suspend": "Confirm Suspension"
+    },
+    "missions": {
+      "title": "مهام PAC",
+      "company": "الشركة",
+      "location": "الموقع",
+      "status": "الحالة",
+      "assigned_to": "مُسنَدة إلى",
+      "fee": "الأتعاب",
+      "created": "تاريخ الإنشاء",
+      "outcome": "النتيجة",
+      "report": "التقرير",
+      "cancel_mission": "إلغاء",
+      "reopen_mission": "إعادة فتح"
+    },
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ…",
+    "saved": "تمّ الحفظ",
+    "no_data": "لا توجد سجلات.",
+    "cancel": "Cancel"
+  },
+  "metrics": {
+    "title": "مقاييس الأعمال",
+    "loading": "تحميل…",
+    "fetching": "جارٍ استرداد البيانات…",
+    "updated": "تم التحديث",
+    "live": "مباشر",
+    "polling": "استطلاع",
+    "vs_snapshot": "مقارنة بالسابق",
+    "sections": {
+      "registry": "نظرة عامة على السجل",
+      "trust_fraud": "الثقة والاحتيال",
+      "activity": "نشاط المنصة"
+    },
+    "kpis": {
+      "users": "إجمالي المستخدمين",
+      "companies": "الشركات",
+      "certified": "معتمدة",
+      "cert_rate_subtitle": "معدل الاعتماد",
+      "revenue": "الإيرادات",
+      "requests": "طلبات HTTP",
+      "since_restart": "منذ آخر إعادة تشغيل",
+      "data_as_of": "البيانات حتى"
+    },
+    "trust": {
+      "avg_score": "متوسط درجة الثقة",
+      "indicators": "بناءً على 27 مؤشراً",
+      "fraud_alerts": "تنبيهات الاحتيال",
+      "fraud_clear": "لا شيء",
+      "fraud_active": "نشطة",
+      "cert_rate": "معدل الاعتماد",
+      "low_risk": "خطر منخفض",
+      "medium_risk": "خطر متوسط",
+      "high_risk": "خطر مرتفع",
+      "rules": {
+        "disposable_email": "بريد مؤقت",
+        "no_company_profile": "لا ملف شركة",
+        "rapid_profile_change": "تغييرات متكررة",
+        "ip_multi_account": "حسابات متعددة بنفس IP"
+      }
+    }
+  },
+  "not_found": {
+    "title": "الصفحة غير موجودة",
+    "description": "الصفحة التي تبحث عنها غير موجودة أو تم نقلها.",
+    "go_home": "العودة إلى الرئيسية"
+  },
+  "cert_print": {
+    "print_pdf": "طباعة / حفظ كـ PDF",
+    "copy_link": "نسخ رابط التحقق"
+  },
+  "cookie": {
+    "title": "نستخدم ملفات تعريف الارتباط",
+    "desc": "نستخدم ملفات تعريف الارتباط الأساسية لتشغيل MyDD. لا يوجد تتبع أو إعلانات.",
+    "learn_more": "اعرف المزيد",
+    "accept": "قبول",
+    "decline": "رفض"
+  },
+  "verify_email": {
+    "verifying": "جارٍ التحقق…",
+    "success_title": "تم التحقق!",
+    "success_desc": "حسابك نشط بالكامل الآن.",
+    "error_title": "فشل التحقق",
+    "error_desc": "الرابط غير صالح أو منتهي الصلاحية.",
+    "go_dashboard": "الذهاب إلى لوحة التحكم",
+    "missing_token": "لم يتم العثور على رمز التحقق.",
+    "invalid_token": "رمز غير صالح أو منتهي."
+  },
+  "upsell": {
+    "next_step": "Next step",
+    "per_year": "per year",
+    "register_first": "Register your company profile first",
+    "lvl0": {
+      "title": "Start your certification journey",
+      "subtitle": "Join the B&E Trusted Registry and stand out in global trade.",
+      "cta": "View Certification Plans"
+    },
+    "l0": {
+      "perk1": "Listed in the global B&E Registry",
+      "perk2": "Embeddable trust badge for your website",
+      "perk3": "Verified supplier status"
+    },
+    "lvl1": {
+      "title": "Upgrade to Level 2 — KYC Full Validation",
+      "subtitle": "Strengthen trust with KYC validation and beneficial owner screening.",
+      "cta": "Upgrade to Silver"
+    },
+    "l1": {
+      "perk1": "KYC & UBO identity screening",
+      "perk2": "Higher trust score in the Registry",
+      "perk3": "Silver badge on your profile"
+    },
+    "lvl2": {
+      "title": "Upgrade to Level 3 — Physical Site Inspection",
+      "subtitle": "The highest level of trust. A certified PAC agent visits your facilities.",
+      "cta": "Upgrade to Gold"
+    },
+    "l2": {
+      "perk1": "PAC agent physical site inspection",
+      "perk2": "Gold badge — maximum credibility",
+      "perk3": "Featured placement in Registry search"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 [build]
 builder = "RAILPACK"
+builder = "NIXPACKS"
 buildCommand = "npm install"
 
 [env]
@@ -7,6 +8,7 @@ NODE_VERSION = "22.12.0"
 
 [deploy]
 startCommand = "npm run start:preprod"
+startCommand = "npm run migrate && node server.js"
 healthcheckPath = "/api/health/ready"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

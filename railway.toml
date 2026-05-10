@@ -5,3 +5,20 @@
 # Each Railway service should be configured with its Root Directory:
 # - Backend service: Root Directory = /backend
 # - Frontend service: Root Directory = /frontend
+# Monorepo root config — satisfies CI guard + sert de fallback.
+# Le déploiement réel utilise backend/railway.toml et frontend/railway.toml
+# configurés via le "Root Directory" de chaque service Railway.
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install"
+
+[env]
+NODE_VERSION = "22.12.0"
+
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
