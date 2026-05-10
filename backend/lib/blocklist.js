@@ -1,10 +1,11 @@
 'use strict'
 
 /**
- * blocklist.js — Companies that cannot undergo certification on this platform.
+ * blocklist.js — Companies that cannot be CERTIFIED on this platform.
  *
- * B&E CONSULT (in all legal forms) is the platform operator and is excluded
- * from certification to prevent conflicts of interest.
+ * B&E CONSULT (in all legal forms) is the platform operator.
+ * These entities CAN register and appear in the public registry,
+ * but CANNOT request or receive certification (conflict of interest).
  */
 
 // Canonical blocked names — checked case-insensitively after normalization
@@ -45,12 +46,13 @@ function isBlockedCompany (companyName) {
 }
 
 /**
- * Express middleware — rejects requests where req.body contains a blocked company name.
+ * Express middleware — rejects CERTIFICATION requests for blocked company names.
+ * Use only on certification/payment routes, NOT on registration routes.
  * Checks `name`, `companyName`, and `company_name` fields.
  * @param {string} [errorMsg]
  */
 function blocklistedCompanyMiddleware (errorMsg) {
-  const msg = errorMsg || 'This company cannot be registered or certified on this platform.'
+  const msg = errorMsg || 'This company cannot be certified on this platform.'
   return (req, res, next) => {
     const candidate =
       req.body?.name ||
