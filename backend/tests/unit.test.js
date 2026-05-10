@@ -490,3 +490,43 @@ describe('checkFraud — multiple rules can trigger simultaneously', () => {
     assert.ok(alerts.find(a => a.rule === 'stripe_radar_risk'))
   })
 })
+
+// ── blocklist.js ──────────────────────────────────────────────────────────────
+
+const { isBlockedCompany } = require('../lib/blocklist')
+
+describe('isBlockedCompany', () => {
+  test('blocks exact "B&E CONSULT"', () => {
+    assert.ok(isBlockedCompany('B&E CONSULT'))
+  })
+
+  test('blocks "b and e consult" (case-insensitive)', () => {
+    assert.ok(isBlockedCompany('b and e consult'))
+  })
+
+  test('blocks "B&E CONSULT FZCO" (legal suffix stripped)', () => {
+    assert.ok(isBlockedCompany('B&E CONSULT FZCO'))
+  })
+
+  test('blocks "B&E CONSULT SARL"', () => {
+    assert.ok(isBlockedCompany('B&E CONSULT SARL'))
+  })
+
+  test('blocks "B AND E CONSULT PTY"', () => {
+    assert.ok(isBlockedCompany('B AND E CONSULT PTY'))
+  })
+
+  test('blocks "b&e consult" lowercase', () => {
+    assert.ok(isBlockedCompany('b&e consult'))
+  })
+
+  test('does NOT block unrelated companies', () => {
+    assert.ok(!isBlockedCompany('Acme Corp'))
+    assert.ok(!isBlockedCompany('Best Consulting LLC'))
+    assert.ok(!isBlockedCompany('B&G Consult'))
+  })
+
+  test('does NOT block empty string', () => {
+    assert.ok(!isBlockedCompany(''))
+  })
+})

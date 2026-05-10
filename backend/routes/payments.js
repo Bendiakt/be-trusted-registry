@@ -4,6 +4,7 @@ const Stripe = require('stripe')
 const { query } = require('../db')
 const { checkFraud } = require('../lib/fraudDetection')
 const { sendPaymentConfirmation } = require('../lib/mailer')
+const { isBlockedCompany } = require('../lib/blocklist')
 
 const levelFromPlanId = (planId) => {
   const map = { level1: 1, level2: 2, level3: 3 }
@@ -37,11 +38,17 @@ router.post('/create-checkout-session', async (req, res) => {
     if (!plan) return res.status(400).json({ error: 'Invalid plan' })
 
     // Resolve companyId from authenticated user (req.user set by auth middleware)
-    const companyResult = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    const companyResult = await query('SELECT id, name FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
     const userCompany = companyResult.rows[0]
     if (!userCompany) {
       return res.status(400).json({ error: 'Register your company profile before checkout' })
     }
+
+    // Block operator's own entities from purchasing certification
+    if (isBlockedCompany(userCompany.name)) {
+      return res.status(403).json({ error: 'This company cannot be certified on this platform.' })
+    }
+
     const resolvedCompanyId = String(userCompany.id)
 
     const session = await getStripe().checkout.sessions.create({
