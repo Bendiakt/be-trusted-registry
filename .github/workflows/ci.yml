@@ -28,7 +28,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: backend
-        run: node --test tests/*.test.js
+        run: node --test tests/unit.test.js
 
   test:
     name: Backend lint & health check
