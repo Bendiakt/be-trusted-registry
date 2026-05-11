@@ -1593,7 +1593,7 @@ app.get('/metrics/json', (req, res) => {
 })
 
 // Must be registered after all controllers and before custom error middleware.
-Sentry.setupExpressErrorHandler(app)
+if (Sentry) Sentry.setupExpressErrorHandler(app)
 
 app.use((err, req, res, next) => {
   if (err && err.message === 'Not allowed by CORS') {
