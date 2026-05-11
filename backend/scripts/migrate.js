@@ -45,7 +45,7 @@ const run = async () => {
 
     const files = fs
       .readdirSync(MIGRATIONS_DIR)
-      .filter((f) => f.endsWith('.sql'))
+      .filter((f) => /^\d+_.+\.sql$/.test(f))
       .sort()
 
     for (const file of files) {

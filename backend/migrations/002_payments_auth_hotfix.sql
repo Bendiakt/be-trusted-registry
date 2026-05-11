@@ -51,12 +51,19 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_active ON refresh_tokens(user
 CREATE INDEX IF NOT EXISTS idx_payments_company_created ON payments(company_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payments_status_created ON payments(status, created_at DESC);
 
-CREATE OR REPLACE VIEW revenue_stats AS
+DROP VIEW IF EXISTS revenue_stats;
+CREATE VIEW revenue_stats AS
 SELECT
-  COALESCE(SUM(amount_cents), 0) AS revenue_total_cents,
-  ROUND(COALESCE(SUM(amount_cents), 0)::numeric / 100, 2) AS revenue_total_usd,
-  COUNT(*) AS payments_completed
-FROM payments
-WHERE status = 'completed';
+  COALESCE(SUM(amount_cents) FILTER (WHERE status = 'completed'), 0)                          AS revenue_total_cents,
+  ROUND(COALESCE(SUM(amount_cents) FILTER (WHERE status = 'completed'), 0)::numeric / 100, 2)  AS revenue_total_usd,
+  COUNT(*) FILTER (WHERE status = 'completed')                                                 AS payments_completed,
+  COUNT(*) FILTER (WHERE status = 'pending')                                                   AS payments_pending,
+  COUNT(*) FILTER (WHERE status = 'failed')                                                    AS payments_failed,
+  COUNT(*) FILTER (WHERE status = 'refunded')                                                  AS payments_refunded,
+  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days' AND status = 'completed')    AS payments_last_30d,
+  ROUND(COALESCE(SUM(amount_cents) FILTER (
+    WHERE created_at > NOW() - INTERVAL '30 days' AND status = 'completed'
+  ), 0)::numeric / 100, 2)                                                                     AS revenue_last_30d_usd
+FROM payments;
 
 COMMIT;
