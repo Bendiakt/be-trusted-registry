@@ -215,17 +215,33 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         [planLevel, resolvedCompanyId, session.customer || null]
       )
 
-      // Stamp certification with granted_at and expires_at (1 year)
+      // Stamp certification with granted_at and expires_at.
+      // For renewals: extend from the existing expiry (or NOW() if already past).
+      // For new certs: set expires_at = NOW() + 1 year.
       if (effectiveCertificationId) {
-        await query(
-          `UPDATE certifications
-           SET status = 'active',
-               granted_at = COALESCE(granted_at, NOW()),
-               expires_at = COALESCE(expires_at, NOW() + INTERVAL '1 year'),
-               updated_at = NOW()
-           WHERE id = $1`,
-          [effectiveCertificationId]
-        )
+        const isRenewal = session.metadata?.isRenewal === 'true'
+        if (isRenewal) {
+          await query(
+            `UPDATE certifications
+             SET status     = 'active',
+                 granted_at = COALESCE(granted_at, NOW()),
+                 expires_at = GREATEST(expires_at, NOW()) + INTERVAL '1 year',
+                 renewal_reminder_sent_at = NULL,
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [effectiveCertificationId]
+          )
+        } else {
+          await query(
+            `UPDATE certifications
+             SET status     = 'active',
+                 granted_at = COALESCE(granted_at, NOW()),
+                 expires_at = COALESCE(expires_at, NOW() + INTERVAL '1 year'),
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [effectiveCertificationId]
+          )
+        }
       }
 
       const companyResult = await query('SELECT user_id FROM companies WHERE id = $1 LIMIT 1', [resolvedCompanyId])

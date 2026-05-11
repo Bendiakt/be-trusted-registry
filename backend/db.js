@@ -336,6 +336,19 @@ const initDb = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_prt_hash    ON password_reset_tokens(token_hash)')
     await query('CREATE INDEX IF NOT EXISTS idx_prt_expires ON password_reset_tokens(expires_at)')
 
+    // ── Trader Portal watchlist ──────────────────────────────────────────────
+    await query(`
+      CREATE TABLE IF NOT EXISTS trader_watchlist (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL REFERENCES users(id)     ON DELETE CASCADE,
+        company_id INTEGER     NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        added_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, company_id)
+      )
+    `)
+    await query('CREATE INDEX IF NOT EXISTS idx_trader_watchlist_user    ON trader_watchlist (user_id, added_at DESC)')
+    await query('CREATE INDEX IF NOT EXISTS idx_trader_watchlist_company ON trader_watchlist (company_id)')
+
     // Partial index for fast certified-company lookups (Trader Portal / public registry)
     await query('CREATE INDEX IF NOT EXISTS idx_companies_certified_country ON companies(country, certification_level) WHERE certification_level > 0')
     await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'company'")

@@ -443,6 +443,19 @@ export default function Dashboard() {
     }
   }
 
+  const handleRenewalCheckout = async () => {
+    setPaymentError('')
+    setCheckoutPlanId('renewal')
+    try {
+      const res = await api.post('/api/payments/renewal-checkout')
+      window.location.href = res.data.url
+    } catch (err) {
+      setPaymentError(err.response?.data?.error || 'Renewal initialization failed. Please try again.')
+    } finally {
+      setCheckoutPlanId('')
+    }
+  }
+
   const handleBillingPortal = async () => {
     setBillingLoading(true)
     try {
@@ -602,11 +615,11 @@ export default function Dashboard() {
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {(company.certInfo.expired || company.certInfo.expiringSoon) && (
                           <button
-                            onClick={() => handleCheckout(`level${company.certInfo.level}`)}
+                            onClick={handleRenewalCheckout}
                             disabled={!!checkoutPlanId}
                             style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
                           >
-                            {checkoutPlanId ? t('dashboard.pricing.redirecting') : t('dashboard.overview.renew')}
+                            {checkoutPlanId === 'renewal' ? t('dashboard.pricing.redirecting') : t('dashboard.overview.renew')}
                           </button>
                         )}
                         <a href={`/verify/${company.id}`} target="_blank" rel="noreferrer" style={{ color: '#C9A84C', fontSize: '0.8rem', fontWeight: '600', textDecoration: 'none', border: '1px solid #C9A84C44', padding: '0.4rem 0.8rem', borderRadius: '6px' }}>
