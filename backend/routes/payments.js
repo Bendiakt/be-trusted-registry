@@ -395,4 +395,83 @@ router.post('/portal', async (req, res) => {
   }
 })
 
+// ── POST /api/payments/renewal-checkout ──────────────────────────────────────
+// Creates a Stripe Checkout session specifically for renewing an active or
+// recently-expired certification. The new session links to the existing cert
+// so the webhook can extend expires_at rather than creating a duplicate cert.
+router.post('/renewal-checkout', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const companyResult = await query(
+      'SELECT id, name FROM companies WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    )
+    const company = companyResult.rows[0]
+    if (!company) return res.status(400).json({ error: 'No company profile found' })
+
+    if (isBlockedCompany(company.name)) {
+      return res.status(403).json({ error: 'This company cannot be certified on this platform.' })
+    }
+
+    // Find the most recent cert that is active or expired (reneweable)
+    const certResult = await query(
+      `SELECT id, level, status, expires_at
+         FROM certifications
+        WHERE company_id = $1
+          AND status IN ('active', 'expired')
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [company.id]
+    )
+    const cert = certResult.rows[0]
+    if (!cert) return res.status(404).json({ error: 'No certification eligible for renewal' })
+
+    const planMap = { 1: 'level1', 2: 'level2', 3: 'level3' }
+    const planId  = planMap[cert.level]
+    const plan    = PLANS[planId]
+    if (!plan) return res.status(400).json({ error: 'Unknown certification level' })
+
+    const session = await getStripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name:        `${plan.name} — Renewal`,
+            description: `Renewing certification for ${company.name}`,
+          },
+          unit_amount: plan.price,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&plan=${planId}&renewal=1`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
+      metadata: {
+        planId,
+        companyId:       String(company.id),
+        userId:          String(req.user.id),
+        certificationId: String(cert.id),
+        isRenewal:       'true',
+      },
+      customer_email: req.user.email || undefined,
+    })
+
+    await query(
+      `INSERT INTO payments (user_id, company_id, stripe_session_id, amount_cents, currency, plan_id, status, certification_id)
+       VALUES ($1, $2, $3, $4, 'usd', $5, 'pending', $6)
+       ON CONFLICT (stripe_session_id) DO NOTHING`,
+      [req.user.id, company.id, session.id, plan.price, planId, cert.id]
+    )
+
+    res.json({ url: session.url, certId: cert.id, level: cert.level })
+  } catch (err) {
+    console.error('Renewal checkout error:', err.message)
+    if (err.message === 'Missing STRIPE_SECRET_KEY') {
+      return res.status(500).json({ error: 'Server payment configuration is incomplete' })
+    }
+    res.status(500).json({ error: 'Failed to create renewal session' })
+  }
+})
+
 module.exports = { router }

@@ -264,7 +264,8 @@ const mapMissionRow = (row) => {
 
 const { router: paymentsRouter } = require('./routes/payments')
 const documentsRouter = require('./routes/documents')
-const { sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder } = require('./lib/mailer')
+const traderRouter    = require('./routes/trader')
+const { sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
 app.post('/api/payments/create-checkout-session', auth)
 app.get('/api/payments/stats', auth)
 app.post('/api/stripe/create-checkout-session', auth)
@@ -274,6 +275,7 @@ app.use('/api/stripe', paymentsRouter)
 app.use('/api/metrics',   metricsRouter)
 app.use('/api/badge',     badgeRouter)
 app.use('/api/documents', auth, documentsRouter)
+app.use('/api/trader',    auth, traderRouter)
 
 // Immutable audit trail helper — fire-and-forget (never blocks response)
 const logAudit = (userId, action, resource, ip, payload) => {
@@ -1789,6 +1791,95 @@ const startServer = async () => {
     // Delay first run 5 min after boot to let DB stabilize, then run every 24 h
     setTimeout(runRenewalReminders, 5 * 60 * 1000)
     setInterval(runRenewalReminders, 24 * 60 * 60 * 1000)
+
+    // ── Urgent reminder — D-7 ─────────────────────────────────────────────────
+    // Second reminder for certs expiring in 5-7 days with no email in last 4 days.
+    const runUrgentReminders = async () => {
+      try {
+        const result = await query(
+          `SELECT c.id AS cert_id, c.level, c.expires_at,
+                  co.company_name, u.email, u.name
+             FROM certifications c
+             JOIN companies co ON co.id = c.company_id
+             JOIN users     u  ON u.id  = co.user_id
+            WHERE c.status = 'active'
+              AND c.expires_at BETWEEN NOW() + INTERVAL '5 days' AND NOW() + INTERVAL '7 days'
+              AND (c.renewal_reminder_sent_at IS NULL
+                   OR c.renewal_reminder_sent_at < NOW() - INTERVAL '4 days')
+              AND u.email IS NOT NULL`
+        )
+        if (!result.rows.length) return
+        const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
+        for (const row of result.rows) {
+          await sendRenewalReminder({
+            email: row.email, name: row.name, companyName: row.company_name,
+            level: row.level, expiresAt: row.expires_at,
+            renewUrl: `${frontendUrl}/dashboard`,
+          })
+          await query(
+            'UPDATE certifications SET renewal_reminder_sent_at = NOW() WHERE id = $1',
+            [row.cert_id]
+          )
+        }
+        if (result.rows.length) {
+          console.log(JSON.stringify({ event: 'urgent_reminders_sent', count: result.rows.length }))
+        }
+      } catch (e) {
+        console.error('Urgent reminder cron error:', e.message)
+      }
+    }
+    setTimeout(runUrgentReminders, 7 * 60 * 1000)
+    setInterval(runUrgentReminders, 24 * 60 * 60 * 1000)
+
+    // ── Cert expiry enforcement — runs every 24 h ─────────────────────────────
+    // Marks expired certs, revokes company certification level, notifies by email.
+    const runCertExpiryCleanup = async () => {
+      try {
+        const expired = await query(
+          `UPDATE certifications
+              SET status = 'expired', updated_at = NOW()
+            WHERE status = 'active'
+              AND expires_at < NOW()
+            RETURNING id, company_id, level`
+        )
+        if (!expired.rows.length) return
+
+        for (const cert of expired.rows) {
+          // Downgrade the company's visible certification level
+          await query(
+            `UPDATE companies
+                SET certification_level = 0, updated_at = NOW()
+              WHERE id = $1
+                AND NOT EXISTS (
+                  SELECT 1 FROM certifications
+                   WHERE company_id = $1 AND status = 'active'
+                )`,
+            [cert.company_id]
+          )
+          // Notify the company contact
+          const userRow = await query(
+            `SELECT u.email, u.name, co.company_name
+               FROM companies co JOIN users u ON u.id = co.user_id
+              WHERE co.id = $1 LIMIT 1`,
+            [cert.company_id]
+          )
+          if (userRow.rows.length && userRow.rows[0].email) {
+            const { email, name, company_name } = userRow.rows[0]
+            const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
+            await sendCertExpired({
+              email, name, companyName: company_name,
+              level: cert.level,
+              renewUrl: `${frontendUrl}/dashboard`,
+            }).catch(() => {})
+          }
+        }
+        console.log(JSON.stringify({ event: 'certs_expired', count: expired.rows.length }))
+      } catch (e) {
+        console.error('Cert expiry cleanup error:', e.message)
+      }
+    }
+    setTimeout(runCertExpiryCleanup, 10 * 60 * 1000)
+    setInterval(runCertExpiryCleanup, 24 * 60 * 60 * 1000)
 
     // Broadcast business metrics every 10 s to all connected WS clients.
     setInterval(async () => {
