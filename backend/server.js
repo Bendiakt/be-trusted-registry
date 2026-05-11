@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const rateLimit = require('express-rate-limit')
+const { ipKeyGenerator } = require('express-rate-limit')
 const http = require('http')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
@@ -187,7 +188,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const email = String(req.body?.email || '').trim().toLowerCase()
-    return `${req.ip || 'unknown'}:${email}`
+    return `${ipKeyGenerator(req)}:${email}`
   },
   message: { error: 'Too many login attempts. Try again later.' },
 })
@@ -211,6 +212,11 @@ const auth = async (req, res, next) => {
   } catch {
     return res.status(401).json({ error: 'Invalid token' })
   }
+}
+
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
+  return next()
 }
 
 const mapCompanyRow = (row) => {
@@ -1259,11 +1265,6 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
 })
 
 // ─── Admin Routes ─────────────────────────────────────────────────────────────
-const requireAdmin = (req, res, next) => {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
-  return next()
-}
-
 app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
   try {
     const [users, companies, revenue] = await Promise.all([

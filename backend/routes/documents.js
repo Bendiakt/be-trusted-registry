@@ -16,6 +16,7 @@ const path       = require('path')
 const fs         = require('fs')
 const express    = require('express')
 const rateLimit  = require('express-rate-limit')
+const { ipKeyGenerator } = require('express-rate-limit')
 const router     = express.Router()
 const { query }  = require('../db')
 
@@ -25,7 +26,7 @@ const uploadLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => `upload:${req.ip || 'unknown'}:${req.user?.id || 'anon'}`,
+  keyGenerator: (req) => `upload:${ipKeyGenerator(req)}:${req.user?.id || 'anon'}`,
   message: { error: 'Too many uploads. Try again later.' },
 })
 
