@@ -1,7 +1,6 @@
 -- 001_security_trust_metrics.sql
 -- Versioned migration for security/trust/fraud/metrics features.
-
-BEGIN;
+-- Note: migrate.js wraps each file in its own BEGIN/COMMIT — do NOT add one here.
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
   id SERIAL PRIMARY KEY,
@@ -56,5 +55,3 @@ CREATE INDEX IF NOT EXISTS idx_trust_scores_company_computed ON trust_scores (co
 CREATE INDEX IF NOT EXISTS idx_fraud_alerts_user_created ON fraud_alerts (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_fraud_alerts_active ON fraud_alerts (resolved, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_metrics_snapshot_at ON metrics_snapshot (snapshot_at DESC);
-
-COMMIT;
