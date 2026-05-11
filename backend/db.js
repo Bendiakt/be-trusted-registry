@@ -336,6 +336,30 @@ const initDb = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_prt_hash    ON password_reset_tokens(token_hash)')
     await query('CREATE INDEX IF NOT EXISTS idx_prt_expires ON password_reset_tokens(expires_at)')
 
+    // ── Columns added post-launch (previously only in PROD_SETUP.sql) ──────────
+    // These are idempotent — safe to run on every boot against any DB state.
+    await query("ALTER TABLE users         ADD COLUMN IF NOT EXISTS email_verified       BOOLEAN     NOT NULL DEFAULT FALSE")
+    await query("ALTER TABLE users         ADD COLUMN IF NOT EXISTS email_verify_token   TEXT")
+    await query("ALTER TABLE users         ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ")
+    await query("ALTER TABLE companies     ADD COLUMN IF NOT EXISTS stripe_customer_id   TEXT")
+    await query("ALTER TABLE companies     ADD COLUMN IF NOT EXISTS suspended_at         TIMESTAMPTZ")
+    await query("ALTER TABLE certifications ADD COLUMN IF NOT EXISTS renewal_reminder_sent_at TIMESTAMPTZ")
+    await query('CREATE INDEX IF NOT EXISTS idx_companies_stripe_customer ON companies(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL')
+
+    // ── Notifications ────────────────────────────────────────────────────────
+    await query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type       TEXT        NOT NULL,
+        payload    JSONB       NOT NULL DEFAULT '{}',
+        read_at    TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+    await query('CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications (user_id, created_at DESC)')
+    await query('CREATE INDEX IF NOT EXISTS idx_notifications_user_unread  ON notifications (user_id, read_at) WHERE read_at IS NULL')
+
     // Partial index for fast certified-company lookups (Trader Portal / public registry)
     await query('CREATE INDEX IF NOT EXISTS idx_companies_certified_country ON companies(country, certification_level) WHERE certification_level > 0')
     await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'company'")
