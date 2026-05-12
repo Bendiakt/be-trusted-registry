@@ -2,15 +2,18 @@ require('./instrument.js')
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
+const jwt    = require('jsonwebtoken')
 const crypto = require('crypto')
-const rateLimit = require('express-rate-limit')
-const { ipKeyGenerator } = require('express-rate-limit')
 const http = require('http')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
-const { checkFraud } = require('./lib/fraudDetection')
+const { checkFraud }   = require('./lib/fraudDetection')
+const {
+  auth,
+  requireAdmin,
+  publicReadLimiter,
+  SECRET,
+} = require('./lib/auth')
 const { getRuntimeMetrics } = require('./lib/runtimeMetrics')
 const metricsRouter = require('./routes/metrics')
 const badgeRouter  = require('./routes/badge')
@@ -132,6 +135,7 @@ app.use((req, res, next) => {
   return jsonMiddleware(req, res, next)
 })
 
+// auth, requireAdmin, publicReadLimiter and SECRET are imported from lib/auth above.
 // ── Required environment variables ───────────────────────────────────────────
 // Fail fast at startup rather than crashing in the middle of a request.
 ;(function validateEnv() {
@@ -274,11 +278,32 @@ const mapMissionRow = (row) => {
   }
 }
 
-const { router: paymentsRouter } = require('./routes/payments')
-const documentsRouter = require('./routes/documents')
-const traderRouter    = require('./routes/trader')
-const { sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+const { router: paymentsRouter }  = require('./routes/payments')
+const documentsRouter             = require('./routes/documents')
+const traderRouter                = require('./routes/trader')
+const authRouter                  = require('./routes/auth')
+const adminRouter                 = require('./routes/admin')
+const notificationsRouter         = require('./routes/notifications')
+const { sendMissionAssigned, sendMissionCompleted, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+
+// ── Router mounts ─────────────────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', auth)
+app.post('/api/payments/renewal-checkout',        auth)
+app.post('/api/payments/portal',                  auth)
+app.get('/api/payments/stats',                    auth)
+app.post('/api/stripe/create-checkout-session',   auth)
+app.post('/api/stripe/renewal-checkout',          auth)
+app.post('/api/stripe/portal',                    auth)
+app.get('/api/stripe/stats',                      auth)
+app.use('/api/payments',       paymentsRouter)
+app.use('/api/stripe',         paymentsRouter)
+app.use('/api/metrics',        metricsRouter)
+app.use('/api/badge',          badgeRouter)
+app.use('/api/documents',      auth, documentsRouter)
+app.use('/api/trader',         auth, traderRouter)
+app.use('/api/auth',           authRouter)
+app.use('/api/admin',          adminRouter)
+app.use('/api/notifications',  notificationsRouter)
 app.post('/api/payments/renewal-checkout',         auth)
 app.post('/api/payments/portal',                   auth)
 app.get('/api/payments/stats',                     auth)
