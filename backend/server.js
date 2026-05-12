@@ -2,15 +2,18 @@ require('./instrument.js')
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
+const jwt    = require('jsonwebtoken')
 const crypto = require('crypto')
-const rateLimit = require('express-rate-limit')
-const { ipKeyGenerator } = require('express-rate-limit')
 const http = require('http')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
-const { checkFraud } = require('./lib/fraudDetection')
+const { checkFraud }   = require('./lib/fraudDetection')
+const {
+  auth,
+  requireAdmin,
+  publicReadLimiter,
+  SECRET,
+} = require('./lib/auth')
 const { getRuntimeMetrics } = require('./lib/runtimeMetrics')
 const metricsRouter = require('./routes/metrics')
 const badgeRouter  = require('./routes/badge')
@@ -132,92 +135,7 @@ app.use((req, res, next) => {
   return jsonMiddleware(req, res, next)
 })
 
-const SECRET = process.env.JWT_SECRET
-if (!SECRET) {
-  throw new Error('Missing JWT_SECRET environment variable')
-}
-
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || SECRET
-if (!process.env.JWT_REFRESH_SECRET) {
-  console.warn('JWT_REFRESH_SECRET is missing; falling back to JWT_SECRET')
-}
-
-const hashToken = (value) => crypto.createHash('sha256').update(String(value)).digest('hex')
-
-const issueAccessToken = (user) => {
-  const jti = crypto.randomUUID()
-  const token = jwt.sign(
-    { jti, id: user.id, role: user.role, name: user.name, email: user.email },
-    SECRET,
-    { expiresIn: '15m' }
-  )
-  return { token, jti }
-}
-
-const issueRefreshToken = (user) => {
-  const jti = crypto.randomUUID()
-  const token = jwt.sign(
-    { jti, id: user.id, type: 'refresh' },
-    REFRESH_SECRET,
-    { expiresIn: '30d' }
-  )
-  return { token, jti }
-}
-
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many registration attempts. Try again later.' },
-})
-
-// Public endpoints rate limits — prevent enumeration / scraping
-const publicReadLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests. Slow down.' },
-})
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const email = String(req.body?.email || '').trim().toLowerCase()
-    return `${ipKeyGenerator(req)}:${email}`
-  },
-  message: { error: 'Too many login attempts. Try again later.' },
-})
-
-const auth = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]
-  if (!token) return res.status(401).json({ error: 'Unauthorized' })
-  try {
-    const decoded = jwt.verify(token, SECRET)
-    if (decoded?.jti) {
-      const blacklisted = await query(
-        'SELECT 1 FROM token_blacklist WHERE jti = $1 AND expires_at > NOW() LIMIT 1',
-        [decoded.jti]
-      )
-      if (blacklisted.rows.length > 0) {
-        return res.status(401).json({ error: 'Token revoked' })
-      }
-    }
-    req.user = decoded
-    return next()
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' })
-  }
-}
-
-const requireAdmin = (req, res, next) => {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
-  return next()
-}
+// auth, requireAdmin, publicReadLimiter and SECRET are imported from lib/auth above.
 
 const mapCompanyRow = (row) => {
   if (!row) return null
@@ -262,20 +180,32 @@ const mapMissionRow = (row) => {
   }
 }
 
-const { router: paymentsRouter } = require('./routes/payments')
-const documentsRouter = require('./routes/documents')
-const traderRouter    = require('./routes/trader')
-const { sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+const { router: paymentsRouter }  = require('./routes/payments')
+const documentsRouter             = require('./routes/documents')
+const traderRouter                = require('./routes/trader')
+const authRouter                  = require('./routes/auth')
+const adminRouter                 = require('./routes/admin')
+const notificationsRouter         = require('./routes/notifications')
+const { sendMissionAssigned, sendMissionCompleted, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+
+// ── Router mounts ─────────────────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', auth)
-app.get('/api/payments/stats', auth)
-app.post('/api/stripe/create-checkout-session', auth)
-app.get('/api/stripe/stats', auth)
-app.use('/api/payments', paymentsRouter)
-app.use('/api/stripe', paymentsRouter)
-app.use('/api/metrics',   metricsRouter)
-app.use('/api/badge',     badgeRouter)
-app.use('/api/documents', auth, documentsRouter)
-app.use('/api/trader',    auth, traderRouter)
+app.post('/api/payments/renewal-checkout',        auth)
+app.post('/api/payments/portal',                  auth)
+app.get('/api/payments/stats',                    auth)
+app.post('/api/stripe/create-checkout-session',   auth)
+app.post('/api/stripe/renewal-checkout',          auth)
+app.post('/api/stripe/portal',                    auth)
+app.get('/api/stripe/stats',                      auth)
+app.use('/api/payments',       paymentsRouter)
+app.use('/api/stripe',         paymentsRouter)
+app.use('/api/metrics',        metricsRouter)
+app.use('/api/badge',          badgeRouter)
+app.use('/api/documents',      auth, documentsRouter)
+app.use('/api/trader',         auth, traderRouter)
+app.use('/api/auth',           authRouter)
+app.use('/api/admin',          adminRouter)
+app.use('/api/notifications',  notificationsRouter)
 
 // Immutable audit trail helper — fire-and-forget (never blocks response)
 const logAudit = (userId, action, resource, ip, payload) => {
@@ -286,212 +216,6 @@ const logAudit = (userId, action, resource, ip, payload) => {
   ).catch(e => console.error('audit_log write failed:', e.message))
 }
 
-app.post('/api/auth/register', registerLimiter, async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body
-    if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
-
-    const nameStr = String(name).trim()
-    const emailStr = String(email).trim().toLowerCase()
-    const passwordStr = String(password)
-
-    if (nameStr.length < 2 || nameStr.length > 120) return res.status(400).json({ error: 'Name must be 2–120 characters' })
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) return res.status(400).json({ error: 'Invalid email address' })
-    if (passwordStr.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
-    if (passwordStr.length > 128) return res.status(400).json({ error: 'Password too long' })
-    const VALID_ROLES = ['company', 'trader', 'pac']
-    const resolvedRole = VALID_ROLES.includes(role) ? role : 'company'
-
-    const existing = await query('SELECT id FROM users WHERE email = $1 LIMIT 1', [emailStr])
-    if (existing.rows.length > 0) return res.status(400).json({ error: 'Email already exists' })
-
-    const hash = await bcrypt.hash(passwordStr, 10)
-    const verifyToken   = crypto.randomBytes(32).toString('hex')
-    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
-    await query(
-      `INSERT INTO users (name, email, password, role, email_verify_token, email_verify_expires)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [nameStr, emailStr, hash, resolvedRole, verifyToken, verifyExpires]
-    )
-
-    res.json({ message: 'Registered successfully. Please check your email to verify your account.' })
-    logAudit(null, 'user_register', 'users', req.ip, { email: emailStr, role: resolvedRole })
-
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
-    sendEmailVerification({
-      email: emailStr,
-      name: nameStr,
-      verifyUrl: `${frontendUrl}/verify-email?token=${verifyToken}`,
-    }).catch(() => {})
-    sendWelcome({ email: emailStr, name: nameStr }).catch(() => {})
-    await checkFraud({ userId: null, email: emailStr, ip: req.ip, action: 'user_register' }).catch(() => {})
-  } catch (err) {
-    console.error('Register error:', err.message)
-    res.status(500).json({ error: 'Registration failed' })
-  }
-})
-
-// GET /api/auth/verify-email?token=xxx — confirm email ownership
-app.get('/api/auth/verify-email', async (req, res) => {
-  const token = String(req.query.token || '').trim()
-  if (!token) return res.status(400).json({ error: 'Missing token' })
-  try {
-    const result = await query(
-      `UPDATE users
-          SET email_verified = TRUE, email_verify_token = NULL, email_verify_expires = NULL
-        WHERE email_verify_token = $1
-          AND email_verify_expires > NOW()
-          AND email_verified = FALSE
-       RETURNING id, email`,
-      [token]
-    )
-    if (!result.rows.length) return res.status(400).json({ error: 'Invalid or expired token' })
-    logAudit(result.rows[0].id, 'email_verified', 'users', req.ip, { email: result.rows[0].email })
-    res.json({ message: 'Email verified successfully' })
-  } catch (err) {
-    console.error('Email verify error:', err.message)
-    res.status(500).json({ error: 'Verification failed' })
-  }
-})
-
-// POST /api/auth/resend-verification — resend the verification email
-const resendVerifyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 3, standardHeaders: true, legacyHeaders: false })
-app.post('/api/auth/resend-verification', resendVerifyLimiter, auth, async (req, res) => {
-  try {
-    const userResult = await query('SELECT id, name, email, email_verified FROM users WHERE id = $1 LIMIT 1', [req.user.id])
-    const user = userResult.rows[0]
-    if (!user) return res.status(404).json({ error: 'User not found' })
-    if (user.email_verified) return res.status(400).json({ error: 'Email already verified' })
-
-    const newToken   = crypto.randomBytes(32).toString('hex')
-    const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000)
-    await query(
-      'UPDATE users SET email_verify_token = $1, email_verify_expires = $2 WHERE id = $3',
-      [newToken, newExpires, req.user.id]
-    )
-
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
-    sendEmailVerification({
-      email: user.email,
-      name:  user.name,
-      verifyUrl: `${frontendUrl}/verify-email?token=${newToken}`,
-    }).catch(() => {})
-
-    res.json({ message: 'Verification email sent' })
-  } catch (err) {
-    console.error('Resend verify error:', err.message)
-    res.status(500).json({ error: 'Failed to resend' })
-  }
-})
-
-app.post('/api/auth/login', loginLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body
-    const userResult = await query('SELECT id, name, email, password, role FROM users WHERE email = $1 LIMIT 1', [email])
-    const user = userResult.rows[0]
-    if (!user) return res.status(400).json({ error: 'Invalid credentials' })
-
-    const valid = await bcrypt.compare(password, user.password)
-    if (!valid) return res.status(400).json({ error: 'Invalid credentials' })
-
-    const { token, jti } = issueAccessToken(user)
-    const { token: refreshToken } = issueRefreshToken(user)
-    const refreshDecoded = jwt.decode(refreshToken)
-
-    await Promise.all([
-      query(
-        `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-         VALUES ($1, $2, to_timestamp($3))`,
-        [user.id, hashToken(refreshToken), refreshDecoded.exp]
-      ),
-      query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]),
-    ])
-
-    res.json({
-      token,
-      refreshToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
-    })
-    logAudit(user.id, 'user_login', 'users', req.ip, { email, jti })
-  } catch (err) {
-    console.error('Login error:', err.message)
-    res.status(500).json({ error: 'Login failed' })
-  }
-})
-
-app.post('/api/auth/refresh', async (req, res) => {
-  try {
-    const refreshToken = req.body?.refreshToken
-    if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' })
-
-    const payload = jwt.verify(refreshToken, REFRESH_SECRET)
-    if (payload.type !== 'refresh') return res.status(401).json({ error: 'Invalid refresh token' })
-
-    const stored = await query(
-      `SELECT id, user_id
-       FROM refresh_tokens
-       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()
-       LIMIT 1`,
-      [hashToken(refreshToken)]
-    )
-    if (stored.rows.length === 0) return res.status(401).json({ error: 'Refresh token revoked or expired' })
-
-    await query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1', [stored.rows[0].id])
-
-    const userResult = await query(
-      'SELECT id, name, email, role FROM users WHERE id = $1 LIMIT 1',
-      [stored.rows[0].user_id]
-    )
-    const user = userResult.rows[0]
-    if (!user) return res.status(401).json({ error: 'User not found' })
-
-    const { token } = issueAccessToken(user)
-    const { token: newRefreshToken } = issueRefreshToken(user)
-    const newRefreshDecoded = jwt.decode(newRefreshToken)
-    await query(
-      `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, to_timestamp($3))`,
-      [user.id, hashToken(newRefreshToken), newRefreshDecoded.exp]
-    )
-
-    return res.json({ token, refreshToken: newRefreshToken })
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid refresh token' })
-  }
-})
-
-app.post('/api/auth/logout', auth, async (req, res) => {
-  try {
-    const accessToken = req.headers.authorization?.split(' ')[1]
-    const refreshToken = req.body?.refreshToken || null
-    const decoded = jwt.verify(accessToken, SECRET)
-
-    if (decoded?.jti && decoded?.exp) {
-      await query(
-        `INSERT INTO token_blacklist (jti, user_id, expires_at)
-         VALUES ($1, $2, to_timestamp($3))
-         ON CONFLICT (jti) DO NOTHING`,
-        [decoded.jti, decoded.id || null, decoded.exp]
-      )
-    }
-
-    if (refreshToken) {
-      await query(
-        `UPDATE refresh_tokens
-         SET revoked_at = NOW()
-         WHERE token_hash = $1 AND user_id = $2`,
-        [hashToken(refreshToken), decoded.id]
-      )
-    }
-
-    await query('DELETE FROM token_blacklist WHERE expires_at <= NOW()')
-    await query('DELETE FROM refresh_tokens WHERE expires_at <= NOW()')
-
-    return res.json({ message: 'Logged out' })
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' })
-  }
-})
 
 app.get('/api/companies', auth, async (req, res) => {
   try {
@@ -1182,246 +906,6 @@ app.get('/api/registry', publicReadLimiter, async (req, res) => {
   } catch (err) {
     console.error('Registry search error:', err.message)
     res.status(500).json({ error: 'Failed to load registry' })
-  }
-})
-
-// ─── Forgot / Reset Password ──────────────────────────────────────────────────
-const forgotLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many password reset requests. Try again later.' },
-})
-
-app.post('/api/auth/forgot-password', forgotLimiter, async (req, res) => {
-  // Always return 200 to prevent email enumeration
-  res.json({ message: 'If this email is registered you will receive a reset link.' })
-  try {
-    const emailStr = String(req.body?.email || '').trim().toLowerCase()
-    if (!emailStr) return
-
-    const userResult = await query('SELECT id, name, email FROM users WHERE email = $1 LIMIT 1', [emailStr])
-    if (!userResult.rows.length) return
-
-    const user = userResult.rows[0]
-    const rawToken = crypto.randomBytes(32).toString('hex')
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    await query(
-      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (token_hash) DO NOTHING`,
-      [user.id, tokenHash, expiresAt]
-    )
-
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
-    const resetUrl = `${frontendUrl}/reset-password/${rawToken}`
-    sendPasswordReset({ email: user.email, name: user.name, resetUrl }).catch(() => {})
-  } catch (err) {
-    console.error('Forgot password error:', err.message)
-  }
-})
-
-const resetPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many reset attempts. Try again later.' },
-})
-
-app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
-  try {
-    const { token, password } = req.body
-    if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' })
-    if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
-    if (String(password).length > 128) return res.status(400).json({ error: 'Password too long' })
-
-    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex')
-    const result = await query(
-      `SELECT id, user_id FROM password_reset_tokens
-       WHERE token_hash = $1 AND expires_at > NOW() AND used_at IS NULL
-       LIMIT 1`,
-      [tokenHash]
-    )
-    if (!result.rows.length) return res.status(400).json({ error: 'Reset link is invalid or expired' })
-
-    const { id: prtId, user_id } = result.rows[0]
-    const hash = await bcrypt.hash(String(password), 10)
-
-    await Promise.all([
-      query('UPDATE users SET password = $1 WHERE id = $2', [hash, user_id]),
-      query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [prtId]),
-      // Revoke all active refresh tokens for this user (force re-login everywhere)
-      query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [user_id]),
-    ])
-
-    logAudit(user_id, 'password_reset', 'users', req.ip, {})
-    res.json({ message: 'Password reset successfully' })
-  } catch (err) {
-    console.error('Reset password error:', err.message)
-    res.status(500).json({ error: 'Reset failed' })
-  }
-})
-
-// ─── Admin Routes ─────────────────────────────────────────────────────────────
-app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
-  try {
-    const [users, companies, revenue] = await Promise.all([
-      query('SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL \'30d\')::int AS last_30d FROM users'),
-      query('SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE certification_level > 0)::int AS certified FROM companies'),
-      query('SELECT COALESCE(SUM(amount_cents) FILTER (WHERE status = \'completed\'), 0)::bigint AS total_cents FROM payments'),
-    ])
-    res.json({
-      users:     users.rows[0],
-      companies: companies.rows[0],
-      revenue:   { total_usd: (Number(revenue.rows[0].total_cents) / 100).toFixed(2) },
-    })
-  } catch (err) {
-    console.error('Admin stats error:', err.message)
-    res.status(500).json({ error: 'Failed to load stats' })
-  }
-})
-
-app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
-  try {
-    const page  = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
-    const search = String(req.query.q || '').trim()
-
-    let rowsResult, totalResult
-    if (search) {
-      const like = `%${search}%`
-      rowsResult  = await query(`SELECT id, name, email, role, created_at, last_login FROM users WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3`, [like, limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM users WHERE name ILIKE $1 OR email ILIKE $1`, [like])
-    } else {
-      rowsResult  = await query(`SELECT id, name, email, role, created_at, last_login FROM users ORDER BY id DESC LIMIT $1 OFFSET $2`, [limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM users`)
-    }
-
-    const total = totalResult.rows[0]?.total || 0
-    res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
-  } catch (err) {
-    console.error('Admin users error:', err.message)
-    res.status(500).json({ error: 'Failed to load users' })
-  }
-})
-
-app.get('/api/admin/companies', auth, requireAdmin, async (req, res) => {
-  try {
-    const page  = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
-    const search = String(req.query.q || '').trim()
-
-    let rowsResult, totalResult
-    if (search) {
-      const like = `%${search}%`
-      rowsResult  = await query(`SELECT c.id, c.company_name, c.name, c.country, c.sector, c.industry, c.certification_level, c.status, c.created_at, u.email FROM companies c LEFT JOIN users u ON u.id = c.user_id WHERE c.company_name ILIKE $1 OR c.name ILIKE $1 OR u.email ILIKE $1 ORDER BY c.id DESC LIMIT $2 OFFSET $3`, [like, limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM companies c LEFT JOIN users u ON u.id = c.user_id WHERE c.company_name ILIKE $1 OR c.name ILIKE $1 OR u.email ILIKE $1`, [like])
-    } else {
-      rowsResult  = await query(`SELECT c.id, c.company_name, c.name, c.country, c.sector, c.industry, c.certification_level, c.status, c.created_at, u.email FROM companies c LEFT JOIN users u ON u.id = c.user_id ORDER BY c.id DESC LIMIT $1 OFFSET $2`, [limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM companies`)
-    }
-
-    const total = totalResult.rows[0]?.total || 0
-    res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
-  } catch (err) {
-    console.error('Admin companies error:', err.message)
-    res.status(500).json({ error: 'Failed to load companies' })
-  }
-})
-
-app.patch('/api/admin/companies/:id/level', auth, requireAdmin, async (req, res) => {
-  try {
-    const companyId = parseInt(req.params.id, 10)
-    const level = parseInt(req.body?.level, 10)
-    if (Number.isNaN(companyId) || Number.isNaN(level) || level < 0 || level > 3) {
-      return res.status(400).json({ error: 'Invalid company id or level (0-3)' })
-    }
-    const result = await query(
-      `UPDATE companies SET certification_level = $1, updated_at = NOW()
-        WHERE id = $2
-       RETURNING id, company_name, certification_level, user_id`,
-      [level, companyId]
-    )
-    if (!result.rows.length) return res.status(404).json({ error: 'Company not found' })
-    const company = result.rows[0]
-    logAudit(req.user.id, 'admin_set_cert_level', 'companies', req.ip, { companyId, level })
-
-    // Fire cert-granted email + in-app WS notification (non-blocking) when level is promoted to > 0
-    if (level > 0 && company.user_id) {
-      notifyUser(company.user_id, { type: 'cert_granted', level, companyId })
-      query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
-        .then(({ rows }) => {
-          if (!rows.length) return
-          const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
-          sendCertGranted({
-            email:       rows[0].email,
-            name:        rows[0].name,
-            companyName: company.company_name,
-            level,
-            verifyUrl:   `${frontendUrl}/verify/${companyId}`,
-          }).catch(() => {})
-        })
-        .catch(() => {})
-    }
-
-    res.json({ company })
-  } catch (err) {
-    console.error('Admin set level error:', err.message)
-    res.status(500).json({ error: 'Update failed' })
-  }
-})
-
-// PATCH /api/admin/companies/:id/suspend — toggle company suspension
-app.patch('/api/admin/companies/:id/suspend', auth, requireAdmin, async (req, res) => {
-  try {
-    const companyId = parseInt(req.params.id, 10)
-    if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
-
-    const { suspend, reason } = req.body
-    const isSuspend = Boolean(suspend)
-    const result = await query(
-      `UPDATE companies
-          SET suspended_at     = ${isSuspend ? 'NOW()' : 'NULL'},
-              suspended_reason = ${isSuspend ? '$2' : 'NULL'},
-              updated_at       = NOW()
-        WHERE id = $1
-       RETURNING id, company_name, suspended_at, suspended_reason`,
-      isSuspend ? [companyId, String(reason || '').slice(0, 500)] : [companyId]
-    )
-    if (!result.rows.length) return res.status(404).json({ error: 'Company not found' })
-    logAudit(req.user.id, isSuspend ? 'admin_suspend_company' : 'admin_unsuspend_company', 'companies', req.ip, { companyId, reason })
-    res.json({ company: result.rows[0] })
-  } catch (err) {
-    console.error('Suspend company error:', err.message)
-    res.status(500).json({ error: 'Update failed' })
-  }
-})
-
-app.get('/api/admin/missions', auth, requireAdmin, async (req, res) => {
-  try {
-    const page  = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
-
-    const [rowsResult, totalResult] = await Promise.all([
-      query(`SELECT m.*, u.name AS pac_name, u.email AS pac_email
-             FROM missions m
-             LEFT JOIN users u ON u.id = m.assigned_to
-             ORDER BY m.id DESC LIMIT $1 OFFSET $2`, [limit, offset]),
-      query('SELECT COUNT(*)::int AS total FROM missions'),
-    ])
-
-    const total = totalResult.rows[0]?.total || 0
-    res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
-  } catch (err) {
-    console.error('Admin missions error:', err.message)
-    res.status(500).json({ error: 'Failed to load missions' })
   }
 })
 
