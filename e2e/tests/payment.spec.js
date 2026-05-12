@@ -34,6 +34,11 @@ test.describe('Payments — pricing & checkout', () => {
   test('checkout button calls create-checkout-session and navigates to Stripe URL', async ({ page }) => {
     await page.goto('/dashboard')
 
+    // Wait for the company profile to load — plan buttons are disabled until company != null.
+    // The stub returns company.name = 'Acme Corp', so waiting for that text ensures the
+    // /api/companies/me response has been processed and React state is updated.
+    await expect(page.getByText('Acme Corp')).toBeVisible({ timeout: 5000 })
+
     // Track the checkout API call
     let checkoutCalled = false
     await page.route('**/api/payments/create-checkout-session', (route) => {
@@ -51,9 +56,12 @@ test.describe('Payments — pricing & checkout', () => {
       await pricingTab.click()
     }
 
-    // Click the first available plan button (text is "Get Certified" in the pricing tab).
-    // Note: "upgrade" is intentionally excluded to avoid matching the "Pricing & Upgrade" tab button.
-    const buyBtn = page.getByRole('button', { name: /get certified|subscribe|buy|choose|select|obtenir|certifi/i }).first()
+    // Click the first ENABLED plan button. With certificationLevel: 2 the enabled plan is L3
+    // whose button text is "Get Certified". "upgrade" is excluded to avoid matching the
+    // "Pricing & Upgrade" tab button which also remains in the DOM.
+    const buyBtn = page.locator('button:not([disabled])').filter({
+      hasText: /get certified|subscribe|buy|choose|select|obtenir|certifi/i,
+    }).first()
     if (await buyBtn.isVisible()) {
       await buyBtn.click()
       // Give the request time to fire

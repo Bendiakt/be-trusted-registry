@@ -76,8 +76,8 @@ test.describe('Company — registration form', () => {
       await countryInput.fill('France')
     }
 
-    // Submit
-    const submitBtn = page.getByRole('button', { name: /save|submit|register|enregistrer/i }).first()
+    // Submit — use type="submit" so we don't accidentally click a tab button
+    const submitBtn = page.locator('form button[type="submit"]').first()
     if (await submitBtn.isVisible()) {
       await submitBtn.click()
       // Expect some success feedback (toast, message, or no error)
