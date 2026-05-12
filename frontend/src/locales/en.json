@@ -343,7 +343,8 @@
       "overview": "Overview",
       "users": "Users",
       "companies": "Companies",
-      "missions": "Missions"
+      "missions": "Missions",
+      "audit": "Audit Log"
     },
     "stats": {
       "total_users": "Total Users",
