@@ -122,11 +122,14 @@ const resetPasswordLimiter = rateLimit({
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 /**
- * auth — verifies the Bearer JWT and checks the blacklist.
+ * auth — verifies the Bearer JWT (or httpOnly cookie) and checks the blacklist.
+ * Reads from:
+ *   1. Authorization: Bearer <token> header  (API clients, mobile, existing integrations)
+ *   2. req.cookies.token                     (web frontend with httpOnly cookie strategy)
  * Attaches decoded payload to req.user on success.
  */
 const auth = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]
+  const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
   try {
     const decoded = jwt.verify(token, SECRET)

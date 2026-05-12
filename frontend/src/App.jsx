@@ -1,4 +1,7 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { getSession } from './lib/session'
+import api from './lib/api'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -15,31 +18,9 @@ import NotFound from './pages/NotFound'
 import MissionReport from './pages/MissionReport'
 import VerifyEmail from './pages/VerifyEmail'
 
-/**
- * Decode the JWT payload stored in localStorage without a library.
- * Returns null if the token is missing, malformed, or expired.
- */
-function getTokenPayload() {
-  try {
-    const token = localStorage.getItem('token')
-    if (!token) return null
-    const base64 = token.split('.')[1]
-    if (!base64) return null
-    const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
-    const payload = JSON.parse(json)
-    // Reject if token is already expired on the client side
-    if (payload.exp && payload.exp * 1000 < Date.now()) {
-      return null
-    }
-    return payload
-  } catch {
-    return null
-  }
-}
-
-/** Requires any authenticated user. */
+/** Requires any authenticated user (session cookie present). */
 function PrivateRoute({ children }) {
-  return getTokenPayload() ? children : <Navigate to="/login" replace />
+  return getSession() ? children : <Navigate to="/login" replace />
 }
 
 /**
@@ -47,14 +28,20 @@ function PrivateRoute({ children }) {
  * Redirects to /login if not authenticated, /dashboard if wrong role.
  */
 function RoleRoute({ role, children }) {
-  const payload = getTokenPayload()
-  if (!payload) return <Navigate to="/login" replace />
+  const user = getSession()
+  if (!user) return <Navigate to="/login" replace />
   const allowed = Array.isArray(role) ? role : [role]
-  if (!allowed.includes(payload.role)) return <Navigate to="/dashboard" replace />
+  if (!allowed.includes(user.role)) return <Navigate to="/dashboard" replace />
   return children
 }
 
 export default function App() {
+  // Seed the CSRF double-submit cookie once on app load so POST/PUT/DELETE
+  // requests can immediately read it from document.cookie.
+  useEffect(() => {
+    api.get('/api/auth/csrf-token').catch(() => { /* non-blocking */ })
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>

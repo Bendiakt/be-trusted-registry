@@ -530,3 +530,236 @@ describe('isBlockedCompany', () => {
     assert.ok(!isBlockedCompany(''))
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// lib/auth.js — validatePassword (pure, no DB needed)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Stub JWT_SECRET so lib/auth.js can be required without throwing
+process.env.JWT_SECRET          = 'test-secret-32-chars-long-enough!'
+process.env.JWT_REFRESH_SECRET  = 'test-refresh-secret-32-chars-longe'
+
+const { validatePassword, hashToken, issueAccessToken, issueRefreshToken } = require('../lib/auth')
+
+describe('validatePassword — length rules', () => {
+  test('rejects password shorter than 8 chars', () => {
+    assert.match(validatePassword('Ab1'), /8 characters/)
+  })
+  test('rejects password longer than 128 chars', () => {
+    assert.match(validatePassword('Aa1' + 'x'.repeat(130)), /too long/)
+  })
+  test('accepts 8-character valid password', () => {
+    assert.strictEqual(validatePassword('Abcdef1!'), null)
+  })
+  test('accepts 128-character password', () => {
+    assert.strictEqual(validatePassword('Aa1' + 'x'.repeat(125)), null)
+  })
+})
+
+describe('validatePassword — character class rules', () => {
+  test('rejects all-uppercase + digit (no lowercase)', () => {
+    assert.match(validatePassword('ABCDEFG1'), /lowercase/)
+  })
+  test('rejects all-lowercase + digit (no uppercase)', () => {
+    assert.match(validatePassword('abcdefg1'), /uppercase/)
+  })
+  test('rejects letters-only (no digit)', () => {
+    assert.match(validatePassword('Abcdefgh'), /digit/)
+  })
+  test('accepts password with lower + upper + digit', () => {
+    assert.strictEqual(validatePassword('Passw0rd'), null)
+  })
+  test('accepts password with special characters', () => {
+    assert.strictEqual(validatePassword('P@ssw0rd!'), null)
+  })
+  test('returns null (not false/undefined) on success', () => {
+    assert.strictEqual(validatePassword('Valid1pw'), null)
+  })
+})
+
+describe('hashToken', () => {
+  test('returns a 64-char hex string', () => {
+    const h = hashToken('some-jti-value')
+    assert.match(h, /^[0-9a-f]{64}$/)
+  })
+  test('same input produces same hash (deterministic)', () => {
+    assert.strictEqual(hashToken('abc'), hashToken('abc'))
+  })
+  test('different inputs produce different hashes', () => {
+    assert.notStrictEqual(hashToken('a'), hashToken('b'))
+  })
+  test('coerces non-string input', () => {
+    assert.doesNotThrow(() => hashToken(12345))
+  })
+})
+
+describe('issueAccessToken', () => {
+  const user = { id: 7, role: 'company', name: 'Test Co', email: 'test@co.com' }
+
+  test('returns token string and jti', () => {
+    const { token, jti } = issueAccessToken(user)
+    assert.strictEqual(typeof token, 'string')
+    assert.ok(token.split('.').length === 3, 'JWT has 3 parts')
+    assert.match(jti, /^[0-9a-f-]{36}$/)
+  })
+  test('jti is unique across calls', () => {
+    const a = issueAccessToken(user)
+    const b = issueAccessToken(user)
+    assert.notStrictEqual(a.jti, b.jti)
+  })
+  test('payload encodes correct user fields', () => {
+    const { token } = issueAccessToken(user)
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+    assert.strictEqual(payload.id, user.id)
+    assert.strictEqual(payload.role, user.role)
+    assert.strictEqual(payload.email, user.email)
+  })
+})
+
+describe('issueRefreshToken', () => {
+  const user = { id: 7, role: 'company' }
+
+  test('returns token string and jti', () => {
+    const { token, jti } = issueRefreshToken(user)
+    assert.strictEqual(typeof token, 'string')
+    assert.ok(token.split('.').length === 3)
+    assert.match(jti, /^[0-9a-f-]{36}$/)
+  })
+  test('payload type is "refresh"', () => {
+    const { token } = issueRefreshToken(user)
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+    assert.strictEqual(payload.type, 'refresh')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// lib/mappers.js — mapCompanyRow, mapMissionRow (pure transformers)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const { mapCompanyRow, mapMissionRow } = require('../lib/mappers')
+
+describe('mapCompanyRow — null / missing row', () => {
+  test('returns null for undefined', () => assert.strictEqual(mapCompanyRow(undefined), null))
+  test('returns null for null', ()      => assert.strictEqual(mapCompanyRow(null), null))
+})
+
+describe('mapCompanyRow — field mapping', () => {
+  const row = {
+    id: 1, user_id: 2, name: 'Acme', company_name: 'Acme Ltd',
+    industry: 'Tech', sector: 'IT', country: 'AE',
+    description: 'desc', website: 'https://acme.ae', status: 'active',
+    certification_level: 2, verified_at: '2024-01-01', suspended_at: null,
+    suspended_reason: null, created_at: '2024-01-01', updated_at: '2024-06-01',
+  }
+  const out = mapCompanyRow(row)
+
+  test('maps id', ()                  => assert.strictEqual(out.id, 1))
+  test('maps userId',()               => assert.strictEqual(out.userId, 2))
+  test('maps companyName',()          => assert.strictEqual(out.companyName, 'Acme Ltd'))
+  test('certificationLevel from row', () => assert.strictEqual(out.certificationLevel, 2))
+  test('level mirrors certificationLevel', () => assert.strictEqual(out.level, 2))
+  test('badge is "certified" when level > 0', () => assert.strictEqual(out.badge, 'certified'))
+})
+
+describe('mapCompanyRow — defaults', () => {
+  const minimal = { id: 5, user_id: 1, name: 'Min', created_at: 'x', updated_at: 'y' }
+  const out = mapCompanyRow(minimal)
+
+  test('companyName falls back to name', () => assert.strictEqual(out.companyName, 'Min'))
+  test('sector falls back to empty string when industry absent', () => assert.strictEqual(out.sector, ''))
+  test('certificationLevel defaults to 0', () => assert.strictEqual(out.certificationLevel, 0))
+  test('badge is "not-certified" when level is 0', () => assert.strictEqual(out.badge, 'not-certified'))
+  test('verifiedAt defaults to null',  () => assert.strictEqual(out.verifiedAt, null))
+  test('suspendedAt defaults to null', () => assert.strictEqual(out.suspendedAt, null))
+})
+
+describe('mapMissionRow — null / missing row', () => {
+  test('returns null for undefined', () => assert.strictEqual(mapMissionRow(undefined), null))
+  test('returns null for null',      () => assert.strictEqual(mapMissionRow(null), null))
+})
+
+describe('mapMissionRow — field mapping', () => {
+  const row = {
+    id: 10, company_id: 5, company_name: 'Acme', location: 'Dubai',
+    type: 'audit', description: 'Audit mission', fee_usd: 800,
+    assigned_to: 3, status: 'assigned', created_at: '2024-01-01',
+    report_text: 'Report', outcome: 'pass', completed_at: '2024-06-01',
+  }
+  const out = mapMissionRow(row)
+
+  test('maps id',           () => assert.strictEqual(out.id, 10))
+  test('maps company_id',   () => assert.strictEqual(out.company_id, 5))
+  test('maps company_name', () => assert.strictEqual(out.company_name, 'Acme'))
+  test('maps fee from fee_usd', () => assert.strictEqual(out.fee, 800))
+  test('maps reportText',   () => assert.strictEqual(out.reportText, 'Report'))
+  test('maps outcome',      () => assert.strictEqual(out.outcome, 'pass'))
+  test('maps completedAt',  () => assert.strictEqual(out.completedAt, '2024-06-01'))
+})
+
+describe('mapMissionRow — defaults', () => {
+  const minimal = { id: 1, company_id: 1, status: 'available', created_at: '2024-01-01' }
+  const out = mapMissionRow(minimal)
+
+  test('company_name defaults to empty string', () => assert.strictEqual(out.company_name, ''))
+  test('location defaults to empty string',     () => assert.strictEqual(out.location, ''))
+  test('fee defaults to 500',                   () => assert.strictEqual(out.fee, 500))
+  test('reportText defaults to null',           () => assert.strictEqual(out.reportText, null))
+  test('outcome defaults to null',              () => assert.strictEqual(out.outcome, null))
+  test('completedAt defaults to null',          () => assert.strictEqual(out.completedAt, null))
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// lib/encryption.js — encrypt / decrypt / hashForIntegrity (pure crypto)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// 64-char hex key = 32 bytes (required by AES-256)
+process.env.ENCRYPTION_KEY = 'a'.repeat(64)
+
+const { encrypt, decrypt, hashForIntegrity } = require('../lib/encryption')
+
+describe('encrypt / decrypt round-trip', () => {
+  test('decrypts back to original string', () => {
+    const plain = 'Hello, World!'
+    assert.strictEqual(decrypt(encrypt(plain)), plain)
+  })
+  test('works with empty string', () => {
+    assert.strictEqual(decrypt(encrypt('')), '')
+  })
+  test('works with unicode text', () => {
+    const s = 'مرحبا — Bonjour 🌍'
+    assert.strictEqual(decrypt(encrypt(s)), s)
+  })
+  test('ciphertext format is ivHex.ctHex.tagHex (3 parts)', () => {
+    const ct = encrypt('test')
+    assert.strictEqual(ct.split('.').length, 3)
+  })
+  test('same plaintext produces different ciphertext each call (random IV)', () => {
+    assert.notStrictEqual(encrypt('same'), encrypt('same'))
+  })
+})
+
+describe('decrypt — invalid input', () => {
+  test('throws on malformed ciphertext (too few parts)', () => {
+    assert.throws(() => decrypt('onlyone'), /Invalid ciphertext/)
+  })
+  test('throws on tampered ciphertext (auth tag mismatch)', () => {
+    const [iv, ct, tag] = encrypt('legit').split('.')
+    assert.throws(() => decrypt(`${iv}.${ct}.deadbeef`))
+  })
+})
+
+describe('hashForIntegrity', () => {
+  test('returns 64-char hex string', () => {
+    assert.match(hashForIntegrity('payload'), /^[0-9a-f]{64}$/)
+  })
+  test('is deterministic for same string', () => {
+    assert.strictEqual(hashForIntegrity('x'), hashForIntegrity('x'))
+  })
+  test('accepts object (JSON-stringified)', () => {
+    const h = hashForIntegrity({ a: 1 })
+    assert.match(h, /^[0-9a-f]{64}$/)
+  })
+  test('different inputs → different hashes', () => {
+    assert.notStrictEqual(hashForIntegrity('a'), hashForIntegrity('b'))
+  })
+})

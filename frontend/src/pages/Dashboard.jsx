@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { getSession, clearSession } from '../lib/session'
 import MetricsDashboard from '../components/MetricsDashboard'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Skeleton from '../components/Skeleton'
@@ -379,9 +380,9 @@ export default function Dashboard() {
   ]
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    const role = localStorage.getItem('role')
-    if (!token) { navigate('/login'); return }
+    const user = getSession()
+    if (!user) { navigate('/login'); return }
+    const role = user.role
     if (role === 'pac')    { navigate('/pac');    return }
     if (role === 'admin')  { navigate('/admin');  return }
     if (role === 'trader') { navigate('/trader'); return }
@@ -397,12 +398,11 @@ export default function Dashboard() {
 
   // Per-user WebSocket notifications (cert_granted, mission_assigned)
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
+    // WebSocket auth is cookie-based — no token needed in URL
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     let ws
     try {
-      ws = new WebSocket(`${proto}//${window.location.host}/ws/metrics?token=${encodeURIComponent(token)}`)
+      ws = new WebSocket(`${proto}//${window.location.host}/ws/metrics`)
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data)
@@ -457,11 +457,8 @@ export default function Dashboard() {
 
 
   const handleLogout = async () => {
-    const refreshToken = localStorage.getItem('refreshToken')
-    try {
-      await api.post('/api/auth/logout', { refreshToken })
-    } catch { /* server-side revocation best-effort */ }
-    localStorage.clear()
+    try { await api.post('/api/auth/logout') } catch { /* best-effort */ }
+    clearSession()
     navigate('/login')
   }
 
