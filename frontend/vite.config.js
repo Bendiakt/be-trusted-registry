@@ -16,11 +16,6 @@ export default defineConfig({
     allowedHosts: true,
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
     // Split vendor bundles so the browser can cache them independently from
     // app code. Each chunk is content-hashed by Vite so cache busting is free.
     rollupOptions: {
@@ -35,6 +30,7 @@ export default defineConfig({
         },
       },
     },
+    // Warn (not fail) if a single chunk exceeds 600 kB after minification.
     chunkSizeWarningLimit: 600,
   },
   // ── Vitest configuration ────────────────────────────────────────────────────
@@ -42,11 +38,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.js'],
-    // Exclude node_modules but include all src test files
     include: ['src/**/*.{test,spec}.{js,jsx}'],
     css: false,
-  },
-    // Warn (not fail) if a single chunk exceeds 600 kB after minification.
-    chunkSizeWarningLimit: 600,
   },
 })
