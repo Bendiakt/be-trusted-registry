@@ -10,6 +10,7 @@ const { mapCompanyRow }      = require('../lib/mappers')
 const { logAudit }           = require('../lib/audit')
 const { checkFraud }         = require('../lib/fraudDetection')
 const { computeTrustScore }  = require('../lib/trustScore')
+const { validate, schemas }  = require('../lib/validators')
 
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
@@ -129,7 +130,7 @@ router.get('/mine', auth, companyReadLimiter, async (req, res) => {
 })
 
 // ── POST /api/companies/register — create or update company profile ───────────
-router.post('/register', auth, companyWriteLimiter, async (req, res) => {
+router.post('/register', auth, companyWriteLimiter, validate(schemas.createCompany), async (req, res) => {
   try {
     const { name, industry, sector, country, description, website } = req.body
     if (!name) return res.status(400).json({ error: 'Company name is required' })
@@ -177,7 +178,7 @@ router.post('/register', auth, companyWriteLimiter, async (req, res) => {
 })
 
 // ── POST /api/companies/apply — legacy endpoint ───────────────────────────────
-router.post('/apply', auth, companyWriteLimiter, async (req, res) => {
+router.post('/apply', auth, companyWriteLimiter, validate(schemas.updateCompany), async (req, res) => {
   try {
     const { companyName, country, sector, website } = req.body
 

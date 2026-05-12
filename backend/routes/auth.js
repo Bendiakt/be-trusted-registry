@@ -13,6 +13,7 @@ const { logAudit }                               = require('../lib/audit')
 const { checkFraud }                             = require('../lib/fraudDetection')
 const { sendWelcome, sendPasswordReset,
         sendEmailVerification }                  = require('../lib/mailer')
+const { validate, schemas }                      = require('../lib/validators')
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 const registerLimiter = rateLimit({
@@ -83,7 +84,7 @@ const clearAuthCookies = (res) => {
 }
 
 // ── POST /register ────────────────────────────────────────────────────────────
-router.post('/register', registerLimiter, async (req, res) => {
+router.post('/register', registerLimiter, validate(schemas.register), async (req, res) => {
   try {
     const { name, email, password, role } = req.body
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
@@ -177,7 +178,7 @@ router.post('/resend-verification', resendVerifyLimiter, auth, async (req, res) 
 
 // ── POST /resend-verification-public (unauthenticated — from login page) ──────
 // Rate-limited by email. Always returns 200 to avoid leaking account existence.
-router.post('/resend-verification-public', resendVerifyLimiter, async (req, res) => {
+router.post('/resend-verification-public', resendVerifyLimiter, validate(schemas.resendVerify), async (req, res) => {
   // Always return success immediately to prevent timing-based email enumeration
   res.json({ message: 'If that email exists and is unverified, a new link has been sent.' })
   try {
@@ -212,7 +213,7 @@ const jwt = require('jsonwebtoken')
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MINUTES     = 15
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, validate(schemas.login), async (req, res) => {
   try {
     const { email, password } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Invalid credentials' })
@@ -368,7 +369,7 @@ router.post('/logout', auth, async (req, res) => {
 })
 
 // ── POST /forgot-password ─────────────────────────────────────────────────────
-router.post('/forgot-password', forgotLimiter, async (req, res) => {
+router.post('/forgot-password', forgotLimiter, validate(schemas.forgotPassword), async (req, res) => {
   res.json({ message: 'If this email is registered you will receive a reset link.' })
   try {
     const emailStr = String(req.body?.email || '').trim().toLowerCase()
@@ -395,7 +396,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 })
 
 // ── POST /reset-password ──────────────────────────────────────────────────────
-router.post('/reset-password', resetPasswordLimiter, async (req, res) => {
+router.post('/reset-password', resetPasswordLimiter, validate(schemas.resetPassword), async (req, res) => {
   try {
     const { token, password } = req.body
     if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' })
@@ -429,7 +430,7 @@ router.post('/reset-password', resetPasswordLimiter, async (req, res) => {
 })
 
 // ── PATCH /api/auth/profile — update display name and/or password ─────────────
-router.patch('/profile', profileLimiter, auth, async (req, res) => {
+router.patch('/profile', profileLimiter, auth, validate(schemas.updateProfile), async (req, res) => {
   const { name, currentPassword, newPassword } = req.body
 
   const updates = []

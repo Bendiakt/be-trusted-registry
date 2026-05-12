@@ -12,6 +12,7 @@ const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
         sendCertRevoked }        = require('../lib/mailer')
 const { isBlockedCompany }       = require('../lib/blocklist')
+const { validate, schemas }      = require('../lib/validators')
 
 // ── Rate limiters ────────────────────────────────────────────────────────────
 // Admin reads: generous since admins are few and trusted
@@ -94,7 +95,7 @@ router.get('/users/:id', auth, requireAdmin, adminReadLimiter, async (req, res) 
 })
 
 // ── PATCH /api/admin/users/:id/role ─────────────────────────────────────────
-router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, validate(schemas.assignRole), async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10)
     const { role } = req.body
@@ -237,7 +238,7 @@ router.get('/companies', auth, requireAdmin, adminReadLimiter, async (req, res) 
 })
 
 // ── PATCH /api/admin/companies/:id/level ─────────────────────────────────────
-router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, validate(schemas.certifyCompany), async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     const level     = parseInt(req.body?.level, 10)
@@ -300,7 +301,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, asyn
 })
 
 // ── PATCH /api/admin/companies/:id/suspend ────────────────────────────────────
-router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, validate(schemas.suspendCompany), async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
@@ -326,7 +327,7 @@ router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, as
 })
 
 // ── PATCH /api/admin/missions/:id/status ─────────────────────────────────────
-router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, validate(schemas.updateCompanyStatus), async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { status }  = req.body

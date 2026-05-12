@@ -11,6 +11,7 @@ const { logAudit }                        = require('../lib/audit')
 const { sendMissionAssigned,
         sendMissionCompleted }            = require('../lib/mailer')
 const { createNotification }             = require('../lib/notify')
+const { validate, schemas }              = require('../lib/validators')
 
 // ── Rate limiters ────────────────────────────────────────────────────────────
 // Read-heavy endpoints: list/get missions
@@ -234,7 +235,7 @@ router.get('/profile', auth, pacReadLimiter, async (req, res) => {
 })
 
 // ── POST /api/pac/profile ─────────────────────────────────────────────────────
-router.post('/profile', auth, pacWriteLimiter, async (req, res) => {
+router.post('/profile', auth, pacWriteLimiter, validate(schemas.updatePacProfile), async (req, res) => {
   if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
   try {
     const { name, location, languages, certifications, bio } = req.body
@@ -298,7 +299,7 @@ router.post('/missions/:id/accept', auth, pacWriteLimiter, async (req, res) => {
 })
 
 // ── POST /api/pac/missions/:id/complete ──────────────────────────────────────
-router.post('/missions/:id/complete', auth, pacWriteLimiter, async (req, res) => {
+router.post('/missions/:id/complete', auth, pacWriteLimiter, validate(schemas.submitMissionReport), async (req, res) => {
   try {
     if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
     const missionId = parseInt(req.params.id, 10)
