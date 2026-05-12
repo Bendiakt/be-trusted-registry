@@ -27,6 +27,12 @@ async function seedSession(page, user) {
  * @param {import('@playwright/test').Page} page
  */
 async function stubApi(page) {
+  // Catch-all FIRST — Playwright matches routes LIFO (last-registered wins),
+  // so registering the catch-all first lets every specific stub below override it.
+  await page.route('**/api/**', (route) =>
+    route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) }),
+  )
+
   // CSRF seed
   await page.route('**/api/auth/csrf-token', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }),
@@ -150,11 +156,6 @@ async function stubApi(page) {
     }),
   )
 
-  // Catch-all: let any unmatched /api/ request return a generic 404
-  // so tests don't hang waiting for a real server.
-  await page.route('**/api/**', (route) =>
-    route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) }),
-  )
 }
 
 module.exports = { seedSession, stubApi }
