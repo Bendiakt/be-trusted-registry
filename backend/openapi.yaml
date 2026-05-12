@@ -1,0 +1,596 @@
+openapi: 3.1.0
+info:
+  title: MyDD API
+  version: 1.0.0
+  description: |
+    REST API for the MyDD supplier certification platform.
+    Authentication uses httpOnly JWT cookies (set by POST /api/auth/login).
+    All mutating requests require the `X-CSRF-Token` header matching the
+    `csrf_token` cookie (double-submit CSRF protection).
+  contact:
+    name: B&E Consult FZCO
+    url: https://mydd.work
+    email: support@mydd.work
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://mydd.work
+    description: Production
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Registration, login, token refresh, 2FA
+  - name: Companies
+    description: Company profile management
+  - name: Certifications
+    description: Public certificate verification
+  - name: PAC
+    description: Physical Audit Controller missions
+  - name: Admin
+    description: Admin-only management endpoints
+  - name: Registry
+    description: Public supplier registry
+  - name: Payments
+    description: Stripe checkout and billing portal
+  - name: Health
+    description: Liveness and readiness probes
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: httpOnly JWT access token (set by login)
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Invalid credentials
+      required: [error]
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Validation failed
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:   { type: string, example: email }
+              message: { type: string, example: Invalid email address }
+      required: [error, errors]
+
+    User:
+      type: object
+      properties:
+        id:    { type: integer, example: 42 }
+        name:  { type: string,  example: Alice Dupont }
+        email: { type: string, format: email }
+        role:  { type: string, enum: [company, pac, trader, admin] }
+
+    Company:
+      type: object
+      properties:
+        id:               { type: integer }
+        name:             { type: string }
+        companyName:      { type: string }
+        sector:           { type: string }
+        country:          { type: string }
+        website:          { type: string, format: uri }
+        status:           { type: string, enum: [pending, active, suspended] }
+        certificationLevel: { type: integer, enum: [0, 1, 2, 3] }
+
+    CertInfo:
+      type: object
+      properties:
+        level:       { type: integer }
+        status:      { type: string }
+        grantedAt:   { type: string, format: date-time }
+        expiresAt:   { type: string, format: date-time }
+        daysLeft:    { type: integer }
+        expiringSoon: { type: boolean }
+        expired:     { type: boolean }
+
+    Mission:
+      type: object
+      properties:
+        id:          { type: integer }
+        company_id:  { type: integer }
+        company_name: { type: string }
+        location:    { type: string }
+        type:        { type: string }
+        description: { type: string }
+        fee:         { type: number }
+        status:      { type: string, enum: [available, assigned, completed, cancelled] }
+        outcome:     { type: string, enum: [pass, fail, inconclusive], nullable: true }
+
+paths:
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:     { type: string, minLength: 2, maxLength: 100 }
+                email:    { type: string, format: email }
+                password: { type: string, minLength: 8, maxLength: 128 }
+                role:     { type: string, enum: [company, pac, trader], default: company }
+      responses:
+        '200':
+          description: Registered — verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        '400':
+          description: Validation error or duplicate email
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in and receive JWT cookies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: |
+            Success — JWT set as httpOnly cookie.
+            If 2FA is enabled returns `{ requires2fa: true, tempToken }` instead.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+                  - type: object
+                    properties:
+                      requires2fa: { type: boolean, example: true }
+                      tempToken:   { type: string }
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Account locked (too many failed attempts)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sign out and clear JWT cookies
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Silently rotate access token using httpOnly refresh_token cookie
+      responses:
+        '200':
+          description: New access token set as cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '401':
+          description: Refresh token invalid or expired — re-login required
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset link (always returns 200)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Reset link sent (if email is registered)
+
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Set a new password using a reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:    { type: string }
+                password: { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Password updated
+        '400':
+          description: Token invalid or expired
+
+  /api/auth/csrf-token:
+    get:
+      tags: [Auth]
+      summary: Seed the csrf_token cookie (call once on app startup)
+      responses:
+        '200':
+          description: csrf_token cookie set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/auth/2fa/setup:
+    get:
+      tags: [Auth]
+      summary: Generate TOTP secret + QR code (admin/PAC only)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Secret and QR code data URI
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret:  { type: string }
+                  qr:      { type: string, description: data:image/png;base64,... }
+                  message: { type: string }
+
+  /api/auth/2fa/verify:
+    post:
+      tags: [Auth]
+      summary: Confirm first TOTP code and enable 2FA
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200':
+          description: 2FA enabled
+        '400':
+          description: Invalid code
+
+  /api/auth/2fa/validate:
+    post:
+      tags: [Auth]
+      summary: Validate TOTP during login (step 2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tempToken, token]
+              properties:
+                tempToken: { type: string }
+                token:     { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200':
+          description: TOTP validated — JWT cookies issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Invalid code or expired temp token
+
+  # ── Companies ────────────────────────────────────────────────────────────────
+
+  /api/companies/me:
+    get:
+      tags: [Companies]
+      summary: Get current user's company profile + cert info
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Company profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  company: { $ref: '#/components/schemas/Company' }
+                  user:    { $ref: '#/components/schemas/User' }
+
+  /api/companies/register:
+    post:
+      tags: [Companies]
+      summary: Create or update company profile
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, country]
+              properties:
+                name:        { type: string }
+                industry:    { type: string }
+                sector:      { type: string }
+                country:     { type: string }
+                description: { type: string }
+                website:     { type: string, format: uri }
+      responses:
+        '200':
+          description: Company upserted
+        '400': { description: Validation error }
+        '403': { description: Email not verified }
+
+  # ── Certifications ───────────────────────────────────────────────────────────
+
+  /api/verify/{id}:
+    get:
+      tags: [Certifications]
+      summary: Public certificate verification page data
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Company + certInfo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/Company' }
+                  - type: object
+                    properties:
+                      certInfo: { $ref: '#/components/schemas/CertInfo' }
+        '404': { description: Company not found }
+
+  # ── Registry ─────────────────────────────────────────────────────────────────
+
+  /api/registry:
+    get:
+      tags: [Registry]
+      summary: Search certified companies (public)
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search term (name, sector, country)
+        - in: query
+          name: country
+          schema: { type: string }
+        - in: query
+          name: level
+          schema: { type: integer, enum: [1, 2, 3] }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: Paginated company list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Company' }
+                  pagination:
+                    type: object
+                    properties:
+                      page:  { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      pages: { type: integer }
+
+  # ── PAC ───────────────────────────────────────────────────────────────────────
+
+  /api/pac/missions:
+    get:
+      tags: [PAC]
+      summary: List available and assigned missions (PAC role)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Mission list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Mission' }
+
+  /api/pac/missions/{id}/accept:
+    post:
+      tags: [PAC]
+      summary: Accept an available mission
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Mission accepted }
+        '409': { description: Already assigned }
+
+  /api/pac/missions/{id}/complete:
+    post:
+      tags: [PAC]
+      summary: Submit mission report and outcome
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report_text, outcome]
+              properties:
+                report_text: { type: string, minLength: 10 }
+                outcome:     { type: string, enum: [pass, fail, inconclusive] }
+      responses:
+        '200': { description: Mission completed }
+        '400': { description: Validation error }
+
+  # ── Admin ─────────────────────────────────────────────────────────────────────
+
+  /api/admin/companies/{id}/level:
+    patch:
+      tags: [Admin]
+      summary: Set company certification level
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level]
+              properties:
+                level: { type: integer, enum: [0, 1, 2, 3] }
+      responses:
+        '200': { description: Level updated, cert PDF emailed }
+        '403': { description: Blocked company }
+        '404': { description: Company not found }
+
+  /api/admin/companies/{id}/suspend:
+    patch:
+      tags: [Admin]
+      summary: Suspend or unsuspend a company
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suspend]
+              properties:
+                suspend: { type: boolean }
+                reason:  { type: string }
+      responses:
+        '200': { description: Status updated }
+
+  # ── Health ────────────────────────────────────────────────────────────────────
+
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Full health check (memory, uptime, node version)
+      responses:
+        '200':
+          description: Health details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:    { type: string, example: ok }
+                  uptimeSec: { type: integer }
+                  memory:
+                    type: object
+                    properties:
+                      rss:       { type: integer }
+                      heapUsed:  { type: integer }
+                      heapTotal: { type: integer }
+
+  /api/health/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe (process is running)
+      responses:
+        '200':
+          description: Alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alive:     { type: boolean }
+                  uptimeSec: { type: integer }
+
+  /api/health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe (DB reachable)
+      responses:
+        '200':
+          description: Ready
+        '503':
+          description: Database unreachable

@@ -10,6 +10,7 @@ const { mapCompanyRow }      = require('../lib/mappers')
 const { logAudit }           = require('../lib/audit')
 const { checkFraud }         = require('../lib/fraudDetection')
 const { computeTrustScore }  = require('../lib/trustScore')
+const { validate, schemas }  = require('../lib/validators')
 
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
@@ -68,7 +69,7 @@ router.get('/', auth, companyReadLimiter, async (req, res) => {
       pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
     })
   } catch (err) {
-    console.error('List companies error:', err.message)
+    console.error(JSON.stringify({ event: 'list_companies_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load companies' })
   }
 })
@@ -112,7 +113,7 @@ router.get('/me', auth, companyReadLimiter, async (req, res) => {
       user:    { id: u.id, name: u.name, email: u.email, role: u.role, emailVerified: u.email_verified ?? false },
     })
   } catch (err) {
-    console.error('My company error:', err.message)
+    console.error(JSON.stringify({ event: 'my_company_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load profile' })
   }
 })
@@ -123,13 +124,13 @@ router.get('/mine', auth, companyReadLimiter, async (req, res) => {
     const companyResult = await query('SELECT * FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
     res.json(mapCompanyRow(companyResult.rows[0]) || null)
   } catch (err) {
-    console.error('Mine company error:', err.message)
+    console.error(JSON.stringify({ event: 'mine_company_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load company' })
   }
 })
 
 // ── POST /api/companies/register — create or update company profile ───────────
-router.post('/register', auth, companyWriteLimiter, async (req, res) => {
+router.post('/register', auth, companyWriteLimiter, validate(schemas.createCompany), async (req, res) => {
   try {
     const { name, industry, sector, country, description, website } = req.body
     if (!name) return res.status(400).json({ error: 'Company name is required' })
@@ -171,13 +172,13 @@ router.post('/register', auth, companyWriteLimiter, async (req, res) => {
     checkFraud({ userId: req.user.id, email: req.user.email, ip: req.ip, action: 'company_profile_update', companyId: result.rows[0].id }).catch(() => {})
     computeTrustScore(req.user.id).catch(() => {})
   } catch (err) {
-    console.error('Register company error:', err.message)
+    console.error(JSON.stringify({ event: 'register_company_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Save failed' })
   }
 })
 
 // ── POST /api/companies/apply — legacy endpoint ───────────────────────────────
-router.post('/apply', auth, companyWriteLimiter, async (req, res) => {
+router.post('/apply', auth, companyWriteLimiter, validate(schemas.updateCompany), async (req, res) => {
   try {
     const { companyName, country, sector, website } = req.body
 
@@ -203,7 +204,7 @@ router.post('/apply', auth, companyWriteLimiter, async (req, res) => {
     )
     res.json(mapCompanyRow(result.rows[0]))
   } catch (err) {
-    console.error('Legacy apply error:', err.message)
+    console.error(JSON.stringify({ event: 'legacy_apply_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Application failed' })
   }
 })
@@ -241,7 +242,7 @@ router.get('/verify/:id', publicReadLimiter, async (req, res) => {
     }
     res.json({ ...company, certInfo })
   } catch (err) {
-    console.error('Verify error:', err.message)
+    console.error(JSON.stringify({ event: 'verify_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Verification failed' })
   }
 })
@@ -300,7 +301,7 @@ router.get('/registry', publicReadLimiter, async (req, res) => {
       pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
     })
   } catch (err) {
-    console.error('Registry search error:', err.message)
+    console.error(JSON.stringify({ event: 'registry_search_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load registry' })
   }
 })
@@ -357,7 +358,7 @@ router.get('/missions', auth, companyReadLimiter, async (req, res) => {
       pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
     })
   } catch (err) {
-    console.error('Company missions error:', err.message)
+    console.error(JSON.stringify({ event: 'company_missions_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load missions' })
   }
 })

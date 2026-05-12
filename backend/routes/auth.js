@@ -13,6 +13,7 @@ const { logAudit }                               = require('../lib/audit')
 const { checkFraud }                             = require('../lib/fraudDetection')
 const { sendWelcome, sendPasswordReset,
         sendEmailVerification }                  = require('../lib/mailer')
+const { validate, schemas }                      = require('../lib/validators')
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 const registerLimiter = rateLimit({
@@ -83,7 +84,7 @@ const clearAuthCookies = (res) => {
 }
 
 // ── POST /register ────────────────────────────────────────────────────────────
-router.post('/register', registerLimiter, async (req, res) => {
+router.post('/register', registerLimiter, validate(schemas.register), async (req, res) => {
   try {
     const { name, email, password, role } = req.body
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
@@ -124,7 +125,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     sendWelcome({ email: emailStr, name: nameStr }).catch(() => {})
     checkFraud({ userId: null, email: emailStr, ip: req.ip, action: 'user_register' }).catch(() => {})
   } catch (err) {
-    console.error('Register error:', err.message)
+    console.error(JSON.stringify({ event: 'register_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Registration failed' })
   }
 })
@@ -147,7 +148,7 @@ router.get('/verify-email', async (req, res) => {
     logAudit(result.rows[0].id, 'email_verified', 'users', req.ip, { email: result.rows[0].email })
     res.json({ message: 'Email verified successfully' })
   } catch (err) {
-    console.error('Email verify error:', err.message)
+    console.error(JSON.stringify({ event: 'email_verify_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Verification failed' })
   }
 })
@@ -170,14 +171,14 @@ router.post('/resend-verification', resendVerifyLimiter, auth, async (req, res) 
     sendEmailVerification({ email: user.email, name: user.name, verifyUrl: `${frontendUrl}/verify-email?token=${newToken}` }).catch(() => {})
     res.json({ message: 'Verification email sent' })
   } catch (err) {
-    console.error('Resend verify error:', err.message)
+    console.error(JSON.stringify({ event: 'resend_verify_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to resend' })
   }
 })
 
 // ── POST /resend-verification-public (unauthenticated — from login page) ──────
 // Rate-limited by email. Always returns 200 to avoid leaking account existence.
-router.post('/resend-verification-public', resendVerifyLimiter, async (req, res) => {
+router.post('/resend-verification-public', resendVerifyLimiter, validate(schemas.resendVerify), async (req, res) => {
   // Always return success immediately to prevent timing-based email enumeration
   res.json({ message: 'If that email exists and is unverified, a new link has been sent.' })
   try {
@@ -200,7 +201,7 @@ router.post('/resend-verification-public', resendVerifyLimiter, async (req, res)
     sendEmailVerification({ email: user.email, name: user.name, verifyUrl: `${frontendUrl}/verify-email?token=${newToken}` }).catch(() => {})
     logAudit(user.id, 'resend_verify_public', 'users', req.ip, { email: emailStr })
   } catch (err) {
-    console.error('Resend-verify-public error:', err.message)
+    console.error(JSON.stringify({ event: 'resend_verify_public_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     // Response already sent — swallow error silently
   }
 })
@@ -212,7 +213,7 @@ const jwt = require('jsonwebtoken')
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_MINUTES     = 15
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, validate(schemas.login), async (req, res) => {
   try {
     const { email, password } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Invalid credentials' })
@@ -220,7 +221,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     const emailStr   = String(email).trim().toLowerCase()
     const userResult = await query(
       `SELECT id, name, email, password, role, email_verified,
-              failed_login_attempts, locked_until
+              failed_login_attempts, locked_until,
+              totp_enabled, totp_secret
        FROM users WHERE email = $1 LIMIT 1`,
       [emailStr],
     )
@@ -267,7 +269,27 @@ router.post('/login', loginLimiter, async (req, res) => {
       })
     }
 
-    // ── Success: reset lockout counters ───────────────────────────────────────
+    // ── Reset lockout counters on successful password check ───────────────────
+    await query(
+      `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`,
+      [user.id],
+    )
+
+    // ── 2FA gate: if TOTP is enabled, issue a short-lived temp token ─────────
+    if (user.totp_enabled) {
+      const rawTemp    = crypto.randomBytes(32).toString('hex')
+      const tempHash   = crypto.createHash('sha256').update(rawTemp).digest('hex')
+      await query(
+        `INSERT INTO totp_pending (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '5 minutes')
+         ON CONFLICT (token_hash) DO NOTHING`,
+        [user.id, tempHash],
+      )
+      logAudit(user.id, 'login_2fa_required', 'users', req.ip, { email: emailStr })
+      return res.json({ requires2fa: true, tempToken: rawTemp })
+    }
+
+    // ── No 2FA — issue JWT cookies immediately ────────────────────────────────
     const { token, jti }          = issueAccessToken(user)
     const { token: refreshToken } = issueRefreshToken(user)
     const refreshDecoded          = jwt.decode(refreshToken)
@@ -279,11 +301,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         [user.id, hashToken(refreshToken), refreshDecoded.exp],
       ),
       query(
-        `UPDATE users
-            SET last_login             = NOW(),
-                failed_login_attempts  = 0,
-                locked_until           = NULL
-          WHERE id = $1`,
+        'UPDATE users SET last_login = NOW() WHERE id = $1',
         [user.id],
       ),
     ])
@@ -293,7 +311,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
     logAudit(user.id, 'user_login', 'users', req.ip, { email: emailStr, jti })
   } catch (err) {
-    console.error('Login error:', err.message)
+    console.error(JSON.stringify({ event: 'login_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Login failed' })
   }
 })
@@ -368,7 +386,7 @@ router.post('/logout', auth, async (req, res) => {
 })
 
 // ── POST /forgot-password ─────────────────────────────────────────────────────
-router.post('/forgot-password', forgotLimiter, async (req, res) => {
+router.post('/forgot-password', forgotLimiter, validate(schemas.forgotPassword), async (req, res) => {
   res.json({ message: 'If this email is registered you will receive a reset link.' })
   try {
     const emailStr = String(req.body?.email || '').trim().toLowerCase()
@@ -390,12 +408,12 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
     sendPasswordReset({ email: user.email, name: user.name, resetUrl: `${frontendUrl}/reset-password/${rawToken}` }).catch(() => {})
   } catch (err) {
-    console.error('Forgot password error:', err.message)
+    console.error(JSON.stringify({ event: 'forgot_password_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
   }
 })
 
 // ── POST /reset-password ──────────────────────────────────────────────────────
-router.post('/reset-password', resetPasswordLimiter, async (req, res) => {
+router.post('/reset-password', resetPasswordLimiter, validate(schemas.resetPassword), async (req, res) => {
   try {
     const { token, password } = req.body
     if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' })
@@ -423,13 +441,13 @@ router.post('/reset-password', resetPasswordLimiter, async (req, res) => {
     logAudit(user_id, 'password_reset', 'users', req.ip, {})
     res.json({ message: 'Password reset successfully' })
   } catch (err) {
-    console.error('Reset password error:', err.message)
+    console.error(JSON.stringify({ event: 'reset_password_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Reset failed' })
   }
 })
 
 // ── PATCH /api/auth/profile — update display name and/or password ─────────────
-router.patch('/profile', profileLimiter, auth, async (req, res) => {
+router.patch('/profile', profileLimiter, auth, validate(schemas.updateProfile), async (req, res) => {
   const { name, currentPassword, newPassword } = req.body
 
   const updates = []
@@ -478,7 +496,7 @@ router.patch('/profile', profileLimiter, auth, async (req, res) => {
     const updatedUser = updated.rows[0] || {}
     res.json({ message: 'Profile updated successfully.', name: updatedUser.name, email: updatedUser.email })
   } catch (err) {
-    console.error('Profile update error:', err.message)
+    console.error(JSON.stringify({ event: 'profile_update_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed.' })
   }
 })

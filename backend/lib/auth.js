@@ -11,6 +11,7 @@ const crypto  = require('crypto')
 const jwt     = require('jsonwebtoken')
 const rateLimit              = require('express-rate-limit')
 const { ipKeyGenerator }     = require('express-rate-limit')
+const { makeRateLimiter }    = require('./rateLimiter')
 const { query }              = require('../db')
 
 // ── Secrets ───────────────────────────────────────────────────────────────────
@@ -57,29 +58,28 @@ const issueRefreshToken = (user) => {
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many registration attempts. Try again later.' },
+// ── Rate limiters — Redis-backed when REDIS_URL is set, memory otherwise ──────
+
+const registerLimiter = makeRateLimiter({
+  _prefix:    'rl:register:',
+  windowMs:   60 * 60 * 1000,
+  max:        5,
+  message:    { error: 'Too many registration attempts. Try again later.' },
 })
 
 /** General public read limiter — guards scraping / enumeration. */
-const publicReadLimiter = rateLimit({
+const publicReadLimiter = makeRateLimiter({
+  _prefix:  'rl:pub:',
   windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests. Slow down.' },
+  max:      30,
+  message:  { error: 'Too many requests. Slow down.' },
 })
 
 /** Per-IP + per-email login limiter. */
-const loginLimiter = rateLimit({
+const loginLimiter = makeRateLimiter({
+  _prefix:  'rl:login:',
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
+  max:      10,
   keyGenerator: (req) => {
     const email = String(req.body?.email || '').trim().toLowerCase()
     return `${ipKeyGenerator(req)}:${email}`
@@ -88,35 +88,31 @@ const loginLimiter = rateLimit({
 })
 
 /** Limits token verification to prevent automated scanning. */
-const verifyEmailLimiter = rateLimit({
+const verifyEmailLimiter = makeRateLimiter({
+  _prefix:  'rl:verify:',
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many verification attempts. Try again later.' },
+  max:      10,
+  message:  { error: 'Too many verification attempts. Try again later.' },
 })
 
-const resendVerifyLimiter = rateLimit({
+const resendVerifyLimiter = makeRateLimiter({
+  _prefix:  'rl:resend:',
   windowMs: 15 * 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
+  max:      3,
 })
 
-const forgotLimiter = rateLimit({
+const forgotLimiter = makeRateLimiter({
+  _prefix:  'rl:forgot:',
   windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many password reset requests. Try again later.' },
+  max:      5,
+  message:  { error: 'Too many password reset requests. Try again later.' },
 })
 
-const resetPasswordLimiter = rateLimit({
+const resetPasswordLimiter = makeRateLimiter({
+  _prefix:  'rl:reset:',
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many reset attempts. Try again later.' },
+  max:      10,
+  message:  { error: 'Too many reset attempts. Try again later.' },
 })
 
 // ── Middleware ────────────────────────────────────────────────────────────────

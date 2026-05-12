@@ -32,10 +32,31 @@ const getPool = () => {
 // Slow-query threshold (ms). Queries exceeding this emit a structured warning.
 const SLOW_QUERY_WARN_MS = parseInt(process.env.SLOW_QUERY_WARN_MS || '1000', 10)
 
+// Circuit-breaker: reject with 503 when the pool is overwhelmed.
+// Prevents request pile-up that starves all workers under sudden traffic spikes.
+const POOL_CIRCUIT_THRESHOLD = parseInt(process.env.PG_CIRCUIT_THRESHOLD || '5', 10)
+
 const query = async (text, params = []) => {
+  const p = getPool()
+
+  // Check pool saturation before acquiring a connection
+  if (p.waitingCount > POOL_CIRCUIT_THRESHOLD) {
+    const err = new Error('Database pool saturated — circuit breaker open')
+    err.status = 503
+    err.code    = 'POOL_SATURATED'
+    console.error(JSON.stringify({
+      event:        'pool_circuit_open',
+      waitingCount: p.waitingCount,
+      totalCount:   p.totalCount,
+      idleCount:    p.idleCount,
+      threshold:    POOL_CIRCUIT_THRESHOLD,
+    }))
+    throw err
+  }
+
   const start = Date.now()
   try {
-    const result = await getPool().query(text, params)
+    const result = await p.query(text, params)
     const durationMs = Date.now() - start
     if (durationMs > SLOW_QUERY_WARN_MS) {
       // Truncate query text to avoid logging PII — first 120 chars only
@@ -364,6 +385,23 @@ const initDb = async () => {
     // Partial index for fast certified-company lookups (Trader Portal / public registry)
     await query('CREATE INDEX IF NOT EXISTS idx_companies_certified_country ON companies(country, certification_level) WHERE certification_level > 0')
     await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'company'")
+
+    // ── 2FA TOTP columns (admin accounts) ────────────────────────────────────
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret  TEXT")
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE")
+
+    // Temp-token store: short-lived tokens issued after password check but before TOTP validation
+    await query(`
+      CREATE TABLE IF NOT EXISTS totp_pending (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT        NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '5 minutes',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+    await query('CREATE INDEX IF NOT EXISTS idx_totp_pending_hash    ON totp_pending(token_hash)')
+    await query('CREATE INDEX IF NOT EXISTS idx_totp_pending_expires ON totp_pending(expires_at)')
 
     // ── Text-search indexes (GIN trigram for ILIKE) ──────────────────────────
     // Enable pg_trgm if not already available (safe on Railway PostgreSQL)

@@ -52,16 +52,16 @@ export default function Register() {
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '1rem' }}>
-            <label style={lbl}>{t('register.full_name')}</label>
-            <input type="text" style={inp} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+            <label htmlFor="reg-name" style={lbl}>{t('register.full_name')}</label>
+            <input id="reg-name" type="text" style={inp} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required autoComplete="name" />
           </div>
           <div style={{ marginBottom: '1rem' }}>
-            <label style={lbl}>{t('register.email')}</label>
-            <input type="email" style={inp} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+            <label htmlFor="reg-email" style={lbl}>{t('register.email')}</label>
+            <input id="reg-email" type="email" style={inp} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required autoComplete="email" />
           </div>
           <div style={{ marginBottom: '1.25rem' }}>
-            <label style={lbl}>{t('register.password')}</label>
-            <input type="password" style={inp} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+            <label htmlFor="reg-password" style={lbl}>{t('register.password')}</label>
+            <input id="reg-password" type="password" style={inp} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required autoComplete="new-password" />
           </div>
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ ...lbl, marginBottom: '0.75rem' }}>{t('register.role_label')}</label>

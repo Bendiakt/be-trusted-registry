@@ -31,12 +31,12 @@ export default function PublicRegistry() {
 
   useEffect(() => {
     const BASE = 'https://mydd.work'
-    document.title = 'B&E Trusted Registry — Certified Supplier Directory'
+    document.title = 'MyDD — Certified Supplier Directory'
     ;[
-      ['meta[name="description"]',        { name: 'description',        content: 'Browse and verify certified suppliers on the B&E Trusted Registry. Instant due-diligence verification for global trade.' }],
+      ['meta[name="description"]',        { name: 'description',        content: 'Browse and verify certified suppliers on MyDD. Instant due-diligence verification for global trade.' }],
       ['meta[property="og:type"]',        { property: 'og:type',        content: 'website' }],
       ['meta[property="og:url"]',         { property: 'og:url',         content: `${BASE}/registry` }],
-      ['meta[property="og:title"]',       { property: 'og:title',       content: 'B&E Trusted Registry — Certified Suppliers' }],
+      ['meta[property="og:title"]',       { property: 'og:title',       content: 'MyDD — Certified Suppliers' }],
       ['meta[property="og:description"]', { property: 'og:description', content: 'Verified suppliers for global trade. Browse B&E-certified companies across all industries.' }],
     ].forEach(([sel, attrs]) => {
       let el = document.querySelector(sel)
@@ -75,7 +75,7 @@ export default function PublicRegistry() {
   useEffect(() => { fetchRegistry(1) }, [q, level, country]) // eslint-disable-line
 
   // SEO title
-  useEffect(() => { document.title = 'B&E Trusted Registry — Certified Supplier Search' }, [])
+  useEffect(() => { document.title = 'MyDD — Certified Supplier Search' }, [])
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', fontFamily: 'Inter,sans-serif', color: '#eee' }}>

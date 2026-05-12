@@ -192,7 +192,7 @@ export default function AdminPanel() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={G.logo}>{t('admin.title')}</div>
           <div style={{ width: '1px', height: '24px', background: '#333' }} />
-          <div style={{ color: '#555', fontSize: '0.75rem', letterSpacing: '0.08em' }}>B&amp;E Registry</div>
+          <div style={{ color: '#555', fontSize: '0.75rem', letterSpacing: '0.08em' }}>MyDD</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <LanguageSwitcher />

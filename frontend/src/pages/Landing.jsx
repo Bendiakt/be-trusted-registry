@@ -16,9 +16,9 @@ export default function Landing() {
 
   useEffect(() => {
     const BASE = 'https://mydd.work'
-    document.title = 'MyDD — Certified Supplier Registry by B&E Consult'
+    document.title = 'MyDD — Trusted Supplier Certification'
     const meta = [
-      { name: 'description',        content: 'MyDD by B&E Consult is the trusted supplier certification registry for global trade. Verify suppliers instantly with Level 1-3 due-diligence certifications.' },
+      { name: 'description',        content: 'MyDD is the trusted supplier certification platform for global trade. Verify suppliers instantly with Level 1-3 due-diligence certifications.' },
       { property: 'og:type',        content: 'website' },
       { property: 'og:url',         content: BASE },
       { property: 'og:title',       content: 'MyDD — Certified Supplier Registry' },
@@ -26,7 +26,7 @@ export default function Landing() {
       { property: 'og:image',       content: `${BASE}/og-image.svg` },
       { name: 'twitter:card',       content: 'summary_large_image' },
       { name: 'twitter:title',      content: 'MyDD — Certified Supplier Registry' },
-      { name: 'twitter:description',content: 'Verify suppliers instantly. B&E Consult certified registry for global trade.' },
+      { name: 'twitter:description',content: 'Verify suppliers instantly. MyDD certified registry for global trade.' },
       { name: 'twitter:image',      content: `${BASE}/og-image.svg` },
     ]
     const added = meta.map(attrs => {

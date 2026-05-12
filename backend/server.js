@@ -1,5 +1,8 @@
 require('./instrument.js')
 require('dotenv').config()
+// Eagerly initialise Redis so the client is ready before the first request.
+// lib/redis.js handles REDIS_URL absence gracefully (logs warning, returns null).
+require('./lib/redis').getRedis()
 const express      = require('express')
 const cors         = require('cors')
 const cookieParser = require('cookie-parser')
@@ -177,7 +180,7 @@ app.use((req, res, next) => {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
   }
   // Warn about important-but-optional vars that degrade functionality
-  const RECOMMENDED = ['JWT_REFRESH_SECRET', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'FRONTEND_URL', 'SENTRY_DSN']
+  const RECOMMENDED = ['JWT_REFRESH_SECRET', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'FRONTEND_URL', 'SENTRY_DSN', 'REDIS_URL']
   const absent = RECOMMENDED.filter((k) => !process.env[k])
   if (absent.length) {
     console.warn(JSON.stringify({ event: 'env_warning', missing: absent, note: 'Some features may be degraded' }))
@@ -212,11 +215,44 @@ const { router: paymentsRouter }  = require('./routes/payments')
 const documentsRouter             = require('./routes/documents')
 const traderRouter                = require('./routes/trader')
 const authRouter                  = require('./routes/auth')
+const totpRouter                  = require('./routes/totp')
 const adminRouter                 = require('./routes/admin')
 const notificationsRouter         = require('./routes/notifications')
 const companiesRouter             = require('./routes/companies')
 const pacRouter                   = require('./routes/pac')
 const { sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+
+// ── OpenAPI / Swagger UI ──────────────────────────────────────────────────────
+// Served at /api/docs in all environments. Parsing is done once at startup;
+// if the YAML file is missing (e.g. stripped in a minimal Docker image) the
+// block is silently skipped rather than crashing the server.
+try {
+  const swaggerUi = require('swagger-ui-express')
+  const YAML      = require('yaml')
+  const fs        = require('fs')
+  const path      = require('path')
+  const specPath  = path.join(__dirname, 'openapi.yaml')
+  if (fs.existsSync(specPath)) {
+    const openApiSpec = YAML.parse(fs.readFileSync(specPath, 'utf8'))
+    // Relax the API-only CSP for the Swagger UI page (it loads inline scripts)
+    app.use('/api/docs', (req, res, next) => {
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      )
+      next()
+    })
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+      customSiteTitle: 'MyDD API',
+      swaggerOptions: { persistAuthorization: true },
+    }))
+    console.log(JSON.stringify({ event: 'swagger_ui.mounted', path: '/api/docs' }))
+  } else {
+    console.warn(JSON.stringify({ event: 'swagger_ui.skipped', reason: 'openapi.yaml not found' }))
+  }
+} catch (e) {
+  console.warn(JSON.stringify({ event: 'swagger_ui.error', message: e.message }))
+}
 
 // ── Router mounts ─────────────────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', auth)
@@ -234,6 +270,7 @@ app.use('/api/badge',          badgeRouter)
 app.use('/api/documents',      auth, documentsRouter)
 app.use('/api/trader',         auth, traderRouter)
 app.use('/api/auth',           authRouter)
+app.use('/api/auth/2fa',      totpRouter)
 app.use('/api/admin',          adminRouter)
 app.use('/api/notifications',  notificationsRouter)
 app.use('/api/companies',      companiesRouter)
@@ -398,303 +435,6 @@ app.get('/api/registry', publicReadLimiter, async (req, res) => {
   }
 })
 
-// ─── Forgot / Reset Password ──────────────────────────────────────────────────
-const forgotLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many password reset requests. Try again later.' },
-})
-
-app.post('/api/auth/forgot-password', forgotLimiter, async (req, res) => {
-  // Always return 200 to prevent email enumeration
-  res.json({ message: 'If this email is registered you will receive a reset link.' })
-  try {
-    const emailStr = String(req.body?.email || '').trim().toLowerCase()
-    if (!emailStr) return
-
-    const userResult = await query('SELECT id, name, email FROM users WHERE email = $1 LIMIT 1', [emailStr])
-    if (!userResult.rows.length) return
-
-    const user = userResult.rows[0]
-    const rawToken = crypto.randomBytes(32).toString('hex')
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
-
-    await query(
-      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (token_hash) DO NOTHING`,
-      [user.id, tokenHash, expiresAt]
-    )
-
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
-    const resetUrl = `${frontendUrl}/reset-password/${rawToken}`
-    sendPasswordReset({ email: user.email, name: user.name, resetUrl }).catch(() => {})
-  } catch (err) {
-    console.error('Forgot password error:', err.message)
-  }
-})
-
-const resetPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many reset attempts. Try again later.' },
-})
-
-app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
-  try {
-    const { token, password } = req.body
-    if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' })
-    const pwStr = String(password)
-    if (pwStr.length < 8)   return res.status(400).json({ error: 'Password must be at least 8 characters' })
-    if (pwStr.length > 128) return res.status(400).json({ error: 'Password too long' })
-    if (!/[a-z]/.test(pwStr)) return res.status(400).json({ error: 'Password must contain at least one lowercase letter' })
-    if (!/[A-Z]/.test(pwStr)) return res.status(400).json({ error: 'Password must contain at least one uppercase letter' })
-    if (!/[0-9]/.test(pwStr)) return res.status(400).json({ error: 'Password must contain at least one digit' })
-
-    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex')
-    const result = await query(
-      `SELECT id, user_id FROM password_reset_tokens
-       WHERE token_hash = $1 AND expires_at > NOW() AND used_at IS NULL
-       LIMIT 1`,
-      [tokenHash]
-    )
-    if (!result.rows.length) return res.status(400).json({ error: 'Reset link is invalid or expired' })
-
-    const { id: prtId, user_id } = result.rows[0]
-    const hash = await bcrypt.hash(pwStr, 10)
-
-    await Promise.all([
-      query('UPDATE users SET password = $1 WHERE id = $2', [hash, user_id]),
-      query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [prtId]),
-      // Revoke all active refresh tokens for this user (force re-login everywhere)
-      query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [user_id]),
-    ])
-
-    logAudit(user_id, 'password_reset', 'users', req.ip, {})
-    res.json({ message: 'Password reset successfully' })
-  } catch (err) {
-    console.error('Reset password error:', err.message)
-    res.status(500).json({ error: 'Reset failed' })
-  }
-})
-
-// ─── Admin Routes ─────────────────────────────────────────────────────────────
-app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
-  try {
-    const [users, companies, revenue] = await Promise.all([
-      query('SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL \'30d\')::int AS last_30d FROM users'),
-      query('SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE certification_level > 0)::int AS certified FROM companies'),
-      query('SELECT COALESCE(SUM(amount_cents) FILTER (WHERE status = \'completed\'), 0)::bigint AS total_cents FROM payments'),
-    ])
-    res.json({
-      users:     users.rows[0],
-      companies: companies.rows[0],
-      revenue:   { total_usd: (Number(revenue.rows[0].total_cents) / 100).toFixed(2) },
-    })
-  } catch (err) {
-    console.error('Admin stats error:', err.message)
-    res.status(500).json({ error: 'Failed to load stats' })
-  }
-})
-
-app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
-  try {
-    const page  = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
-    const search = String(req.query.q || '').trim()
-
-    let rowsResult, totalResult
-    if (search) {
-      const like = `%${search}%`
-      rowsResult  = await query(`SELECT id, name, email, role, created_at, last_login FROM users WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3`, [like, limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM users WHERE name ILIKE $1 OR email ILIKE $1`, [like])
-    } else {
-      rowsResult  = await query(`SELECT id, name, email, role, created_at, last_login FROM users ORDER BY id DESC LIMIT $1 OFFSET $2`, [limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM users`)
-    }
-
-    const total = totalResult.rows[0]?.total || 0
-    res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
-  } catch (err) {
-    console.error('Admin users error:', err.message)
-    res.status(500).json({ error: 'Failed to load users' })
-  }
-})
-
-app.get('/api/admin/companies', auth, requireAdmin, async (req, res) => {
-  try {
-    const page  = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
-    const search = String(req.query.q || '').trim()
-
-    let rowsResult, totalResult
-    if (search) {
-      const like = `%${search}%`
-      rowsResult  = await query(`SELECT c.id, c.company_name, c.name, c.country, c.sector, c.industry, c.certification_level, c.status, c.created_at, u.email FROM companies c LEFT JOIN users u ON u.id = c.user_id WHERE c.company_name ILIKE $1 OR c.name ILIKE $1 OR u.email ILIKE $1 ORDER BY c.id DESC LIMIT $2 OFFSET $3`, [like, limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM companies c LEFT JOIN users u ON u.id = c.user_id WHERE c.company_name ILIKE $1 OR c.name ILIKE $1 OR u.email ILIKE $1`, [like])
-    } else {
-      rowsResult  = await query(`SELECT c.id, c.company_name, c.name, c.country, c.sector, c.industry, c.certification_level, c.status, c.created_at, u.email FROM companies c LEFT JOIN users u ON u.id = c.user_id ORDER BY c.id DESC LIMIT $1 OFFSET $2`, [limit, offset])
-      totalResult = await query(`SELECT COUNT(*)::int AS total FROM companies`)
-    }
-
-    const total = totalResult.rows[0]?.total || 0
-    res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
-  } catch (err) {
-    console.error('Admin companies error:', err.message)
-    res.status(500).json({ error: 'Failed to load companies' })
-  }
-})
-
-app.patch('/api/admin/companies/:id/level', auth, requireAdmin, async (req, res) => {
-  try {
-    const companyId = parseInt(req.params.id, 10)
-    const level = parseInt(req.body?.level, 10)
-    if (Number.isNaN(companyId) || Number.isNaN(level) || level < 0 || level > 3) {
-      return res.status(400).json({ error: 'Invalid company id or level (0-3)' })
-    }
-    const result = await query(
-      `UPDATE companies SET certification_level = $1, updated_at = NOW()
-        WHERE id = $2
-       RETURNING id, company_name, certification_level, user_id`,
-      [level, companyId]
-    )
-    if (!result.rows.length) return res.status(404).json({ error: 'Company not found' })
-    const company = result.rows[0]
-    logAudit(req.user.id, 'admin_set_cert_level', 'companies', req.ip, { companyId, level })
-
-    // Fire cert-granted email + in-app WS notification (non-blocking) when level is promoted to > 0
-    if (level > 0 && company.user_id) {
-      notifyUser(company.user_id, { type: 'cert_granted', level, companyId })
-      query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
-        .then(({ rows }) => {
-          if (!rows.length) return
-          const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
-          sendCertGranted({
-            email:       rows[0].email,
-            name:        rows[0].name,
-            companyName: company.company_name,
-            level,
-            verifyUrl:   `${frontendUrl}/verify/${companyId}`,
-          }).catch(() => {})
-        })
-        .catch(() => {})
-    }
-
-    res.json({ company })
-  } catch (err) {
-    console.error('Admin set level error:', err.message)
-    res.status(500).json({ error: 'Update failed' })
-  }
-})
-
-// PATCH /api/admin/companies/:id/suspend — toggle company suspension
-app.patch('/api/admin/companies/:id/suspend', auth, requireAdmin, async (req, res) => {
-  try {
-    const companyId = parseInt(req.params.id, 10)
-    if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
-
-    const { suspend, reason } = req.body
-    const isSuspend = Boolean(suspend)
-    const result = await query(
-      `UPDATE companies
-          SET suspended_at     = ${isSuspend ? 'NOW()' : 'NULL'},
-              suspended_reason = ${isSuspend ? '$2' : 'NULL'},
-              updated_at       = NOW()
-        WHERE id = $1
-       RETURNING id, company_name, suspended_at, suspended_reason`,
-      isSuspend ? [companyId, String(reason || '').slice(0, 500)] : [companyId]
-    )
-    if (!result.rows.length) return res.status(404).json({ error: 'Company not found' })
-    logAudit(req.user.id, isSuspend ? 'admin_suspend_company' : 'admin_unsuspend_company', 'companies', req.ip, { companyId, reason })
-    res.json({ company: result.rows[0] })
-  } catch (err) {
-    console.error('Suspend company error:', err.message)
-    res.status(500).json({ error: 'Update failed' })
-  }
-})
-
-app.get('/api/admin/missions', auth, requireAdmin, async (req, res) => {
-  try {
-    const page  = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
-
-    const [rowsResult, totalResult] = await Promise.all([
-      query(`SELECT m.*, u.name AS pac_name, u.email AS pac_email
-             FROM missions m
-             LEFT JOIN users u ON u.id = m.assigned_to
-             ORDER BY m.id DESC LIMIT $1 OFFSET $2`, [limit, offset]),
-      query('SELECT COUNT(*)::int AS total FROM missions'),
-    ])
-
-    const total = totalResult.rows[0]?.total || 0
-    res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
-  } catch (err) {
-    console.error('Admin missions error:', err.message)
-    res.status(500).json({ error: 'Failed to load missions' })
-  }
-})
-
-// ── GET /api/admin/audit-log ─────────────────────────────────────────────────
-// Paginated audit trail for the admin panel. Supports filtering by action,
-// resource, and user email. Newest entries first.
-app.get('/api/admin/audit-log', auth, requireAdmin, async (req, res) => {
-  try {
-    const page   = Math.max(1, parseInt(req.query.page  || '1',  10) || 1)
-    const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit || '50', 10) || 50))
-    const offset = (page - 1) * limit
-    const action   = req.query.action   ? String(req.query.action).trim()   : null
-    const resource = req.query.resource ? String(req.query.resource).trim() : null
-    const q        = req.query.q        ? `%${String(req.query.q).trim()}%` : null
-
-    const params = []
-    const conditions = []
-
-    if (action)   { params.push(action);   conditions.push(`al.action = $${params.length}`) }
-    if (resource) { params.push(resource); conditions.push(`al.resource = $${params.length}`) }
-    if (q)        { params.push(q);        conditions.push(`(u.email ILIKE $${params.length} OR u.name ILIKE $${params.length} OR al.action ILIKE $${params.length})`) }
-
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-
-    const countParams = [...params]
-    const [rows, count] = await Promise.all([
-      query(
-        `SELECT al.id, al.action, al.resource, al.ip_address, al.payload_hash, al.created_at,
-                u.id AS user_id, u.email AS user_email, u.name AS user_name, u.role AS user_role
-           FROM audit_log al
-           LEFT JOIN users u ON u.id = al.user_id
-           ${where}
-           ORDER BY al.id DESC
-           LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}`,
-        params
-      ),
-      query(
-        `SELECT COUNT(*)::int AS total
-           FROM audit_log al
-           LEFT JOIN users u ON u.id = al.user_id
-           ${where}`,
-        countParams
-      ),
-    ])
-
-    const total = count.rows[0]?.total || 0
-    res.json({
-      data: rows.rows,
-      pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
-    })
-  } catch (err) {
-    console.error('Admin audit-log error:', err.message)
-    res.status(500).json({ error: 'Failed to load audit log' })
-  }
-})
-
 app.get('/api/health', (req, res) => {
   const mem = process.memoryUsage()
   res.json({
@@ -750,7 +490,7 @@ app.get('/status', async (req, res) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>B&E Trusted Registry — Status</title>
+  <title>MyDD — Status</title>
   <style>
     body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;color:#111}
     h1{font-size:1.5rem;font-weight:700}
@@ -764,7 +504,7 @@ app.get('/status', async (req, res) => {
   </style>
 </head>
 <body>
-  <h1>B&amp;E Trusted Registry</h1>
+  <h1>MyDD</h1>
   <p>Overall status: <span class="badge">${overallStatus}</span></p>
   <table>
     <tr><th>Component</th><th>Status</th><th>Detail</th></tr>
