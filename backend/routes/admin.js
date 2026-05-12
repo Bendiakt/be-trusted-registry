@@ -63,7 +63,7 @@ router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
       missions:  { open_missions: missions.rows[0].open_missions },
     })
   } catch (err) {
-    console.error('Admin stats error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_stats_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load stats' })
   }
 })
@@ -89,7 +89,7 @@ router.get('/users/:id', auth, requireAdmin, adminReadLimiter, async (req, res) 
       fraudAlerts: fraudResult.rows,
     })
   } catch (err) {
-    console.error('Admin user detail error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_user_detail_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load user' })
   }
 })
@@ -115,7 +115,7 @@ router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, validate(
     logAudit(req.user.id, 'admin_change_user_role', 'users', req.ip, { userId, role })
     res.json({ user: result.rows[0] })
   } catch (err) {
-    console.error('Admin change role error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_change_role_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed' })
   }
 })
@@ -145,7 +145,7 @@ router.delete('/users/:id', auth, requireAdmin, adminWriteLimiter, async (req, r
     logAudit(req.user.id, 'admin_delete_user', 'users', req.ip, { userId })
     res.json({ message: 'User anonymised successfully' })
   } catch (err) {
-    console.error('Admin delete user error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_delete_user_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Delete failed' })
   }
 })
@@ -170,7 +170,7 @@ router.get('/users', auth, requireAdmin, adminReadLimiter, async (req, res) => {
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {
-    console.error('Admin users error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_users_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load users' })
   }
 })
@@ -207,7 +207,7 @@ router.get('/companies/:id', auth, requireAdmin, adminReadLimiter, async (req, r
       documents:   docsResult.rows,
     })
   } catch (err) {
-    console.error('Admin company detail error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_company_detail_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load company' })
   }
 })
@@ -232,7 +232,7 @@ router.get('/companies', auth, requireAdmin, adminReadLimiter, async (req, res) 
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {
-    console.error('Admin companies error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_companies_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load companies' })
   }
 })
@@ -314,7 +314,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
     }
     res.json({ company })
   } catch (err) {
-    console.error('Admin set level error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_set_level_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed' })
   }
 })
@@ -340,7 +340,7 @@ router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, va
     logAudit(req.user.id, isSuspend ? 'admin_suspend_company' : 'admin_unsuspend_company', 'companies', req.ip, { companyId, reason })
     res.json({ company: result.rows[0] })
   } catch (err) {
-    console.error('Suspend company error:', err.message)
+    console.error(JSON.stringify({ event: 'suspend_company_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed' })
   }
 })
@@ -362,7 +362,7 @@ router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, vali
     logAudit(req.user.id, 'admin_mission_status_update', 'missions', req.ip, { missionId, status })
     res.json({ mission: result.rows[0] })
   } catch (err) {
-    console.error('Admin mission status error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_mission_status_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed' })
   }
 })
@@ -383,7 +383,7 @@ router.get('/missions', auth, requireAdmin, adminReadLimiter, async (req, res) =
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {
-    console.error('Admin missions error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_missions_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load missions' })
   }
 })
@@ -429,7 +429,7 @@ router.get('/audit-log', auth, requireAdmin, adminReadLimiter, async (req, res) 
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {
-    console.error('Admin audit-log error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_audit_log_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load audit log' })
   }
 })
@@ -457,7 +457,7 @@ router.get('/fraud-alerts', auth, requireAdmin, adminReadLimiter, async (req, re
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {
-    console.error('Admin fraud-alerts error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_fraud_alerts_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load fraud alerts' })
   }
 })
@@ -475,7 +475,7 @@ router.patch('/fraud-alerts/:id/resolve', auth, requireAdmin, adminWriteLimiter,
     logAudit(req.user.id, 'admin_resolve_fraud_alert', 'fraud_alerts', req.ip, { alertId })
     res.json({ alert: result.rows[0] })
   } catch (err) {
-    console.error('Admin resolve alert error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_resolve_alert_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed' })
   }
 })
@@ -524,7 +524,7 @@ router.get('/documents', auth, requireAdmin, adminReadLimiter, async (req, res) 
       pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
     })
   } catch (err) {
-    console.error('Admin documents error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_documents_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load documents' })
   }
 })
@@ -585,7 +585,7 @@ router.get('/export/companies', auth, requireAdmin, adminReadLimiter, async (req
     res.setHeader('Cache-Control', 'no-store')
     res.send('\uFEFF' + lines.join('\r\n'))   // BOM for Excel UTF-8
   } catch (err) {
-    console.error('Admin CSV export error:', err.message)
+    console.error(JSON.stringify({ event: 'admin_csv_export_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Export failed' })
   }
 })

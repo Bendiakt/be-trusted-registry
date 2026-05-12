@@ -44,7 +44,7 @@ router.get('/missions', auth, pacReadLimiter, async (req, res) => {
     )
     res.json(result.rows.map(mapMissionRow))
   } catch (err) {
-    console.error('List missions error:', err.message)
+    console.error(JSON.stringify({ event: 'list_missions_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load missions' })
   }
 })
@@ -75,7 +75,7 @@ router.get('/missions/:id', auth, pacReadLimiter, async (req, res) => {
       pacLocation:   row.pac_location    || null,
     })
   } catch (err) {
-    console.error('Get mission error:', err.message)
+    console.error(JSON.stringify({ event: 'get_mission_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load mission' })
   }
 })
@@ -213,7 +213,7 @@ router.get('/missions/:id/pdf', auth, pacReadLimiter, async (req, res) => {
     doc.fontSize(7).fillColor('#444444').font('Helvetica').text(`REPORT-${String(m.id).padStart(6, '0')} · Confidential`, 0, pageH - 19, { align: 'right', width: W - M })
     doc.end()
   } catch (err) {
-    console.error('PDF generation error:', err.message)
+    console.error(JSON.stringify({ event: 'pdf_generation_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     if (!res.headersSent) res.status(500).json({ error: 'PDF generation failed' })
   }
 })
@@ -229,7 +229,7 @@ router.get('/profile', auth, pacReadLimiter, async (req, res) => {
       languages: row.languages || '', certifications: row.certifications || '', bio: row.bio || '',
     } : {})
   } catch (err) {
-    console.error('PAC profile get error:', err.message)
+    console.error(JSON.stringify({ event: 'pac_profile_get_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load profile' })
   }
 })
@@ -259,7 +259,7 @@ router.post('/profile', auth, pacWriteLimiter, validate(schemas.updatePacProfile
     res.json({ message: 'Profile saved' })
     logAudit(req.user.id, 'pac_profile_update', 'pac_profiles', req.ip, { name, location })
   } catch (err) {
-    console.error('PAC profile save error:', err.message)
+    console.error(JSON.stringify({ event: 'pac_profile_save_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to save profile' })
   }
 })
@@ -293,7 +293,7 @@ router.post('/missions/:id/accept', auth, pacWriteLimiter, async (req, res) => {
       link:  '/pac',
     })
   } catch (err) {
-    console.error('Accept mission error:', err.message)
+    console.error(JSON.stringify({ event: 'accept_mission_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to accept mission' })
   }
 })
@@ -342,7 +342,7 @@ router.post('/missions/:id/complete', auth, pacWriteLimiter, validate(schemas.su
       })
     }
   } catch (err) {
-    console.error('Complete mission error:', err.message)
+    console.error(JSON.stringify({ event: 'complete_mission_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to complete mission' })
   }
 })

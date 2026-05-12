@@ -125,7 +125,7 @@ router.post('/register', registerLimiter, validate(schemas.register), async (req
     sendWelcome({ email: emailStr, name: nameStr }).catch(() => {})
     checkFraud({ userId: null, email: emailStr, ip: req.ip, action: 'user_register' }).catch(() => {})
   } catch (err) {
-    console.error('Register error:', err.message)
+    console.error(JSON.stringify({ event: 'register_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Registration failed' })
   }
 })
@@ -148,7 +148,7 @@ router.get('/verify-email', async (req, res) => {
     logAudit(result.rows[0].id, 'email_verified', 'users', req.ip, { email: result.rows[0].email })
     res.json({ message: 'Email verified successfully' })
   } catch (err) {
-    console.error('Email verify error:', err.message)
+    console.error(JSON.stringify({ event: 'email_verify_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Verification failed' })
   }
 })
@@ -171,7 +171,7 @@ router.post('/resend-verification', resendVerifyLimiter, auth, async (req, res) 
     sendEmailVerification({ email: user.email, name: user.name, verifyUrl: `${frontendUrl}/verify-email?token=${newToken}` }).catch(() => {})
     res.json({ message: 'Verification email sent' })
   } catch (err) {
-    console.error('Resend verify error:', err.message)
+    console.error(JSON.stringify({ event: 'resend_verify_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to resend' })
   }
 })
@@ -201,7 +201,7 @@ router.post('/resend-verification-public', resendVerifyLimiter, validate(schemas
     sendEmailVerification({ email: user.email, name: user.name, verifyUrl: `${frontendUrl}/verify-email?token=${newToken}` }).catch(() => {})
     logAudit(user.id, 'resend_verify_public', 'users', req.ip, { email: emailStr })
   } catch (err) {
-    console.error('Resend-verify-public error:', err.message)
+    console.error(JSON.stringify({ event: 'resend_verify_public_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     // Response already sent — swallow error silently
   }
 })
@@ -294,7 +294,7 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
     logAudit(user.id, 'user_login', 'users', req.ip, { email: emailStr, jti })
   } catch (err) {
-    console.error('Login error:', err.message)
+    console.error(JSON.stringify({ event: 'login_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Login failed' })
   }
 })
@@ -391,7 +391,7 @@ router.post('/forgot-password', forgotLimiter, validate(schemas.forgotPassword),
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
     sendPasswordReset({ email: user.email, name: user.name, resetUrl: `${frontendUrl}/reset-password/${rawToken}` }).catch(() => {})
   } catch (err) {
-    console.error('Forgot password error:', err.message)
+    console.error(JSON.stringify({ event: 'forgot_password_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
   }
 })
 
@@ -424,7 +424,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(schemas.resetPassw
     logAudit(user_id, 'password_reset', 'users', req.ip, {})
     res.json({ message: 'Password reset successfully' })
   } catch (err) {
-    console.error('Reset password error:', err.message)
+    console.error(JSON.stringify({ event: 'reset_password_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Reset failed' })
   }
 })
@@ -479,7 +479,7 @@ router.patch('/profile', profileLimiter, auth, validate(schemas.updateProfile), 
     const updatedUser = updated.rows[0] || {}
     res.json({ message: 'Profile updated successfully.', name: updatedUser.name, email: updatedUser.email })
   } catch (err) {
-    console.error('Profile update error:', err.message)
+    console.error(JSON.stringify({ event: 'profile_update_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Update failed.' })
   }
 })
