@@ -1,9 +1,10 @@
 require('./instrument.js')
 require('dotenv').config()
-const express = require('express')
-const cors = require('cors')
-const jwt    = require('jsonwebtoken')
-const crypto = require('crypto')
+const express      = require('express')
+const cors         = require('cors')
+const cookieParser = require('cookie-parser')
+const jwt          = require('jsonwebtoken')
+const crypto       = require('crypto')
 const http = require('http')
 const { WebSocketServer } = require('ws')
 // lib/encryption, fraudDetection, trustScore are used inside their respective route modules
@@ -131,6 +132,39 @@ const jsonMiddleware = express.json({ limit: '2mb' })
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/stripe/webhook') return next()
   return jsonMiddleware(req, res, next)
+})
+
+// ── Cookie parser — required for httpOnly auth cookie strategy ────────────────
+app.use(cookieParser())
+
+// ── CSRF protection — double-submit cookie pattern ────────────────────────────
+// Works with SameSite=Strict cookies for web; skipped for Bearer-token API calls.
+// The frontend reads the non-httpOnly `csrf_token` cookie and sends it as the
+// X-CSRF-Token header. This middleware verifies they match.
+// (We intentionally do NOT use `csurf` — deprecated by Express team, May 2025.)
+const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+const CSRF_EXEMPT = ['/api/payments/webhook', '/api/stripe/webhook']
+
+app.use((req, res, next) => {
+  // Skip safe HTTP methods and Stripe webhooks
+  if (CSRF_SAFE_METHODS.has(req.method) || CSRF_EXEMPT.includes(req.originalUrl)) return next()
+  // Skip if the request uses Bearer token auth (API clients, mobile) — CSRF only
+  // applies to cookie-based sessions where the browser auto-attaches credentials.
+  if (req.headers.authorization?.startsWith('Bearer ')) return next()
+  // If no CSRF cookie exists yet, generate and set one (first-visit)
+  const cookieToken = req.cookies?.csrf_token
+  const headerToken = req.headers['x-csrf-token']
+  if (!cookieToken) {
+    // Let the request through — frontend will pick up the cookie on next call
+    const newToken = crypto.randomBytes(32).toString('hex')
+    res.cookie('csrf_token', newToken, { sameSite: 'strict', secure: process.env.NODE_ENV === 'production' })
+    return next()
+  }
+  // Verify double-submit: cookie must match header
+  if (!headerToken || headerToken !== cookieToken) {
+    return res.status(403).json({ error: 'CSRF token mismatch' })
+  }
+  return next()
 })
 
 // auth, requireAdmin, publicReadLimiter and SECRET are imported from lib/auth above.
@@ -603,11 +637,15 @@ const getBusinessMetrics = async () => {
 }
 
 wss.on('connection', (ws, req) => {
-  // Authenticate via ?token= query param (JWT in URL is acceptable for WS — short-lived 15m token)
+  // Authenticate via httpOnly cookie (token is never exposed in the URL)
   let wsUserId = null
   try {
-    const qs = new URL(req.url, 'http://localhost').searchParams
-    const token = qs.get('token')
+    // Parse cookies from the upgrade request headers
+    const rawCookies = req.headers.cookie || ''
+    const cookieMap = Object.fromEntries(
+      rawCookies.split(';').map(c => c.trim().split('=').map(decodeURIComponent))
+    )
+    const token = cookieMap['token']
     if (token) {
       const decoded = jwt.verify(token, SECRET)
       wsUserId = decoded?.id ? Number(decoded.id) : null

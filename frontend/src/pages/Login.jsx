@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { saveSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 
 export default function Login() {
@@ -17,11 +18,7 @@ export default function Login() {
     setLoading(true)
     try {
       const res = await api.post('/api/auth/login', form)
-      localStorage.setItem('token', res.data.token)
-      localStorage.setItem('role', res.data.user.role)
-      localStorage.setItem('userName', res.data.user.name || '')
-      localStorage.setItem('userEmail', res.data.user.email || '')
-      if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken)
+      saveSession(res.data.user)
       const role = res.data.user.role
       if (role === 'pac')   navigate('/pac')
       else if (role === 'admin')  navigate('/admin')

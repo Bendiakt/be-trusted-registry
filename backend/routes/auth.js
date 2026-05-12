@@ -56,6 +56,32 @@ const profileLimiter = rateLimit({
   message: { error: 'Too many profile update attempts. Try again later.' },
 })
 
+// ── Cookie helpers ────────────────────────────────────────────────────────────
+const IS_PROD = process.env.NODE_ENV === 'production'
+
+/** Set the two auth cookies (access + refresh) on a response. */
+const setAuthCookies = (res, token, refreshToken) => {
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: 'strict',
+    maxAge: 15 * 60 * 1000, // 15 min — matches JWT expiry
+  })
+  res.cookie('refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — matches JWT expiry
+    path: '/api/auth/refresh',         // scoped: only sent to the refresh endpoint
+  })
+}
+
+/** Clear both auth cookies (call on logout). */
+const clearAuthCookies = (res) => {
+  res.clearCookie('token',         { httpOnly: true, secure: IS_PROD, sameSite: 'strict' })
+  res.clearCookie('refresh_token', { httpOnly: true, secure: IS_PROD, sameSite: 'strict', path: '/api/auth/refresh' })
+}
+
 // ── POST /register ────────────────────────────────────────────────────────────
 router.post('/register', registerLimiter, async (req, res) => {
   try {
@@ -262,6 +288,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       ),
     ])
 
+    // Set httpOnly cookies (web frontend) — tokens also returned in body for API clients
+    setAuthCookies(res, token, refreshToken)
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
     logAudit(user.id, 'user_login', 'users', req.ip, { email: emailStr, jti })
   } catch (err) {
@@ -273,7 +301,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 // ── POST /refresh ─────────────────────────────────────────────────────────────
 router.post('/refresh', async (req, res) => {
   try {
-    const refreshToken = req.body?.refreshToken
+    // Accept from httpOnly cookie (web) or request body (API clients / mobile)
+    const refreshToken = req.cookies?.refresh_token || req.body?.refreshToken
     if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' })
 
     const payload = jwt.verify(refreshToken, REFRESH_SECRET)
@@ -299,6 +328,8 @@ router.post('/refresh', async (req, res) => {
       `INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, to_timestamp($3))`,
       [user.id, hashToken(newRefresh), newRefreshDecoded.exp],
     )
+    // Set new cookies (web) — also return in body (API clients)
+    setAuthCookies(res, token, newRefresh)
     return res.json({ token, refreshToken: newRefresh })
   } catch {
     return res.status(401).json({ error: 'Invalid refresh token' })
@@ -308,8 +339,8 @@ router.post('/refresh', async (req, res) => {
 // ── POST /logout ──────────────────────────────────────────────────────────────
 router.post('/logout', auth, async (req, res) => {
   try {
-    const accessToken  = req.headers.authorization?.split(' ')[1]
-    const refreshToken = req.body?.refreshToken || null
+    const accessToken  = req.headers.authorization?.split(' ')[1] || req.cookies?.token
+    const refreshToken = req.cookies?.refresh_token || req.body?.refreshToken || null
     const decoded      = jwt.verify(accessToken, SECRET)
 
     if (decoded?.jti && decoded?.exp) {
@@ -328,6 +359,8 @@ router.post('/logout', auth, async (req, res) => {
     }
     await query('DELETE FROM token_blacklist WHERE expires_at <= NOW()')
     await query('DELETE FROM refresh_tokens  WHERE expires_at <= NOW()')
+    // Clear httpOnly cookies (web sessions)
+    clearAuthCookies(res)
     return res.json({ message: 'Logged out' })
   } catch {
     return res.status(401).json({ error: 'Invalid token' })
@@ -448,6 +481,20 @@ router.patch('/profile', profileLimiter, auth, async (req, res) => {
     console.error('Profile update error:', err.message)
     res.status(500).json({ error: 'Update failed.' })
   }
+})
+
+// ── GET /csrf-token — initialise the CSRF double-submit cookie ────────────────
+// Called once by the frontend on app load. Sets the non-httpOnly csrf_token
+// cookie (readable by JS) so the frontend can inject it as X-CSRF-Token header.
+router.get('/csrf-token', (req, res) => {
+  const token = require('crypto').randomBytes(32).toString('hex')
+  res.cookie('csrf_token', token, {
+    httpOnly: false, // must be readable by JS
+    secure: IS_PROD,
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000, // 24 h
+  })
+  res.json({ ok: true })
 })
 
 module.exports = router

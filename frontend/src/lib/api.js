@@ -2,26 +2,39 @@ import axios from 'axios'
 
 const baseURL = import.meta.env.VITE_API_URL || ''
 
-const api = axios.create({ baseURL })
+// ── Axios instance — cookies sent automatically via withCredentials ───────────
+// httpOnly cookies (token, refresh_token) are managed by the browser.
+// The frontend never reads or writes them — they are invisible to JS.
+const api = axios.create({ baseURL, withCredentials: true })
 
-// ── Auto-inject token from localStorage on every request ────────────────────
+// ── CSRF double-submit cookie helper ─────────────────────────────────────────
+// Reads the non-httpOnly `csrf_token` cookie set by GET /api/auth/csrf-token
+// and injects it as a header on every mutating request.
+const getCsrfToken = () => {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers = config.headers || {}
-    config.headers['Authorization'] = 'Bearer ' + token
+  const method = (config.method || 'get').toUpperCase()
+  const SAFE = ['GET', 'HEAD', 'OPTIONS']
+  if (!SAFE.includes(method)) {
+    const csrf = getCsrfToken()
+    if (csrf) {
+      config.headers = config.headers || {}
+      config.headers['X-CSRF-Token'] = csrf
+    }
   }
   return config
 })
 
 // ── Silent token refresh on 401 ─────────────────────────────────────────────
-// Pattern: queue concurrent 401s, attempt one refresh, replay all on success.
-
+// Pattern: queue concurrent 401s, attempt one cookie-based refresh, replay all.
 let isRefreshing = false
 let failedQueue = []
 
-const processQueue = (error, token = null) => {
-  failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token)))
+const processQueue = (error) => {
+  failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve()))
   failedQueue = []
 }
 
@@ -42,26 +55,15 @@ api.interceptors.response.use(
 
     // Never redirect unauthenticated users away from public endpoints
     const PUBLIC_PREFIXES = ['/api/registry', '/api/verify/']
-    const isPublicEndpoint = PUBLIC_PREFIXES.some(p => original.url?.includes(p))
+    const isPublicEndpoint = PUBLIC_PREFIXES.some((p) => original.url?.includes(p))
     if (isPublicEndpoint) return Promise.reject(error)
-
-
-    const refreshToken = localStorage.getItem('refreshToken')
-    if (!refreshToken) {
-      localStorage.clear()
-      window.location.replace('/login')
-      return Promise.reject(error)
-    }
 
     if (isRefreshing) {
       // Another refresh is in flight — queue this request until it resolves.
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject })
       })
-        .then((token) => {
-          original.headers['Authorization'] = 'Bearer ' + token
-          return api(original)
-        })
+        .then(() => api(original))
         .catch((err) => Promise.reject(err))
     }
 
@@ -69,17 +71,14 @@ api.interceptors.response.use(
     isRefreshing = true
 
     try {
-      const { data } = await axios.post(baseURL + '/api/auth/refresh', { refreshToken })
-      const newToken = data.token
-      localStorage.setItem('token', newToken)
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken)
-      api.defaults.headers.common['Authorization'] = 'Bearer ' + newToken
-      processQueue(null, newToken)
-      original.headers['Authorization'] = 'Bearer ' + newToken
+      // Cookie-based refresh: no body needed — the browser sends the httpOnly
+      // refresh_token cookie automatically (path: /api/auth/refresh).
+      await axios.post(baseURL + '/api/auth/refresh', {}, { withCredentials: true })
+      processQueue(null)
       return api(original)
     } catch (refreshError) {
-      processQueue(refreshError, null)
-      localStorage.clear()
+      processQueue(refreshError)
+      // Both tokens expired/revoked — force re-login
       window.location.replace('/login')
       return Promise.reject(refreshError)
     } finally {
