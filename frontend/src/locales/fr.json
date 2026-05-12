@@ -347,7 +347,8 @@
       "overview": "Vue d'ensemble",
       "users": "Utilisateurs",
       "companies": "Entreprises",
-      "missions": "Missions"
+      "missions": "Missions",
+      "audit": "Journal d'audit"
     },
     "stats": {
       "total_users": "Utilisateurs",

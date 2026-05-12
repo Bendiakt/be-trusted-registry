@@ -347,7 +347,8 @@
       "overview": "Visão geral",
       "users": "Usuários",
       "companies": "Empresas",
-      "missions": "Missões"
+      "missions": "Missões",
+      "audit": "Log de auditoria"
     },
     "stats": {
       "total_users": "Total de usuários",
