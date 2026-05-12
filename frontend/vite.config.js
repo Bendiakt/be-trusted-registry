@@ -33,4 +33,12 @@ export default defineConfig({
     // Warn (not fail) if a single chunk exceeds 600 kB after minification.
     chunkSizeWarningLimit: 600,
   },
+  // ── Vitest configuration ────────────────────────────────────────────────────
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test-setup.js'],
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    css: false,
+  },
 })
