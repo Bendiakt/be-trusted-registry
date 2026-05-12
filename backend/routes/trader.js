@@ -2,11 +2,8 @@
 /**
  * Trader Portal API
  *
- * All routes require authentication. The auth middleware (`req.user`) is applied
- * at mount time in server.js (`app.use('/api/trader', auth, traderRouter)`).
- * Access is implicitly limited to trader + admin roles by convention; the
- * RoleRoute guard on the frontend enforces the role, and the rate limiter here
- * adds a server-side throttle.
+ * All routes require authentication (`auth`) + trader/admin role (`requireTrader`),
+ * both applied via mount-level middleware in server.js and at route level here.
  *
  * Endpoints:
  *   GET    /api/trader/stats              — dashboard summary
@@ -16,10 +13,14 @@
  *   GET    /api/trader/watchlist/export   — CSV download of full watchlist
  */
 
-const express         = require('express')
-const rateLimit       = require('express-rate-limit')
+const express            = require('express')
+const rateLimit          = require('express-rate-limit')
 const { ipKeyGenerator } = require('express-rate-limit')
-const { query }       = require('../db')
+const { query }          = require('../db')
+const { requireRole }    = require('../lib/authUtils')
+
+/** Server-side role guard: only trader + admin may access this router. */
+const requireTrader = requireRole('trader', 'admin')
 
 const router = express.Router()
 
@@ -42,7 +43,7 @@ const writeLimiter = rateLimit({
 
 // ── GET /api/trader/stats ─────────────────────────────────────────────────────
 // Dashboard KPIs: watchlist size, cert coverage, expiring-soon count.
-router.get('/stats', readLimiter, async (req, res) => {
+router.get('/stats', requireTrader, readLimiter, async (req, res) => {
   try {
     const userId = req.user.id
     const stats = await query(
@@ -69,7 +70,7 @@ router.get('/stats', readLimiter, async (req, res) => {
     )
     res.json(stats.rows[0] || { watched_total: 0, watched_certified: 0, expiring_soon: 0, uncertified: 0 })
   } catch (err) {
-    console.error('trader/stats error:', err.message)
+    console.error(JSON.stringify({ event: 'trader.stats.error', userId: req.user?.id, err: err.message }))
     res.status(500).json({ error: 'Failed to load stats' })
   }
 })
@@ -77,7 +78,7 @@ router.get('/stats', readLimiter, async (req, res) => {
 // ── GET /api/trader/watchlist ─────────────────────────────────────────────────
 // Returns the trader's watched companies with live certification status.
 // Query params: page (default 1), limit (default 20, max 100), q (name search)
-router.get('/watchlist', readLimiter, async (req, res) => {
+router.get('/watchlist', requireTrader, readLimiter, async (req, res) => {
   try {
     const userId = req.user.id
     const page   = Math.max(1, parseInt(req.query.page  || '1', 10))
@@ -132,14 +133,14 @@ router.get('/watchlist', readLimiter, async (req, res) => {
       pagination: { total, page, limit, pages: Math.ceil(total / limit) },
     })
   } catch (err) {
-    console.error('trader/watchlist error:', err.message)
+    console.error(JSON.stringify({ event: 'trader.watchlist.error', userId: req.user?.id, err: err.message }))
     res.status(500).json({ error: 'Failed to load watchlist' })
   }
 })
 
 // ── GET /api/trader/watchlist/export ─────────────────────────────────────────
 // CSV download — full watchlist, no pagination.
-router.get('/watchlist/export', readLimiter, async (req, res) => {
+router.get('/watchlist/export', requireTrader, readLimiter, async (req, res) => {
   try {
     const userId = req.user.id
     const rows = await query(
@@ -187,14 +188,14 @@ router.get('/watchlist/export', readLimiter, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="watchlist-${new Date().toISOString().slice(0, 10)}.csv"`)
     res.send(lines.join('\r\n'))
   } catch (err) {
-    console.error('trader/watchlist/export error:', err.message)
+    console.error(JSON.stringify({ event: 'trader.watchlist.export.error', userId: req.user?.id, err: err.message }))
     res.status(500).json({ error: 'Export failed' })
   }
 })
 
 // ── POST /api/trader/watchlist/:id ───────────────────────────────────────────
 // Add a company to the trader's watchlist. Silently idempotent (ON CONFLICT).
-router.post('/watchlist/:id', writeLimiter, async (req, res) => {
+router.post('/watchlist/:id', requireTrader, writeLimiter, async (req, res) => {
   try {
     const userId    = req.user.id
     const companyId = parseInt(req.params.id, 10)
@@ -212,14 +213,14 @@ router.post('/watchlist/:id', writeLimiter, async (req, res) => {
     )
     res.status(201).json({ watched: true, companyId })
   } catch (err) {
-    console.error('trader/watchlist POST error:', err.message)
+    console.error(JSON.stringify({ event: 'trader.watchlist.add.error', userId: req.user?.id, companyId: req.params.id, err: err.message }))
     res.status(500).json({ error: 'Failed to add to watchlist' })
   }
 })
 
 // ── DELETE /api/trader/watchlist/:id ─────────────────────────────────────────
 // Remove a company from the trader's watchlist.
-router.delete('/watchlist/:id', writeLimiter, async (req, res) => {
+router.delete('/watchlist/:id', requireTrader, writeLimiter, async (req, res) => {
   try {
     const userId    = req.user.id
     const companyId = parseInt(req.params.id, 10)
@@ -231,7 +232,7 @@ router.delete('/watchlist/:id', writeLimiter, async (req, res) => {
     )
     res.json({ watched: false, companyId })
   } catch (err) {
-    console.error('trader/watchlist DELETE error:', err.message)
+    console.error(JSON.stringify({ event: 'trader.watchlist.remove.error', userId: req.user?.id, companyId: req.params.id, err: err.message }))
     res.status(500).json({ error: 'Failed to remove from watchlist' })
   }
 })

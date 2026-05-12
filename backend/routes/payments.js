@@ -2,6 +2,8 @@ const express = require('express')
 const router = express.Router()
 const Stripe = require('stripe')
 const { query } = require('../db')
+const { auth } = require('../lib/authUtils')
+const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
 const { sendPaymentConfirmation } = require('../lib/mailer')
 const { isBlockedCompany } = require('../lib/blocklist')
@@ -31,7 +33,7 @@ const PLANS = {
   level3: { name: 'B&E Level 3 — Physical Site Inspection', price: 249000 },
 }
 
-router.post('/create-checkout-session', async (req, res) => {
+router.post('/create-checkout-session', auth, validate(schemas.createCheckoutSession), async (req, res) => {
   try {
     const { planId, certificationId } = req.body
     const plan = PLANS[planId]
@@ -350,8 +352,7 @@ router.get('/stats', async (req, res) => {
 })
 
 // POST /api/payments/portal — Stripe Customer Portal for billing history & receipts
-router.post('/portal', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+router.post('/portal', auth, async (req, res) => {
   try {
     const stripe = getStripe()
 
@@ -387,7 +388,7 @@ router.post('/portal', async (req, res) => {
     })
     res.json({ url: session.url })
   } catch (err) {
-    console.error('Billing portal error:', err.message)
+    console.error(JSON.stringify({ event: 'payments.portal.error', userId: req.user?.id, err: err.message }))
     if (err.type === 'StripeInvalidRequestError') {
       return res.status(400).json({ error: 'Billing portal unavailable. Please contact support.' })
     }
@@ -399,8 +400,7 @@ router.post('/portal', async (req, res) => {
 // Creates a Stripe Checkout session specifically for renewing an active or
 // recently-expired certification. The new session links to the existing cert
 // so the webhook can extend expires_at rather than creating a duplicate cert.
-router.post('/renewal-checkout', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+router.post('/renewal-checkout', auth, validate(schemas.renewalCheckout), async (req, res) => {
   try {
     const companyResult = await query(
       'SELECT id, name FROM companies WHERE user_id = $1 LIMIT 1',

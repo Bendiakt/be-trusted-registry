@@ -172,6 +172,25 @@ const schemas = {
     type: str(100).optional(),
     note: str(500).optional(),
   }),
+
+  /** PATCH /api/admin/documents/:id/review */
+  reviewDocument: z.object({
+    status:  z.enum(['approved', 'rejected'], { required_error: 'status required' }),
+    comment: str(500).optional(),
+  }),
+
+  // ── Payments ──────────────────────────────────────────────────────────────
+
+  /** POST /api/payments/create-checkout-session */
+  createCheckoutSession: z.object({
+    planId:          z.enum(['level1', 'level2', 'level3'], { required_error: 'planId required' }),
+    certificationId: z.number().int().positive().optional(),
+  }),
+
+  /** POST /api/payments/renewal-checkout */
+  renewalCheckout: z.object({
+    planId: z.enum(['level1', 'level2', 'level3'], { required_error: 'planId required' }),
+  }),
 }
 
 // ── Middleware factory ────────────────────────────────────────────────────────
