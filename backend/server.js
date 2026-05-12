@@ -222,6 +222,38 @@ const companiesRouter             = require('./routes/companies')
 const pacRouter                   = require('./routes/pac')
 const { sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
 
+// ── OpenAPI / Swagger UI ──────────────────────────────────────────────────────
+// Served at /api/docs in all environments. Parsing is done once at startup;
+// if the YAML file is missing (e.g. stripped in a minimal Docker image) the
+// block is silently skipped rather than crashing the server.
+try {
+  const swaggerUi = require('swagger-ui-express')
+  const YAML      = require('yaml')
+  const fs        = require('fs')
+  const path      = require('path')
+  const specPath  = path.join(__dirname, 'openapi.yaml')
+  if (fs.existsSync(specPath)) {
+    const openApiSpec = YAML.parse(fs.readFileSync(specPath, 'utf8'))
+    // Relax the API-only CSP for the Swagger UI page (it loads inline scripts)
+    app.use('/api/docs', (req, res, next) => {
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      )
+      next()
+    })
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+      customSiteTitle: 'MyDD — B&E Registry API',
+      swaggerOptions: { persistAuthorization: true },
+    }))
+    console.log(JSON.stringify({ event: 'swagger_ui.mounted', path: '/api/docs' }))
+  } else {
+    console.warn(JSON.stringify({ event: 'swagger_ui.skipped', reason: 'openapi.yaml not found' }))
+  }
+} catch (e) {
+  console.warn(JSON.stringify({ event: 'swagger_ui.error', message: e.message }))
+}
+
 // ── Router mounts ─────────────────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', auth)
 app.post('/api/payments/renewal-checkout',        auth)
