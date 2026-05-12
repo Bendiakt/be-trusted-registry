@@ -146,6 +146,25 @@ const schemas = {
     }),
   }),
 
+  // ── 2FA TOTP ──────────────────────────────────────────────────────────────
+
+  /** POST /api/auth/2fa/verify — verify TOTP code and activate 2FA */
+  totpVerify: z.object({
+    token: str(6).regex(/^\d{6}$/, 'TOTP token must be exactly 6 digits'),
+  }),
+
+  /** POST /api/auth/2fa/validate — validate TOTP during login (step 2) */
+  totpValidate: z.object({
+    tempToken: str(128).min(1, 'Temp token required'),
+    token:     str(6).regex(/^\d{6}$/, 'TOTP token must be exactly 6 digits'),
+  }),
+
+  /** POST /api/auth/2fa/disable — disable 2FA (requires password confirmation) */
+  totpDisable: z.object({
+    password: str(128).min(1, 'Password required'),
+    token:    str(6).regex(/^\d{6}$/, 'TOTP token must be exactly 6 digits'),
+  }),
+
   // ── Documents ─────────────────────────────────────────────────────────────
 
   /** POST /api/documents/upload (metadata only — file handled by multer) */

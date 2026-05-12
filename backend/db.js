@@ -365,6 +365,23 @@ const initDb = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_companies_certified_country ON companies(country, certification_level) WHERE certification_level > 0')
     await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'company'")
 
+    // ── 2FA TOTP columns (admin accounts) ────────────────────────────────────
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret  TEXT")
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE")
+
+    // Temp-token store: short-lived tokens issued after password check but before TOTP validation
+    await query(`
+      CREATE TABLE IF NOT EXISTS totp_pending (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT        NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '5 minutes',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+    await query('CREATE INDEX IF NOT EXISTS idx_totp_pending_hash    ON totp_pending(token_hash)')
+    await query('CREATE INDEX IF NOT EXISTS idx_totp_pending_expires ON totp_pending(expires_at)')
+
     // ── Text-search indexes (GIN trigram for ILIKE) ──────────────────────────
     // Enable pg_trgm if not already available (safe on Railway PostgreSQL)
     await query("CREATE EXTENSION IF NOT EXISTS pg_trgm").catch(() => {/* may need superuser on some hosts */})

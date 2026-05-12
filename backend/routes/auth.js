@@ -221,7 +221,8 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
     const emailStr   = String(email).trim().toLowerCase()
     const userResult = await query(
       `SELECT id, name, email, password, role, email_verified,
-              failed_login_attempts, locked_until
+              failed_login_attempts, locked_until,
+              totp_enabled, totp_secret
        FROM users WHERE email = $1 LIMIT 1`,
       [emailStr],
     )
@@ -268,7 +269,27 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
       })
     }
 
-    // ── Success: reset lockout counters ───────────────────────────────────────
+    // ── Reset lockout counters on successful password check ───────────────────
+    await query(
+      `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`,
+      [user.id],
+    )
+
+    // ── 2FA gate: if TOTP is enabled, issue a short-lived temp token ─────────
+    if (user.totp_enabled) {
+      const rawTemp    = crypto.randomBytes(32).toString('hex')
+      const tempHash   = crypto.createHash('sha256').update(rawTemp).digest('hex')
+      await query(
+        `INSERT INTO totp_pending (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '5 minutes')
+         ON CONFLICT (token_hash) DO NOTHING`,
+        [user.id, tempHash],
+      )
+      logAudit(user.id, 'login_2fa_required', 'users', req.ip, { email: emailStr })
+      return res.json({ requires2fa: true, tempToken: rawTemp })
+    }
+
+    // ── No 2FA — issue JWT cookies immediately ────────────────────────────────
     const { token, jti }          = issueAccessToken(user)
     const { token: refreshToken } = issueRefreshToken(user)
     const refreshDecoded          = jwt.decode(refreshToken)
@@ -280,11 +301,7 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
         [user.id, hashToken(refreshToken), refreshDecoded.exp],
       ),
       query(
-        `UPDATE users
-            SET last_login             = NOW(),
-                failed_login_attempts  = 0,
-                locked_until           = NULL
-          WHERE id = $1`,
+        'UPDATE users SET last_login = NOW() WHERE id = $1',
         [user.id],
       ),
     ])
