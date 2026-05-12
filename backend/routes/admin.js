@@ -271,12 +271,31 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
           body:  `Your company has been awarded MyDD Level ${level} certification.`,
           link:  '/dashboard',
         })
-        query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
-          .then(({ rows }) => {
-            if (!rows.length) return
-            const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
-            sendCertGranted({ email: rows[0].email, name: rows[0].name, companyName: company.company_name, level, verifyUrl: `${frontendUrl}/verify/${companyId}` }).catch(() => {})
+        // Upsert certification record and send PDF email
+        query(
+          `INSERT INTO certifications (company_id, level, status, granted_at, expires_at)
+           VALUES ($1, $2, 'active', NOW(), NOW() + INTERVAL '1 year')
+           ON CONFLICT (company_id, level) DO UPDATE
+             SET status = 'active', granted_at = NOW(), expires_at = NOW() + INTERVAL '1 year',
+                 updated_at = NOW()
+           RETURNING id, granted_at`,
+          [companyId, level],
+        ).then(async ({ rows: certRows }) => {
+          const certId   = certRows[0]?.id
+          const grantedAt = certRows[0]?.granted_at
+          const userRows = await query('SELECT email, name FROM users WHERE id = $1 LIMIT 1', [company.user_id])
+          if (!userRows.rows.length) return
+          const frontendUrl = process.env.FRONTEND_URL || 'https://mydd.work'
+          sendCertGranted({
+            email: userRows.rows[0].email,
+            name:  userRows.rows[0].name,
+            companyName: company.company_name,
+            level,
+            verifyUrl: `${frontendUrl}/verify/${companyId}`,
+            grantedAt,
+            certId,
           }).catch(() => {})
+        }).catch(() => {})
       } else {
         // Level set to 0 = certification revoked
         notifyUser(company.user_id, { type: 'cert_revoked', companyId })

@@ -447,7 +447,7 @@ const sendEmailVerification = async ({ email, name, verifyUrl }) => {
  * Notify a company owner when an admin grants / upgrades their certification level.
  * Non-blocking — never throws.
  */
-const sendCertGranted = async ({ email, name, companyName, level, verifyUrl }) => {
+const sendCertGranted = async ({ email, name, companyName, level, verifyUrl, grantedAt, certId }) => {
   if (!email) return
 
   const levelName = LEVEL_NAMES[level] || `Level ${level}`
@@ -462,8 +462,22 @@ const sendCertGranted = async ({ email, name, companyName, level, verifyUrl }) =
     return
   }
 
+  // Generate PDF certificate (best-effort — don't block email if PDF fails)
+  let pdfAttachment = null
   try {
-    await sendViaResend({
+    const { generateCertPdf } = require('./certPdf')
+    const pdfBuffer = await generateCertPdf({ companyName, level, grantedAt, verifyUrl, certId })
+    pdfAttachment = {
+      filename: `BE-Certificate-${(companyName || 'company').replace(/[^a-zA-Z0-9]/g, '-')}-L${level}.pdf`,
+      content:  pdfBuffer.toString('base64'),
+      type:     'application/pdf',
+    }
+  } catch (pdfErr) {
+    console.error('[mailer] PDF generation failed (email sent without PDF):', pdfErr.message)
+  }
+
+  try {
+    const payload = {
       from: FROM_ADDRESS,
       to: email,
       subject: `Certification granted — ${levelName} · ${companyName || 'Your company'}`,
@@ -496,7 +510,7 @@ const sendCertGranted = async ({ email, name, companyName, level, verifyUrl }) =
       </div>
 
       <p style="color:#aaa;font-size:0.85rem;margin:0;line-height:1.6">
-        Your certificate and embeddable badge are now live. Share the verify link with your trade partners to instantly prove your due-diligence status.<br><br>
+        Your certificate and embeddable badge are now live${pdfAttachment ? ' — your PDF certificate is attached to this email' : ''}. Share the verify link with your trade partners to instantly prove your due-diligence status.<br><br>
         Questions? <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>
       </p>
     </td></tr>
@@ -506,8 +520,10 @@ const sendCertGranted = async ({ email, name, companyName, level, verifyUrl }) =
   </table>
 </body>
 </html>`,
-    })
-    console.log(JSON.stringify({ event: 'cert_granted.email.sent', email, level, companyName }))
+    }
+    if (pdfAttachment) payload.attachments = [pdfAttachment]
+    await sendViaResend(payload)
+    console.log(JSON.stringify({ event: 'cert_granted.email.sent', email, level, companyName, hasPdf: !!pdfAttachment }))
   } catch (err) {
     console.error('[mailer] sendCertGranted failed:', err.message)
   }
