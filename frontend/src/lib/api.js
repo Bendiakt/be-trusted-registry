@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getCsrfToken } from './csrf'
 
 const baseURL = import.meta.env.VITE_API_URL || ''
 
@@ -6,14 +7,6 @@ const baseURL = import.meta.env.VITE_API_URL || ''
 // httpOnly cookies (token, refresh_token) are managed by the browser.
 // The frontend never reads or writes them — they are invisible to JS.
 const api = axios.create({ baseURL, withCredentials: true })
-
-// ── CSRF double-submit cookie helper ─────────────────────────────────────────
-// Reads the non-httpOnly `csrf_token` cookie set by GET /api/auth/csrf-token
-// and injects it as a header on every mutating request.
-const getCsrfToken = () => {
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
 
 api.interceptors.request.use((config) => {
   const method = (config.method || 'get').toUpperCase()
