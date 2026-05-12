@@ -1,5 +1,8 @@
 require('./instrument.js')
 require('dotenv').config()
+// Eagerly initialise Redis so the client is ready before the first request.
+// lib/redis.js handles REDIS_URL absence gracefully (logs warning, returns null).
+require('./lib/redis').getRedis()
 const express      = require('express')
 const cors         = require('cors')
 const cookieParser = require('cookie-parser')
@@ -177,7 +180,7 @@ app.use((req, res, next) => {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
   }
   // Warn about important-but-optional vars that degrade functionality
-  const RECOMMENDED = ['JWT_REFRESH_SECRET', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'FRONTEND_URL', 'SENTRY_DSN']
+  const RECOMMENDED = ['JWT_REFRESH_SECRET', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'FRONTEND_URL', 'SENTRY_DSN', 'REDIS_URL']
   const absent = RECOMMENDED.filter((k) => !process.env[k])
   if (absent.length) {
     console.warn(JSON.stringify({ event: 'env_warning', missing: absent, note: 'Some features may be degraded' }))
