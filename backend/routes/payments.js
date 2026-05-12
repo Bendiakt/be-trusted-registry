@@ -56,7 +56,7 @@ router.post('/create-checkout-session', async (req, res) => {
       line_items: [{
         price_data: {
           currency: 'usd',
-          product_data: { name: plan.name, description: 'B&E Trusted Registry Certification' },
+          product_data: { name: plan.name, description: 'MyDD Certification' },
           unit_amount: plan.price,
         },
         quantity: 1,

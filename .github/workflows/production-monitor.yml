@@ -31,7 +31,7 @@ jobs:
 
       - name: Run production monitor script
         env:
-          BACKEND_URL: https://be-trusted-registry-production.up.railway.app
+          BACKEND_URL: https://api.mydd.work
           MAX_HEALTH_MS: '1500'
           MAX_BUSINESS_METRICS_MS: '1000'
           CURL_MAX_TIME: '15'

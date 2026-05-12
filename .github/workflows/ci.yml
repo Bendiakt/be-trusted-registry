@@ -77,7 +77,7 @@ jobs:
       - name: Health check
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
-            https://be-trusted-registry-production.up.railway.app/api/health)
+            https://api.mydd.work/api/health)
           echo "Response: $RESPONSE"
           echo "$RESPONSE" | python3 -c "
           import sys, json
@@ -89,7 +89,7 @@ jobs:
       - name: Readiness probe check (DB connectivity)
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
-            https://be-trusted-registry-production.up.railway.app/api/health/ready)
+            https://api.mydd.work/api/health/ready)
           echo "Response: $RESPONSE"
           echo "$RESPONSE" | python3 -c "
           import sys, json
@@ -102,7 +102,7 @@ jobs:
       - name: Verify auth endpoint is live
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-            -X POST https://be-trusted-registry-production.up.railway.app/api/auth/login \
+            -X POST https://api.mydd.work/api/auth/login \
             -H "Content-Type: application/json" \
             -d '{"email":"ci-probe@test.io","password":"wrong"}')
           echo "Auth endpoint status: $STATUS"

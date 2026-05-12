@@ -243,7 +243,7 @@ try {
       next()
     })
     app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
-      customSiteTitle: 'MyDD — B&E Registry API',
+      customSiteTitle: 'MyDD API',
       swaggerOptions: { persistAuthorization: true },
     }))
     console.log(JSON.stringify({ event: 'swagger_ui.mounted', path: '/api/docs' }))
@@ -490,7 +490,7 @@ app.get('/status', async (req, res) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>B&E Trusted Registry — Status</title>
+  <title>MyDD — Status</title>
   <style>
     body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;color:#111}
     h1{font-size:1.5rem;font-weight:700}
@@ -504,7 +504,7 @@ app.get('/status', async (req, res) => {
   </style>
 </head>
 <body>
-  <h1>B&amp;E Trusted Registry</h1>
+  <h1>MyDD</h1>
   <p>Overall status: <span class="badge">${overallStatus}</span></p>
   <table>
     <tr><th>Component</th><th>Status</th><th>Detail</th></tr>

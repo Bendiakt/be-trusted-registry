@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: MyDD — B&E Trusted Registry API
+  title: MyDD API
   version: 1.0.0
   description: |
     REST API for the MyDD supplier certification platform.

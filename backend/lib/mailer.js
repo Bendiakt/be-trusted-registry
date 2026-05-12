@@ -64,7 +64,7 @@ const sendPaymentConfirmation = async ({ email, amountCents, level, companyName 
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Certification Confirmed</h1>
@@ -83,7 +83,7 @@ const sendPaymentConfirmation = async ({ email, amountCents, level, companyName 
         </tr>
       </table>
       <p style="color:#aaa;font-size:0.85rem;margin:0">
-        Your certificate will appear in the B&amp;E Trusted Registry within 24 hours.<br>
+        Your certificate will appear in the MyDD within 24 hours.<br>
         Questions? Reply to this email or contact <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>.
       </p>
     </td></tr>
@@ -111,7 +111,7 @@ const sendWelcome = async ({ email, name }) => {
     await sendViaResend({
       from: FROM_ADDRESS,
       to: email,
-      subject: 'Welcome to B&E Trusted Registry',
+      subject: 'Welcome to MyDD',
       html: `
 <!DOCTYPE html>
 <html lang="en">
@@ -119,7 +119,7 @@ const sendWelcome = async ({ email, name }) => {
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Welcome${name ? `, ${name}` : ''}!</h1>
@@ -168,7 +168,7 @@ const sendPasswordReset = async ({ email, name, resetUrl }) => {
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Reset your password</h1>
@@ -221,7 +221,7 @@ const sendMissionAssigned = async ({ email, name, companyName, location, fee, mi
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry — PAC Portal</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD — PAC Portal</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Mission Assigned</h1>
@@ -287,7 +287,7 @@ const sendMissionCompleted = async ({ email, name, companyName, outcome, mission
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry — Site Inspection</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD — Site Inspection</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Inspection Report Submitted</h1>
@@ -353,7 +353,7 @@ const sendRenewalReminder = async ({ email, name, companyName, level, expiresAt,
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 12px;color:#f5f5f5">Your certification expires soon</h1>
@@ -362,7 +362,7 @@ const sendRenewalReminder = async ({ email, name, companyName, level, expiresAt,
         The <strong style="color:#b8972a">${levelName}</strong> certification for
         <strong style="color:#f5f5f5">${companyName || 'your company'}</strong>
         is set to expire on <strong style="color:#f5f5f5">${expireDate}</strong>.
-        Renew now to maintain your verified status on the B&amp;E Trusted Registry.
+        Renew now to maintain your verified status on the MyDD.
       </p>
       <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:6px;padding:14px 18px;margin-bottom:24px">
         <div style="font-size:0.75rem;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em">Expiry date</div>
@@ -373,7 +373,7 @@ const sendRenewalReminder = async ({ email, name, companyName, level, expiresAt,
         Renew Certification →
       </a>
       <p style="color:#555;font-size:0.8rem;margin-top:16px;line-height:1.5">
-        After expiry your company will be removed from the public B&amp;E Registry until renewed.<br>
+        After expiry your company will be removed from the public MyDD until renewed.<br>
         Questions? <a href="mailto:support@mydd.work" style="color:#b8972a">support@mydd.work</a>
       </p>
     </td></tr>
@@ -406,7 +406,7 @@ const sendEmailVerification = async ({ email, name, verifyUrl }) => {
     await sendViaResend({
       from: FROM_ADDRESS,
       to: email,
-      subject: 'Verify your B&E Registry email address',
+      subject: 'Verify your MyDD email address',
       html: `
 <!DOCTYPE html>
 <html lang="en">
@@ -414,7 +414,7 @@ const sendEmailVerification = async ({ email, name, verifyUrl }) => {
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 12px;color:#f5f5f5">Verify your email</h1>
@@ -488,14 +488,14 @@ const sendCertGranted = async ({ email, name, companyName, level, verifyUrl, gra
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 8px;color:#f5f5f5">Your Certification is Active</h1>
       <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
         Congratulations${name ? `, <strong style="color:#f5f5f5">${name}</strong>` : ''}!
         <strong style="color:#f5f5f5">${companyName || 'Your company'}</strong> is now certified at
-        <strong style="color:#b8972a">${levelName}</strong> on the B&amp;E Trusted Registry.
+        <strong style="color:#b8972a">${levelName}</strong> on the MyDD.
       </p>
 
       ${verifyUrl ? `
@@ -555,7 +555,7 @@ const sendCertExpired = async ({ email, name, companyName, level, renewUrl }) =>
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#c0392b;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#fff">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#fff">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 12px;color:#f5f5f5">Certification Expired</h1>
@@ -563,7 +563,7 @@ const sendCertExpired = async ({ email, name, companyName, level, renewUrl }) =>
         Hi${name ? ` <strong style="color:#f5f5f5">${name}</strong>` : ''},<br>
         The <strong style="color:#e74c3c">${levelName}</strong> certification for
         <strong style="color:#f5f5f5">${companyName || 'your company'}</strong>
-        has expired. Your company has been removed from the B&amp;E Trusted Registry.
+        has expired. Your company has been removed from the MyDD.
       </p>
       <div style="background:#1a0a0a;border:1px solid #3a1a1a;border-radius:6px;padding:14px 18px;margin-bottom:24px">
         <div style="font-size:0.75rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.1em">Status</div>
@@ -610,13 +610,13 @@ const sendOnboardingD1 = async ({ email, name, dashboardUrl }) => {
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 12px;color:#f5f5f5">Complete your company profile</h1>
       <p style="color:#aaa;line-height:1.6;margin:0 0 20px">
         Hi${name ? ` <strong style="color:#f5f5f5">${name}</strong>` : ''},<br>
-        You created your MyDD account yesterday — great first step. Buyers searching the B&amp;E Registry can't find you yet because your company profile isn't set up.
+        You created your MyDD account yesterday — great first step. Buyers searching the MyDD can't find you yet because your company profile isn't set up.
       </p>
       <p style="color:#aaa;line-height:1.6;margin:0 0 24px;font-size:0.9rem">
         It takes 2 minutes. Add your company name, sector, and country — and you'll be ready to start your certification.
@@ -656,7 +656,7 @@ const sendOnboardingD3 = async ({ email, name, companyName, pricingUrl }) => {
 <body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
   <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
     <tr><td style="background:#b8972a;padding:24px 32px">
-      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">B&amp;E Trusted Registry</p>
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD</p>
     </td></tr>
     <tr><td style="padding:32px">
       <h1 style="font-size:1.4rem;margin:0 0 12px;color:#f5f5f5">Get certified. Get found.</h1>
@@ -667,7 +667,7 @@ const sendOnboardingD3 = async ({ email, name, companyName, pricingUrl }) => {
       <div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:6px;padding:14px 18px;margin-bottom:24px">
         <p style="margin:0 0 8px;font-weight:700;color:#b8972a;font-size:0.9rem">What certified suppliers get:</p>
         <ul style="margin:0;padding-left:18px;color:#aaa;font-size:0.875rem;line-height:1.8">
-          <li>Listed in the B&amp;E Trusted Registry (visible to global traders)</li>
+          <li>Listed in the MyDD (visible to global traders)</li>
           <li>Embeddable certification badge for your website</li>
           <li>Shareable verification link for trade negotiations</li>
           <li>Up to 3 certification levels — from document review to site inspection</li>

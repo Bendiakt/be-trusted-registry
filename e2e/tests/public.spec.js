@@ -18,7 +18,7 @@ test.describe('Public — landing page', () => {
 
     // Landing page should include the brand name
     await expect(
-      page.getByText(/MyDD|B&E|Trusted Registry/i).first()
+      page.getByText(/MyDD/i).first()
     ).toBeVisible({ timeout: 6000 })
   })
 

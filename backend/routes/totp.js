@@ -35,7 +35,7 @@ const getQRCode = () => {
   }
 }
 
-const APP_NAME = 'MyDD Trusted Registry'
+const APP_NAME = 'MyDD'
 
 const totpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

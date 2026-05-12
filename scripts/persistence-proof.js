@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('fs')
 
-const BASE_URL = (process.env.BACKEND_URL || 'https://be-trusted-registry-production.up.railway.app').replace(/\/$/, '')
+const BASE_URL = (process.env.BACKEND_URL || 'https://api.mydd.work').replace(/\/$/, '')
 const FILE = process.env.PERSIST_FILE || '/tmp/be-persist-check.json'
 const mode = process.argv[2]
 

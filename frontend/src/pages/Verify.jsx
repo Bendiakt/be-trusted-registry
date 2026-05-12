@@ -31,8 +31,8 @@ export default function Verify() {
         const url  = `${BASE}/verify/${id}`
         const LEVEL_NAMES = { 1: 'Level 1 — Document Verified', 2: 'Level 2 — KYC Validated', 3: 'Level 3 — Site Inspected' }
         const desc = d.level > 0
-          ? `${d.companyName} is certified at ${LEVEL_NAMES[d.level] || `Level ${d.level}`} on the B&E Trusted Registry. Verify instantly at MyDD.`
-          : `${d.companyName} is listed on the B&E Trusted Registry. Verification powered by MyDD.`
+          ? `${d.companyName} is certified at ${LEVEL_NAMES[d.level] || `Level ${d.level}`} on the MyDD. Verify instantly at MyDD.`
+          : `${d.companyName} is listed on the MyDD. Verification powered by MyDD.`
         ;[
           ['meta[name="description"]',         { name: 'description',         content: desc }],
           ['meta[property="og:title"]',         { property: 'og:title',        content: title }],
@@ -62,7 +62,7 @@ export default function Verify() {
       '@type': 'Organization',
       name: data.companyName,
       url: data.website || url,
-      description: `${data.companyName} is listed on the B&E Trusted Registry, certified by MyDD.`,
+      description: `${data.companyName} is listed on the MyDD, certified by MyDD.`,
       sameAs: [url],
       ...(data.country && { areaServed: data.country }),
       ...(data.level > 0 && {
@@ -70,7 +70,7 @@ export default function Verify() {
           '@type': 'EducationalOccupationalCredential',
           name: `B&E MyDD ${LEVEL_NAMES[data.level] || `Level ${data.level}`} Certification`,
           credentialCategory: 'certification',
-          recognizedBy: { '@type': 'Organization', name: 'B&E Consult FZCO', url: 'https://mydd.work' },
+          recognizedBy: { '@type': 'Organization', name: 'MyDD', url: 'https://mydd.work' },
         },
       }),
     }
