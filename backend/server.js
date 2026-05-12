@@ -2,15 +2,18 @@ require('./instrument.js')
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
+const jwt    = require('jsonwebtoken')
 const crypto = require('crypto')
-const rateLimit = require('express-rate-limit')
-const { ipKeyGenerator } = require('express-rate-limit')
 const http = require('http')
 const { WebSocketServer } = require('ws')
 const { hashForIntegrity } = require('./lib/encryption')
-const { checkFraud } = require('./lib/fraudDetection')
+const { checkFraud }   = require('./lib/fraudDetection')
+const {
+  auth,
+  requireAdmin,
+  publicReadLimiter,
+  SECRET,
+} = require('./lib/auth')
 const { getRuntimeMetrics } = require('./lib/runtimeMetrics')
 const metricsRouter = require('./routes/metrics')
 const badgeRouter  = require('./routes/badge')
@@ -132,11 +135,24 @@ app.use((req, res, next) => {
   return jsonMiddleware(req, res, next)
 })
 
-const SECRET = process.env.JWT_SECRET
-if (!SECRET) {
-  throw new Error('Missing JWT_SECRET environment variable')
-}
+// auth, requireAdmin, publicReadLimiter and SECRET are imported from lib/auth above.
+// ── Required environment variables ───────────────────────────────────────────
+// Fail fast at startup rather than crashing in the middle of a request.
+;(function validateEnv() {
+  const REQUIRED = ['JWT_SECRET', 'DATABASE_URL']
+  const missing = REQUIRED.filter((k) => !process.env[k])
+  if (missing.length) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+  }
+  // Warn about important-but-optional vars that degrade functionality
+  const RECOMMENDED = ['JWT_REFRESH_SECRET', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'FRONTEND_URL', 'SENTRY_DSN']
+  const absent = RECOMMENDED.filter((k) => !process.env[k])
+  if (absent.length) {
+    console.warn(JSON.stringify({ event: 'env_warning', missing: absent, note: 'Some features may be degraded' }))
+  }
+})()
 
+const SECRET = process.env.JWT_SECRET
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || SECRET
 if (!process.env.JWT_REFRESH_SECRET) {
   console.warn('JWT_REFRESH_SECRET is missing; falling back to JWT_SECRET')
@@ -262,14 +278,39 @@ const mapMissionRow = (row) => {
   }
 }
 
-const { router: paymentsRouter } = require('./routes/payments')
-const documentsRouter = require('./routes/documents')
-const traderRouter    = require('./routes/trader')
-const { sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+const { router: paymentsRouter }  = require('./routes/payments')
+const documentsRouter             = require('./routes/documents')
+const traderRouter                = require('./routes/trader')
+const authRouter                  = require('./routes/auth')
+const adminRouter                 = require('./routes/admin')
+const notificationsRouter         = require('./routes/notifications')
+const { sendMissionAssigned, sendMissionCompleted, sendRenewalReminder, sendCertExpired } = require('./lib/mailer')
+
+// ── Router mounts ─────────────────────────────────────────────────────────────
 app.post('/api/payments/create-checkout-session', auth)
-app.get('/api/payments/stats', auth)
-app.post('/api/stripe/create-checkout-session', auth)
-app.get('/api/stripe/stats', auth)
+app.post('/api/payments/renewal-checkout',        auth)
+app.post('/api/payments/portal',                  auth)
+app.get('/api/payments/stats',                    auth)
+app.post('/api/stripe/create-checkout-session',   auth)
+app.post('/api/stripe/renewal-checkout',          auth)
+app.post('/api/stripe/portal',                    auth)
+app.get('/api/stripe/stats',                      auth)
+app.use('/api/payments',       paymentsRouter)
+app.use('/api/stripe',         paymentsRouter)
+app.use('/api/metrics',        metricsRouter)
+app.use('/api/badge',          badgeRouter)
+app.use('/api/documents',      auth, documentsRouter)
+app.use('/api/trader',         auth, traderRouter)
+app.use('/api/auth',           authRouter)
+app.use('/api/admin',          adminRouter)
+app.use('/api/notifications',  notificationsRouter)
+app.post('/api/payments/renewal-checkout',         auth)
+app.post('/api/payments/portal',                   auth)
+app.get('/api/payments/stats',                     auth)
+app.post('/api/stripe/create-checkout-session',    auth)
+app.post('/api/stripe/renewal-checkout',           auth)
+app.post('/api/stripe/portal',                     auth)
+app.get('/api/stripe/stats',                       auth)
 app.use('/api/payments', paymentsRouter)
 app.use('/api/stripe', paymentsRouter)
 app.use('/api/metrics',   metricsRouter)
@@ -299,6 +340,9 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) return res.status(400).json({ error: 'Invalid email address' })
     if (passwordStr.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
     if (passwordStr.length > 128) return res.status(400).json({ error: 'Password too long' })
+    if (!/[a-z]/.test(passwordStr)) return res.status(400).json({ error: 'Password must contain at least one lowercase letter' })
+    if (!/[A-Z]/.test(passwordStr)) return res.status(400).json({ error: 'Password must contain at least one uppercase letter' })
+    if (!/[0-9]/.test(passwordStr)) return res.status(400).json({ error: 'Password must contain at least one digit' })
     const VALID_ROLES = ['company', 'trader', 'pac']
     const resolvedRole = VALID_ROLES.includes(role) ? role : 'company'
 
@@ -331,8 +375,18 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
   }
 })
 
+// Rate-limit token verification: tokens are 64-char hex but this prevents
+// mass-scanning of recently issued tokens from leaked email links.
+const verifyEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts. Try again later.' },
+})
+
 // GET /api/auth/verify-email?token=xxx — confirm email ownership
-app.get('/api/auth/verify-email', async (req, res) => {
+app.get('/api/auth/verify-email', verifyEmailLimiter, async (req, res) => {
   const token = String(req.query.token || '').trim()
   if (!token) return res.status(400).json({ error: 'Missing token' })
   try {
@@ -1236,8 +1290,12 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
   try {
     const { token, password } = req.body
     if (!token || !password) return res.status(400).json({ error: 'Token and new password are required' })
-    if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
-    if (String(password).length > 128) return res.status(400).json({ error: 'Password too long' })
+    const pwStr = String(password)
+    if (pwStr.length < 8)   return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    if (pwStr.length > 128) return res.status(400).json({ error: 'Password too long' })
+    if (!/[a-z]/.test(pwStr)) return res.status(400).json({ error: 'Password must contain at least one lowercase letter' })
+    if (!/[A-Z]/.test(pwStr)) return res.status(400).json({ error: 'Password must contain at least one uppercase letter' })
+    if (!/[0-9]/.test(pwStr)) return res.status(400).json({ error: 'Password must contain at least one digit' })
 
     const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex')
     const result = await query(
@@ -1249,7 +1307,7 @@ app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
     if (!result.rows.length) return res.status(400).json({ error: 'Reset link is invalid or expired' })
 
     const { id: prtId, user_id } = result.rows[0]
-    const hash = await bcrypt.hash(String(password), 10)
+    const hash = await bcrypt.hash(pwStr, 10)
 
     await Promise.all([
       query('UPDATE users SET password = $1 WHERE id = $2', [hash, user_id]),

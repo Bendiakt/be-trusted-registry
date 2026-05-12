@@ -105,6 +105,29 @@ jobs:
           [[ "$STATUS" == "401" || "$STATUS" == "400" ]] && echo "PASS: auth endpoint active" || \
             (echo "FAIL: unexpected status $STATUS" && exit 1)
 
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm test
+
   railway-config-guard:
     name: Railway config integrity check
     runs-on: ubuntu-latest

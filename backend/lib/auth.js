@@ -1,0 +1,190 @@
+'use strict'
+/**
+ * lib/auth.js — Shared authentication helpers.
+ *
+ * Centralises all JWT logic (issuing, verifying, blacklist check) and
+ * Express middleware (auth, requireAdmin) so every router imports from
+ * one place rather than duplicating or cross-requiring server.js.
+ */
+
+const crypto  = require('crypto')
+const jwt     = require('jsonwebtoken')
+const rateLimit              = require('express-rate-limit')
+const { ipKeyGenerator }     = require('express-rate-limit')
+const { query }              = require('../db')
+
+// ── Secrets ───────────────────────────────────────────────────────────────────
+const SECRET         = process.env.JWT_SECRET
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || SECRET
+
+if (!SECRET) throw new Error('lib/auth.js: JWT_SECRET is not set')
+if (!process.env.JWT_REFRESH_SECRET) {
+  console.warn(JSON.stringify({ event: 'env_warning', key: 'JWT_REFRESH_SECRET', note: 'falling back to JWT_SECRET' }))
+}
+
+// ── Token helpers ─────────────────────────────────────────────────────────────
+
+/** SHA-256 hash of a token value — used for DB storage (never store raw tokens). */
+const hashToken = (value) => crypto.createHash('sha256').update(String(value)).digest('hex')
+
+/**
+ * Issue a short-lived access token (15 min).
+ * Includes a unique jti so it can be individually revoked via the blacklist.
+ */
+const issueAccessToken = (user) => {
+  const jti = crypto.randomUUID()
+  const token = jwt.sign(
+    { jti, id: user.id, role: user.role, name: user.name, email: user.email },
+    SECRET,
+    { expiresIn: '15m' }
+  )
+  return { token, jti }
+}
+
+/**
+ * Issue a long-lived refresh token (30 days).
+ * Stored (as a hash) in refresh_tokens; revoked on use (one-time rotation).
+ */
+const issueRefreshToken = (user) => {
+  const jti = crypto.randomUUID()
+  const token = jwt.sign(
+    { jti, id: user.id, type: 'refresh' },
+    REFRESH_SECRET,
+    { expiresIn: '30d' }
+  )
+  return { token, jti }
+}
+
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registration attempts. Try again later.' },
+})
+
+/** General public read limiter — guards scraping / enumeration. */
+const publicReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Slow down.' },
+})
+
+/** Per-IP + per-email login limiter. */
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    return `${ipKeyGenerator(req)}:${email}`
+  },
+  message: { error: 'Too many login attempts. Try again later.' },
+})
+
+/** Limits token verification to prevent automated scanning. */
+const verifyEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts. Try again later.' },
+})
+
+const resendVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset requests. Try again later.' },
+})
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many reset attempts. Try again later.' },
+})
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+
+/**
+ * auth — verifies the Bearer JWT and checks the blacklist.
+ * Attaches decoded payload to req.user on success.
+ */
+const auth = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const decoded = jwt.verify(token, SECRET)
+    if (decoded?.jti) {
+      const blacklisted = await query(
+        'SELECT 1 FROM token_blacklist WHERE jti = $1 AND expires_at > NOW() LIMIT 1',
+        [decoded.jti]
+      )
+      if (blacklisted.rows.length > 0) {
+        return res.status(401).json({ error: 'Token revoked' })
+      }
+    }
+    req.user = decoded
+    return next()
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+/** requireAdmin — must come after auth; rejects non-admin roles. */
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
+  return next()
+}
+
+// ── Password strength ─────────────────────────────────────────────────────────
+
+/**
+ * validatePassword — returns an error string if the password fails any rule,
+ * or null if it passes. Import in any route that sets a password.
+ */
+const validatePassword = (pw) => {
+  const s = String(pw)
+  if (s.length < 8)   return 'Password must be at least 8 characters'
+  if (s.length > 128) return 'Password too long'
+  if (!/[a-z]/.test(s)) return 'Password must contain at least one lowercase letter'
+  if (!/[A-Z]/.test(s)) return 'Password must contain at least one uppercase letter'
+  if (!/[0-9]/.test(s)) return 'Password must contain at least one digit'
+  return null
+}
+
+module.exports = {
+  SECRET,
+  REFRESH_SECRET,
+  hashToken,
+  issueAccessToken,
+  issueRefreshToken,
+  // limiters
+  registerLimiter,
+  publicReadLimiter,
+  loginLimiter,
+  verifyEmailLimiter,
+  resendVerifyLimiter,
+  forgotLimiter,
+  resetPasswordLimiter,
+  // middleware
+  auth,
+  requireAdmin,
+  // validators
+  validatePassword,
+}
