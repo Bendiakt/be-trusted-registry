@@ -1425,6 +1425,59 @@ app.get('/api/admin/missions', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ── GET /api/admin/audit-log ─────────────────────────────────────────────────
+// Paginated audit trail for the admin panel. Supports filtering by action,
+// resource, and user email. Newest entries first.
+app.get('/api/admin/audit-log', auth, requireAdmin, async (req, res) => {
+  try {
+    const page   = Math.max(1, parseInt(req.query.page  || '1',  10) || 1)
+    const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit || '50', 10) || 50))
+    const offset = (page - 1) * limit
+    const action   = req.query.action   ? String(req.query.action).trim()   : null
+    const resource = req.query.resource ? String(req.query.resource).trim() : null
+    const q        = req.query.q        ? `%${String(req.query.q).trim()}%` : null
+
+    const params = []
+    const conditions = []
+
+    if (action)   { params.push(action);   conditions.push(`al.action = $${params.length}`) }
+    if (resource) { params.push(resource); conditions.push(`al.resource = $${params.length}`) }
+    if (q)        { params.push(q);        conditions.push(`(u.email ILIKE $${params.length} OR u.name ILIKE $${params.length} OR al.action ILIKE $${params.length})`) }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+
+    const countParams = [...params]
+    const [rows, count] = await Promise.all([
+      query(
+        `SELECT al.id, al.action, al.resource, al.ip_address, al.payload_hash, al.created_at,
+                u.id AS user_id, u.email AS user_email, u.name AS user_name, u.role AS user_role
+           FROM audit_log al
+           LEFT JOIN users u ON u.id = al.user_id
+           ${where}
+           ORDER BY al.id DESC
+           LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}`,
+        params
+      ),
+      query(
+        `SELECT COUNT(*)::int AS total
+           FROM audit_log al
+           LEFT JOIN users u ON u.id = al.user_id
+           ${where}`,
+        countParams
+      ),
+    ])
+
+    const total = count.rows[0]?.total || 0
+    res.json({
+      data: rows.rows,
+      pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
+    })
+  } catch (err) {
+    console.error('Admin audit-log error:', err.message)
+    res.status(500).json({ error: 'Failed to load audit log' })
+  }
+})
+
 app.get('/api/health', (req, res) => {
   const mem = process.memoryUsage()
   res.json({

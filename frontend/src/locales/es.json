@@ -347,7 +347,8 @@
       "overview": "Resumen",
       "users": "Usuarios",
       "companies": "Empresas",
-      "missions": "Misiones"
+      "missions": "Misiones",
+      "audit": "Registro de auditoría"
     },
     "stats": {
       "total_users": "Usuarios totales",

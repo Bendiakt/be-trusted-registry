@@ -13,6 +13,10 @@ export default function AdminPanel() {
   const [companies, setCompanies] = useState([])
   const [missions, setMissions] = useState([])
   const [pagination, setPagination] = useState({})
+  // Audit log state
+  const [auditLog, setAuditLog] = useState([])
+  const [auditQ, setAuditQ] = useState('')
+  const [auditPage, setAuditPage] = useState(1)
   const [q, setQ] = useState('')
   const [saving, setSaving]                 = useState({})
   const [levelInputs, setLevelInputs]       = useState({})
@@ -36,6 +40,7 @@ export default function AdminPanel() {
     if (tab === 'users')     fetchUsers(1)
     if (tab === 'companies') fetchCompanies(1)
     if (tab === 'missions')  fetchMissions(1)
+    if (tab === 'audit')     fetchAuditLog(1)
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStats = async () => {
@@ -66,6 +71,17 @@ export default function AdminPanel() {
       const res = await api.get(`/api/admin/missions?page=${page}&limit=50`)
       setMissions(res.data.data)
       setPagination(p => ({ ...p, missions: res.data.pagination }))
+    } catch { /* silent */ }
+  }, [])
+
+  const fetchAuditLog = useCallback(async (page = 1, q = '') => {
+    try {
+      const qs = new URLSearchParams({ page, limit: 50 })
+      if (q) qs.set('q', q)
+      const res = await api.get(`/api/admin/audit-log?${qs}`)
+      setAuditLog(res.data.data || [])
+      setPagination(p => ({ ...p, audit: res.data.pagination }))
+      setAuditPage(page)
     } catch { /* silent */ }
   }, [])
 
@@ -167,6 +183,7 @@ export default function AdminPanel() {
     { id: 'users',     label: t('admin.tabs.users') },
     { id: 'companies', label: t('admin.tabs.companies') },
     { id: 'missions',  label: t('admin.tabs.missions') },
+    { id: 'audit',     label: t('admin.tabs.audit') },
   ]
 
   return (
@@ -506,6 +523,73 @@ export default function AdminPanel() {
               })}
             </div>
             <PaginationBar pag={pagination.missions} onPage={p => fetchMissions(p)} G={G} />
+          </div>
+        )}
+
+        {/* ── Audit Log Tab ─────────────────────────────────────────────── */}
+        {tab === 'audit' && (
+          <div style={G.card}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem' }}>{t('admin.tabs.audit')}</div>
+              <form onSubmit={e => { e.preventDefault(); fetchAuditLog(1, auditQ) }} style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  value={auditQ}
+                  onChange={e => setAuditQ(e.target.value)}
+                  placeholder="Search action / email…"
+                  style={{ ...G.inp, minWidth: '220px' }}
+                />
+                <button type="submit" style={G.btn}>Search</button>
+                {auditQ && <button type="button" onClick={() => { setAuditQ(''); fetchAuditLog(1, '') }} style={G.outline}>Clear</button>}
+              </form>
+            </div>
+
+            {auditLog.length === 0 ? (
+              <div style={{ color: '#444', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>No audit entries found.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['ID', 'Action', 'Resource', 'User', 'IP Address', 'Timestamp'].map(h => (
+                        <th key={h} style={G.th}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLog.map(entry => (
+                      <tr key={entry.id} style={{ borderBottom: '1px solid #1c1c1c' }}>
+                        <td style={{ ...G.td, color: '#444', fontSize: '0.7rem' }}>#{entry.id}</td>
+                        <td style={G.td}>
+                          <span style={{
+                            padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: '600', fontFamily: 'monospace',
+                            background: entry.action.includes('delete') || entry.action.includes('suspend') ? 'rgba(231,76,60,0.12)' :
+                                        entry.action.includes('login') || entry.action.includes('register') ? 'rgba(74,144,226,0.12)' :
+                                        'rgba(201,168,76,0.10)',
+                            color: entry.action.includes('delete') || entry.action.includes('suspend') ? '#ff6b6b' :
+                                   entry.action.includes('login') || entry.action.includes('register') ? '#4a90e2' :
+                                   '#C9A84C',
+                          }}>{entry.action}</span>
+                        </td>
+                        <td style={{ ...G.td, color: '#888', fontFamily: 'monospace', fontSize: '0.75rem' }}>{entry.resource || '—'}</td>
+                        <td style={G.td}>
+                          {entry.user_email ? (
+                            <div>
+                              <div style={{ color: '#ccc', fontSize: '0.8rem' }}>{entry.user_name || entry.user_email}</div>
+                              <div style={{ color: '#555', fontSize: '0.7rem' }}>{entry.user_email}</div>
+                            </div>
+                          ) : <span style={{ color: '#444' }}>anonymous</span>}
+                        </td>
+                        <td style={{ ...G.td, fontFamily: 'monospace', fontSize: '0.72rem', color: '#555' }}>{entry.ip_address || '—'}</td>
+                        <td style={{ ...G.td, color: '#555', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                          {new Date(entry.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <PaginationBar pag={pagination.audit} onPage={p => fetchAuditLog(p, auditQ)} G={G} />
           </div>
         )}
       </main>
