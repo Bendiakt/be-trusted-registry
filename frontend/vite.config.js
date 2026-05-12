@@ -15,4 +15,22 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
+  build: {
+    // Split vendor bundles so the browser can cache them independently from
+    // app code. Each chunk is content-hashed by Vite so cache busting is free.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React runtime — changes almost never
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          // Heavy charting library — loaded only on admin/metrics pages
+          charts: ['recharts'],
+          // i18n — large but stable; split so app code cache is unaffected
+          i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+        },
+      },
+    },
+    // Warn (not fail) if a single chunk exceeds 600 kB after minification.
+    chunkSizeWarningLimit: 600,
+  },
 })
