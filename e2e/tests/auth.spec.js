@@ -111,6 +111,7 @@ test.describe('Auth — route guard', () => {
     await page.goto('/login')
     await seedSession(page, { id: 2, name: 'Corp User', email: 'corp@test.com', role: 'company' })
     await page.goto('/admin')
-    await expect(page).toHaveURL(/\/login/, { timeout: 6000 })
+    // RoleRoute redirects authenticated users with wrong role to /dashboard, not /login
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 6000 })
   })
 })

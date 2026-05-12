@@ -67,49 +67,52 @@ async function stubApi(page) {
     }),
   )
 
-  // Registry (public)
+  // Registry (public) — field names match PublicRegistry.jsx: c.name, c.level
   await page.route('**/api/registry**', (route) =>
     route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({
         data: [
-          { id: 10, companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', certificationLevel: 2 },
-          { id: 11, companyName: 'Beta Ltd',  sector: 'Logistics',     country: 'DE', certificationLevel: 1 },
+          { id: 10, name: 'Acme Corp', sector: 'Manufacturing', country: 'FR', level: 2 },
+          { id: 11, name: 'Beta Ltd',  sector: 'Logistics',     country: 'DE', level: 1 },
         ],
         pagination: { page: 1, limit: 20, total: 2, pages: 1 },
       }),
     }),
   )
 
-  // Verify
+  // Verify — field names match Verify.jsx: data.level, data.status, data.badge (flat, not nested)
   await page.route('**/api/verify/**', (route) =>
     route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({
         id: 10, companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR',
-        certInfo: {
-          level: 2, status: 'active',
-          grantedAt: '2025-01-01T00:00:00Z',
-          expiresAt: '2026-01-01T00:00:00Z',
-          daysLeft: 200, expiringSoon: false, expired: false,
-        },
+        level: 2, status: 'active', badge: 'Level 2 — KYC Validated',
+        grantedAt: '2025-01-01T00:00:00Z',
+        expiresAt: '2026-01-01T00:00:00Z',
+        daysLeft: 200, expiringSoon: false, expired: false,
       }),
     }),
   )
 
-  // Admin
+  // Admin stats — field names match AdminPanel.jsx: stats.users.total, stats.companies.total
   await page.route('**/api/admin/stats', (route) =>
     route.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({ totalUsers: 42, totalCompanies: 18, pendingMissions: 3, activeCompanies: 15 }),
+      body: JSON.stringify({
+        users:     { total: 42, last_30d: 5 },
+        companies: { total: 18, certified: 15 },
+        revenue:   { total_usd: 0 },
+      }),
     }),
   )
+  // Admin companies — field names match AdminPanel.jsx: c.company_name || c.name, c.certification_level
   await page.route('**/api/admin/companies**', (route) =>
     route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({
         data: [
-          { id: 10, companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', certificationLevel: 2, status: 'active' },
+          { id: 10, company_name: 'Acme Corp', sector: 'Manufacturing', country: 'FR', certification_level: 2, status: 'active' },
         ],
         pagination: { page: 1, limit: 50, total: 1, pages: 1 },
       }),

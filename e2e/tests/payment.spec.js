@@ -51,8 +51,9 @@ test.describe('Payments — pricing & checkout', () => {
       await pricingTab.click()
     }
 
-    // Click the first upgrade / subscribe button
-    const buyBtn = page.getByRole('button', { name: /subscribe|buy|upgrade|choose|select|obtenir/i }).first()
+    // Click the first available plan button (text is "Get Certified" in the pricing tab).
+    // Note: "upgrade" is intentionally excluded to avoid matching the "Pricing & Upgrade" tab button.
+    const buyBtn = page.getByRole('button', { name: /get certified|subscribe|buy|choose|select|obtenir|certifi/i }).first()
     if (await buyBtn.isVisible()) {
       await buyBtn.click()
       // Give the request time to fire

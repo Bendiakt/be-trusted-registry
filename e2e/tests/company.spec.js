@@ -37,8 +37,8 @@ test.describe('Company — dashboard', () => {
     await expect(registerTab).toBeVisible({ timeout: 5000 })
     await registerTab.click()
 
-    // A name or country field should be visible
-    const nameInput = page.locator('input[name="name"], input[placeholder*="company" i], input[id*="name"]').first()
+    // RegisterCompanyForm renders plain <input required> with no name/id/placeholder attrs
+    const nameInput = page.locator('form input[required], form input').first()
     await expect(nameInput).toBeVisible({ timeout: 4000 })
   })
 })
@@ -63,13 +63,15 @@ test.describe('Company — registration form', () => {
     const registerTab = page.getByRole('button', { name: /register|company|entreprise/i }).first()
     await registerTab.click()
 
-    // Fill in the form fields that are present
-    const nameInput = page.locator('input[name="name"], input[id*="name"], input[placeholder*="company" i]').first()
+    // Fill in the form fields — RegisterCompanyForm uses plain inputs with no name/id/placeholder
+    const formInputs = page.locator('form input')
+    const nameInput = formInputs.first()
     if (await nameInput.isVisible()) {
       await nameInput.fill('My New Company')
     }
 
-    const countryInput = page.locator('input[name="country"], select[name="country"]').first()
+    // Country is the third input (after name, sector) — fill if present
+    const countryInput = formInputs.nth(2)
     if (await countryInput.isVisible()) {
       await countryInput.fill('France')
     }

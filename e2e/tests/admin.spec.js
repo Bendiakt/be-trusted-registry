@@ -30,7 +30,8 @@ test.describe('Admin — access control', () => {
     await seedSession(page, { id: 1, name: 'Corp User', email: 'corp@test.com', role: 'company' })
     await page.goto('/admin')
 
-    await expect(page).toHaveURL(/\/login/, { timeout: 6000 })
+    // RoleRoute redirects wrong-role (authenticated) users to /dashboard, not /login
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 6000 })
   })
 
   test('unauthenticated user is redirected from /admin to /login', async ({ page }) => {
@@ -91,10 +92,10 @@ test.describe('Admin — companies tab', () => {
     const companiesTab = page.getByRole('button', { name: /companies|entreprises/i }).first()
     if (await companiesTab.isVisible()) await companiesTab.click()
 
-    // Look for a level input or select for the first company
-    const levelInput = page.locator('input[type="number"], select').filter({ hasText: '' }).first()
+    // Look for a level select for the first company (AdminPanel uses <select>, not <input>)
+    const levelInput = page.locator('select').first()
     if (await levelInput.isVisible()) {
-      await levelInput.fill('3')
+      await levelInput.selectOption('3')
     }
 
     const saveBtn = page.getByRole('button', { name: /save|set level|certify|valider/i }).first()
