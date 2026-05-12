@@ -343,6 +343,7 @@ const initDb = async () => {
     await query("ALTER TABLE users         ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ")
     await query("ALTER TABLE companies     ADD COLUMN IF NOT EXISTS stripe_customer_id   TEXT")
     await query("ALTER TABLE companies     ADD COLUMN IF NOT EXISTS suspended_at         TIMESTAMPTZ")
+    await query("ALTER TABLE companies     ADD COLUMN IF NOT EXISTS suspended_reason      TEXT")
     await query("ALTER TABLE certifications ADD COLUMN IF NOT EXISTS renewal_reminder_sent_at TIMESTAMPTZ")
     await query('CREATE INDEX IF NOT EXISTS idx_companies_stripe_customer ON companies(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL')
 

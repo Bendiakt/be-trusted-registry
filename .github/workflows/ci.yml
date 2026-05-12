@@ -28,7 +28,11 @@ jobs:
 
       - name: Run unit tests
         working-directory: backend
-        run: node --test tests/unit.test.js
+        run: |
+          node --test tests/unit.test.js
+          node --test tests/encryption.test.js
+          node --test tests/fraud.test.js
+          node --test tests/webhook.test.js
 
   test:
     name: Backend lint & health check

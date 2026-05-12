@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { getSession, clearSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Skeleton from '../components/Skeleton'
 
@@ -56,12 +57,11 @@ export default function TraderPortal() {
 
   // ── auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    const role  = localStorage.getItem('role')
-    if (!token)        { navigate('/login'); return }
-    if (role === 'pac')   navigate('/pac')
-    if (role === 'admin') navigate('/admin')
-    setUser({ name: localStorage.getItem('userName') || '', email: localStorage.getItem('userEmail') || '', role })
+    const user = getSession()
+    if (!user)               { navigate('/login'); return }
+    if (user.role === 'pac')   navigate('/pac')
+    if (user.role === 'admin') navigate('/admin')
+    setUser({ name: user.name, email: user.email, role: user.role })
     document.title = 'Supplier Registry — MyDD'
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -168,8 +168,8 @@ export default function TraderPortal() {
 
   // ── logout ─────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
-    try { await api.post('/api/auth/logout', { refreshToken: localStorage.getItem('refreshToken') }) } catch { /**/ }
-    localStorage.clear()
+    try { await api.post('/api/auth/logout') } catch { /* best-effort */ }
+    clearSession()
     navigate('/login')
   }
 

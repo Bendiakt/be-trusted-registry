@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { getSession, clearSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 
 const OUTCOME_COLORS = {
@@ -20,9 +21,10 @@ export default function PACPortal() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const role = localStorage.getItem('role')
-    if (!localStorage.getItem('token')) { navigate('/login'); return }
-    if (role && role !== 'pac') { navigate(role === 'admin' ? '/admin' : '/dashboard'); return }
+    const user = getSession()
+    if (!user) { navigate('/login'); return }
+    const role = user.role
+    if (role !== 'pac') { navigate(role === 'admin' ? '/admin' : '/dashboard'); return }
 
 
     api.get('/api/pac/missions')
@@ -79,9 +81,8 @@ export default function PACPortal() {
   }
 
   const logout = async () => {
-    const refreshToken = localStorage.getItem('refreshToken')
-    try { await api.post('/api/auth/logout', { refreshToken }) } catch { /* best-effort */ }
-    localStorage.clear()
+    try { await api.post('/api/auth/logout') } catch { /* best-effort */ }
+    clearSession()
     navigate('/login')
   }
 

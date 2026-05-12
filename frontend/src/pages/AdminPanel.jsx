@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
+import { getSession, clearSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 
 export default function AdminPanel() {
@@ -27,8 +28,8 @@ export default function AdminPanel() {
   const [docReviewing, setDocReviewing]     = useState({})
 
   useEffect(() => {
-    const role = localStorage.getItem('role')
-    if (!role || role !== 'admin') { navigate('/login'); return }
+    const user = getSession()
+    if (!user || user.role !== 'admin') { navigate('/login'); return }
     fetchStats()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -130,9 +131,8 @@ export default function AdminPanel() {
   }
 
   const handleLogout = async () => {
-    const refreshToken = localStorage.getItem('refreshToken')
-    try { await api.post('/api/auth/logout', { refreshToken }) } catch { /* best-effort */ }
-    localStorage.clear()
+    try { await api.post('/api/auth/logout') } catch { /* best-effort */ }
+    clearSession()
     navigate('/login')
   }
 
