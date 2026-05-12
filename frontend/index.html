@@ -33,6 +33,24 @@
 
     <!-- Theme color (browser chrome on mobile) -->
     <meta name="theme-color" content="#C9A84C" />
+
+    <!-- Content Security Policy
+         script-src: only our own hashed/bundled scripts (Vite adds nonces in dev)
+         connect-src: API on same origin; Stripe payment redirects are server-side
+         img-src:     self + data URIs (inline SVGs) + HTTPS for OG/partner logos
+         style-src:   unsafe-inline needed for Tailwind JIT-injected styles
+    -->
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self';
+               connect-src 'self';
+               img-src 'self' data: https:;
+               style-src 'self' 'unsafe-inline';
+               font-src 'self';
+               frame-src 'none';
+               object-src 'none';
+               base-uri 'self';
+               form-action 'self'" />
   </head>
   <body>
     <div id="root"></div>
