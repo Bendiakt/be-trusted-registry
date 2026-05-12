@@ -32,10 +32,31 @@ const getPool = () => {
 // Slow-query threshold (ms). Queries exceeding this emit a structured warning.
 const SLOW_QUERY_WARN_MS = parseInt(process.env.SLOW_QUERY_WARN_MS || '1000', 10)
 
+// Circuit-breaker: reject with 503 when the pool is overwhelmed.
+// Prevents request pile-up that starves all workers under sudden traffic spikes.
+const POOL_CIRCUIT_THRESHOLD = parseInt(process.env.PG_CIRCUIT_THRESHOLD || '5', 10)
+
 const query = async (text, params = []) => {
+  const p = getPool()
+
+  // Check pool saturation before acquiring a connection
+  if (p.waitingCount > POOL_CIRCUIT_THRESHOLD) {
+    const err = new Error('Database pool saturated — circuit breaker open')
+    err.status = 503
+    err.code    = 'POOL_SATURATED'
+    console.error(JSON.stringify({
+      event:        'pool_circuit_open',
+      waitingCount: p.waitingCount,
+      totalCount:   p.totalCount,
+      idleCount:    p.idleCount,
+      threshold:    POOL_CIRCUIT_THRESHOLD,
+    }))
+    throw err
+  }
+
   const start = Date.now()
   try {
-    const result = await getPool().query(text, params)
+    const result = await p.query(text, params)
     const durationMs = Date.now() - start
     if (durationMs > SLOW_QUERY_WARN_MS) {
       // Truncate query text to avoid logging PII — first 120 chars only

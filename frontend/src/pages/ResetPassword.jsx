@@ -68,25 +68,29 @@ export default function ResetPassword() {
 
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={lbl}>{t('reset_password.new_password')}</label>
+                <label htmlFor="reset-password" style={lbl}>{t('reset_password.new_password')}</label>
                 <input
+                  id="reset-password"
                   type="password"
                   style={inp}
                   value={form.password}
                   onChange={e => setForm({ ...form, password: e.target.value })}
                   required
                   minLength={8}
+                  autoComplete="new-password"
                 />
               </div>
               <div style={{ marginBottom: '1.25rem' }}>
-                <label style={lbl}>{t('reset_password.confirm_password')}</label>
+                <label htmlFor="reset-confirm" style={lbl}>{t('reset_password.confirm_password')}</label>
                 <input
+                  id="reset-confirm"
                   type="password"
                   style={inp}
                   value={form.confirm}
                   onChange={e => setForm({ ...form, confirm: e.target.value })}
                   required
                   minLength={8}
+                  autoComplete="new-password"
                 />
               </div>
               <button

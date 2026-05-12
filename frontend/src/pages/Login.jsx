@@ -113,16 +113,18 @@ export default function Login() {
         {step === 'password' && (
           <form onSubmit={handlePasswordSubmit}>
             <div style={{ marginBottom: '1rem' }}>
-              <label style={lbl}>{t('login.email')}</label>
+              <label htmlFor="login-email" style={lbl}>{t('login.email')}</label>
               <input
+                id="login-email"
                 type="email" style={inp} required autoComplete="email"
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
               />
             </div>
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={lbl}>{t('login.password')}</label>
+              <label htmlFor="login-password" style={lbl}>{t('login.password')}</label>
               <input
+                id="login-password"
                 type="password" style={inp} required autoComplete="current-password"
                 value={form.password}
                 onChange={e => setForm({ ...form, password: e.target.value })}

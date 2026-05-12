@@ -66,13 +66,15 @@ export default function ForgotPassword() {
 
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '1.25rem' }}>
-                <label style={lbl}>{t('forgot_password.email')}</label>
+                <label htmlFor="forgot-email" style={lbl}>{t('forgot_password.email')}</label>
                 <input
+                  id="forgot-email"
                   type="email"
                   style={inp}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
               </div>
               <button

@@ -17,6 +17,7 @@ import PublicRegistry from './pages/PublicRegistry'
 import NotFound from './pages/NotFound'
 import MissionReport from './pages/MissionReport'
 import VerifyEmail from './pages/VerifyEmail'
+import Legal from './pages/Legal'
 
 /** Requires any authenticated user (session cookie present). */
 function PrivateRoute({ children }) {
@@ -54,6 +55,9 @@ export default function App() {
         <Route path="/verify/:id"              element={<Verify />} />
         <Route path="/verify/:id/print"        element={<CertPrint />} />
         <Route path="/registry"                element={<PublicRegistry />} />
+        <Route path="/privacy"                 element={<Legal tab="privacy" />} />
+        <Route path="/terms"                   element={<Legal tab="cgu" />} />
+        <Route path="/legal"                   element={<Legal />} />
         <Route path="/dashboard" element={<RoleRoute role="company"><Dashboard /></RoleRoute>} />
         <Route path="/pac"       element={<RoleRoute role="pac"><PACPortal /></RoleRoute>} />
         <Route path="/pac/missions/:id/report" element={<RoleRoute role="pac"><MissionReport /></RoleRoute>} />

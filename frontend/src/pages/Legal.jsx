@@ -362,10 +362,12 @@ function PrivacyContent() {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function Legal() {
+// `initialTab` prop lets /privacy and /terms routes open the correct tab directly.
+export default function Legal({ tab: initialTab }) {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
-  const tab = searchParams.get('tab') || 'cgu'
+  // Priority: prop (from route) > query param > default
+  const tab = initialTab || searchParams.get('tab') || 'cgu'
 
   return (
     <div style={S.page}>
@@ -374,7 +376,7 @@ export default function Legal() {
         {['cgu', 'privacy'].map(id => (
           <Link
             key={id}
-            to={`/legal?tab=${id}`}
+            to={id === 'privacy' ? '/privacy' : '/terms'}
             style={S.tabBtn(tab === id)}
           >
             {id === 'cgu' ? t('legal.cgu_tab') : t('legal.privacy_tab')}
