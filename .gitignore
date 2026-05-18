@@ -7,3 +7,10 @@ build/
 .DS_Store
 backups/
 *.dump
+.claude/
+infra/sentry/terraform.tfvars
+infra/sentry/terraform.tfvars.save
+infra/sentry/.terraform/
+infra/sentry/terraform.tfstate
+infra/sentry/terraform.tfstate.backup
+infra/sentry/terraform.tfstate.bak

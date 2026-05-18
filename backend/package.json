@@ -7,7 +7,9 @@
     "dev": "node server.js",
     "migrate": "node scripts/migrate.js",
     "start:preprod": "npm run migrate && node server.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/encryption.test.js tests/fraud.test.js tests/lib.test.js tests/unit.test.js tests/validators.test.js tests/webhook.test.js",
+    "test:smoke": "API_URL=https://api.mydd.work node --test tests/smoke.test.js",
+    "test:all": "node --test tests/*.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

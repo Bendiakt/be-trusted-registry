@@ -763,3 +763,71 @@ describe('hashForIntegrity', () => {
     assert.notStrictEqual(hashForIntegrity('a'), hashForIntegrity('b'))
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// lib/auth.js — requireAdmin, requireRole (Express middleware, no DB needed)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const { requireAdmin, requireRole } = require('../lib/auth')
+
+// Minimal Express mock helpers
+const mockRes = () => {
+  const r = { _status: null, _body: null }
+  r.status = (s) => { r._status = s; return r }
+  r.json   = (b) => { r._body = b; return r }
+  return r
+}
+
+describe('requireAdmin — allows admin role', () => {
+  test('calls next() for role admin', () => {
+    let called = false
+    const req = { user: { role: 'admin' } }
+    requireAdmin(req, mockRes(), () => { called = true })
+    assert.ok(called)
+  })
+})
+
+describe('requireAdmin — rejects non-admin roles', () => {
+  for (const role of ['company', 'pac', 'trader', undefined]) {
+    test(`returns 403 for role ${role ?? 'undefined'}`, () => {
+      const req = { user: role ? { role } : undefined }
+      const res = mockRes()
+      let called = false
+      requireAdmin(req, res, () => { called = true })
+      assert.strictEqual(res._status, 403)
+      assert.ok(!called)
+    })
+  }
+})
+
+describe('requireRole — allows matching roles', () => {
+  test('calls next() for single matching role', () => {
+    let called = false
+    const req = { user: { role: 'trader' } }
+    requireRole('trader', 'admin')(req, mockRes(), () => { called = true })
+    assert.ok(called)
+  })
+  test('calls next() for second role in list', () => {
+    let called = false
+    const req = { user: { role: 'admin' } }
+    requireRole('trader', 'admin')(req, mockRes(), () => { called = true })
+    assert.ok(called)
+  })
+})
+
+describe('requireRole — rejects non-matching roles', () => {
+  test('returns 403 for unrelated role', () => {
+    const req = { user: { role: 'company' } }
+    const res = mockRes()
+    let called = false
+    requireRole('trader', 'admin')(req, res, () => { called = true })
+    assert.strictEqual(res._status, 403)
+    assert.ok(!called)
+  })
+  test('returns 403 when req.user is missing', () => {
+    const req = {}
+    const res = mockRes()
+    requireRole('trader')(req, res, () => {})
+    assert.strictEqual(res._status, 403)
+  })
+})
