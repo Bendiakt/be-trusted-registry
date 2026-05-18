@@ -150,6 +150,8 @@
     "company_form": {
       "title": "Company Profile",
       "company_name": "Company Name",
+      "industry": "Industry",
+      "industry_placeholder": "e.g. Manufacturing, Agriculture, Trading",
       "sector": "Sector / Industry",
       "sector_placeholder": "e.g. Manufacturing, Trading, Agriculture",
       "country": "Country",
@@ -335,7 +337,9 @@
     "error": "Failed to load registry.",
     "empty_title": "No certified suppliers yet",
     "empty_desc": "Be the first to get certified, or adjust your search filters.",
-    "empty_cta": "Get Certified"
+    "empty_cta": "Get Certified",
+    "copy_link": "Copy Link",
+    "copied": "Copied!"
   },
   "admin": {
     "title": "Admin Panel",
