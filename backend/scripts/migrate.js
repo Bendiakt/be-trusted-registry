@@ -65,7 +65,9 @@ const run = async () => {
   }
 }
 
-run().catch((err) => {
-  console.error('Migration failed:', err.message)
-  process.exit(1)
-})
+run()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('Migration failed:', err.message)
+    process.exit(1)
+  })
