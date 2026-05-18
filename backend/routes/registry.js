@@ -4,16 +4,28 @@
  *
  * GET /api/registry  — paginated, searchable list of certified companies.
  * Mounted in server.js at /api/registry (no auth required).
+ *
+ * B2B access: supply X-API-Key: mydd_... header with scope "registry:read"
+ * to authenticate, meter usage, and receive a higher rate limit (300 req/min).
  */
 
 const express = require('express')
-const { publicReadLimiter } = require('../lib/auth')
-const { query }             = require('../db')
+const { publicReadLimiter, apiKeyReadLimiter } = require('../lib/auth')
+const { apiKeyAuth } = require('../lib/apiKeyAuth')
+const { query }      = require('../db')
 
 const router = express.Router()
 
+// Optional B2B API key auth — validates key + scope, records usage.
+// Falls through transparently if no X-API-Key header is present.
+const optionalApiKey = apiKeyAuth('registry:read')
+
+// Rate limiter: API key holders get 300 req/min; anonymous gets 30 req/min.
+const smartLimiter = (req, res, next) =>
+  req.apiKey ? apiKeyReadLimiter(req, res, next) : publicReadLimiter(req, res, next)
+
 // GET /api/registry
-router.get('/', publicReadLimiter, async (req, res) => {
+router.get('/', optionalApiKey, smartLimiter, async (req, res) => {
   try {
     const page   = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
     const limit  = Math.min(Math.max(parseInt(req.query.limit || '20', 10) || 20, 1), 100)

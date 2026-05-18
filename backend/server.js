@@ -318,6 +318,23 @@ const startServer = async () => {
       console.error(JSON.stringify({ event: 'db.init_error', code: dbErr.code || null, err: dbErr.message || String(dbErr) }))
     }
 
+    // Warn if Redis is not configured (rate limiters fall back to in-memory)
+    const { isRedisAvailable } = require('./lib/redis')
+    if (!isRedisAvailable()) {
+      console.warn(JSON.stringify({
+        event: 'startup.warning',
+        msg:   'REDIS_URL not set — rate limiters use in-memory store (resets on restart, not suitable for multi-instance or high-traffic prod). Add Railway Redis plugin and set REDIS_URL.',
+      }))
+    }
+
+    // Warn if transactional email is not configured
+    if (!process.env.RESEND_API_KEY) {
+      console.warn(JSON.stringify({
+        event: 'startup.warning',
+        msg:   'RESEND_API_KEY not set — transactional emails (welcome, password reset, payment confirmation) will be logged but not sent.',
+      }))
+    }
+
     // Start all scheduled background jobs (token cleanup, renewal reminders, cert expiry)
     startCronJobs()
 
