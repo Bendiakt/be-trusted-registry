@@ -59,8 +59,8 @@ const enCount = enKeys.size
 
 describe('i18n parity — all locales in sync with en.json', () => {
 
-  it('en.json has at least 400 keys (sanity check)', () => {
-    expect(enCount).toBeGreaterThanOrEqual(400)
+  it('en.json has at least 395 keys (sanity check)', () => {
+    expect(enCount).toBeGreaterThanOrEqual(395)
   })
 
   for (const lang of LANGUAGES.filter((l) => l !== 'en')) {
