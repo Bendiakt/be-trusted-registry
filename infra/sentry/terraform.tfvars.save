@@ -1,0 +1,9 @@
+# local Terraform values for Sentry
+# This file is ignored by git via .gitignore
+
+sentry_token = "sntrys_CHANGE_ME"
+org_slug     = "b-e-consult"
+project_slug = "mydd-backend"
+alert_email  = "ben.diakhate@b-econsult.com"
+
+

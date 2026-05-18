@@ -1,0 +1,217 @@
+/**
+ * Tests for Dashboard page.
+ *
+ * Auth guard: redirects non-company roles away.
+ * On mount calls GET /api/companies/me then GET /api/documents.
+ *
+ * Covers:
+ *  - Redirects to /login when no session
+ *  - Redirects pac/admin/trader to their portal
+ *  - Renders nav MyDD logo for company role
+ *  - Renders all 5 tab buttons (overview, register, pricing, documents, metrics)
+ *  - Calls GET /api/companies/me on mount
+ *  - Shows user name in nav after profile loads
+ *  - Shows email-verification banner when emailVerified=false
+ *  - Logout calls api.post + clearSession + navigates to /login
+ *  - Overview tab renders onboarding stepper when no company
+ *  - WebSocket constructor called on mount (notification channel)
+ */
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { vi } from 'vitest'
+
+const mockNavigate = vi.fn()
+
+// WebSocket mock — must be defined before component import
+const mockWsClose = vi.fn()
+const MockWebSocket = vi.fn().mockImplementation(() => ({
+  close:     mockWsClose,
+  onmessage: null,
+  onerror:   null,
+}))
+global.WebSocket = MockWebSocket
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}))
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key) => key }),
+}))
+
+vi.mock('../lib/api', () => ({
+  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+}))
+
+vi.mock('../lib/session', () => ({
+  getSession:   vi.fn(),
+  clearSession: vi.fn(),
+}))
+
+vi.mock('../components/MetricsDashboard', () => ({
+  default: () => <div data-testid="metrics-dashboard" />,
+}))
+
+vi.mock('../components/LanguageSwitcher', () => ({
+  default: () => <div data-testid="language-switcher" />,
+}))
+
+vi.mock('../components/Skeleton', () => ({
+  default: () => <div data-testid="skeleton" />,
+}))
+
+vi.mock('../components/Toast', () => ({
+  useToast:       () => [[], vi.fn()],
+  ToastContainer: () => <div data-testid="toast-container" />,
+}))
+
+import Dashboard from '../pages/Dashboard'
+import api from '../lib/api'
+import { getSession, clearSession } from '../lib/session'
+
+const COMPANY_SESSION = { id: 10, name: 'Test Company', email: 'test@co.com', role: 'company' }
+const UNVERIFIED_SESSION = { ...COMPANY_SESSION, emailVerified: false }
+
+const PROFILE_RESPONSE = {
+  data: {
+    company: { id: 1, name: 'Test Corp', certificationLevel: 2, status: 'active' },
+    user:    { id: 10, name: 'Test Company', email: 'test@co.com', role: 'company', emailVerified: true },
+  },
+}
+
+const UNVERIFIED_PROFILE = {
+  data: {
+    company: null,
+    user:    { id: 10, name: 'Test Company', email: 'test@co.com', role: 'company', emailVerified: false },
+  },
+}
+
+function mockCompanySession(profileRes = PROFILE_RESPONSE) {
+  getSession.mockReturnValue(COMPANY_SESSION)
+  // URL-aware mock: correct response regardless of effect firing order
+  api.get.mockImplementation((url) => {
+    if (url === '/api/companies/me') return Promise.resolve(profileRes)
+    if (url === '/api/documents')    return Promise.resolve({ data: [] })
+    return Promise.resolve({ data: [] })
+  })
+}
+
+describe('Dashboard — auth guard', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('redirects to /login when no session', () => {
+    getSession.mockReturnValue(null)
+    render(<Dashboard />)
+    expect(mockNavigate).toHaveBeenCalledWith('/login')
+  })
+
+  it('redirects pac role to /pac', () => {
+    getSession.mockReturnValue({ role: 'pac' })
+    render(<Dashboard />)
+    expect(mockNavigate).toHaveBeenCalledWith('/pac')
+  })
+
+  it('redirects admin role to /admin', () => {
+    getSession.mockReturnValue({ role: 'admin' })
+    render(<Dashboard />)
+    expect(mockNavigate).toHaveBeenCalledWith('/admin')
+  })
+
+  it('redirects trader role to /trader', () => {
+    getSession.mockReturnValue({ role: 'trader' })
+    render(<Dashboard />)
+    expect(mockNavigate).toHaveBeenCalledWith('/trader')
+  })
+})
+
+describe('Dashboard — UI', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('renders MyDD logo in nav', async () => {
+    mockCompanySession()
+    render(<Dashboard />)
+    await waitFor(() => expect(screen.getByText('MyDD')).toBeInTheDocument())
+  })
+
+  it('renders all 5 tab buttons', async () => {
+    mockCompanySession()
+    render(<Dashboard />)
+    await waitFor(() => {
+      expect(screen.getByText('dashboard.tabs.overview')).toBeInTheDocument()
+      expect(screen.getByText('dashboard.tabs.register')).toBeInTheDocument()
+      expect(screen.getByText('dashboard.tabs.pricing')).toBeInTheDocument()
+      expect(screen.getByText('dashboard.tabs.documents')).toBeInTheDocument()
+      expect(screen.getByText('dashboard.tabs.metrics')).toBeInTheDocument()
+    })
+  })
+
+  it('calls GET /api/companies/me on mount', async () => {
+    mockCompanySession()
+    render(<Dashboard />)
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith('/api/companies/me')
+    })
+  })
+
+  it('shows user name in nav after profile loads', async () => {
+    mockCompanySession()
+    render(<Dashboard />)
+    await waitFor(() => {
+      expect(screen.getByText('Test Company')).toBeInTheDocument()
+    })
+  })
+
+  it('shows email-verification banner when emailVerified=false', async () => {
+    getSession.mockReturnValue(COMPANY_SESSION)
+    api.get.mockImplementation((url) => {
+      if (url === '/api/companies/me') return Promise.resolve(UNVERIFIED_PROFILE)
+      return Promise.resolve({ data: [] })
+    })
+    render(<Dashboard />)
+    await waitFor(() => {
+      // Banner rendered when user.emailVerified === false
+      expect(screen.getByText('dashboard.verify_email.title')).toBeInTheDocument()
+    })
+  })
+
+  it('does NOT show email-verification banner when verified', async () => {
+    mockCompanySession()
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('Test Company'))
+    expect(screen.queryByText('dashboard.verify_email.banner_text')).not.toBeInTheDocument()
+  })
+
+  it('logout calls api.post + clearSession + navigates to /login', async () => {
+    mockCompanySession()
+    api.post.mockResolvedValueOnce({})
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('nav.logout'))
+
+    fireEvent.click(screen.getByText('nav.logout'))
+    await waitFor(() => {
+      expect(clearSession).toHaveBeenCalled()
+      expect(mockNavigate).toHaveBeenCalledWith('/login')
+    })
+  })
+
+  it('opens WebSocket notification channel on mount', async () => {
+    mockCompanySession()
+    render(<Dashboard />)
+    await waitFor(() => expect(api.get).toHaveBeenCalled())
+    expect(MockWebSocket).toHaveBeenCalledWith(
+      expect.stringContaining('/ws/metrics')
+    )
+  })
+
+  it('shows onboarding stepper when no company profile yet', async () => {
+    getSession.mockReturnValue(COMPANY_SESSION)
+    api.get.mockImplementation((url) => {
+      if (url === '/api/companies/me')
+        return Promise.resolve({ data: { company: null, user: { ...COMPANY_SESSION, emailVerified: true } } })
+      return Promise.resolve({ data: [] })
+    })
+    render(<Dashboard />)
+    await waitFor(() => {
+      expect(screen.getByText('dashboard.onboarding.title')).toBeInTheDocument()
+    })
+  })
+})
