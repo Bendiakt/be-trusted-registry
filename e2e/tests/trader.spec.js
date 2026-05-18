@@ -26,10 +26,22 @@ async function stubTraderApi(page) {
     })
   )
 
-  // Watchlist (lightweight — just ids for star state)
+  // Watchlist:
+  //   GET ?limit=1000  → lightweight id-only snapshot for star state (empty — stars show as ☆)
+  //   GET (other)      → full watchlist for the Watchlist tab
+  //   POST / DELETE    → silently succeed
   await page.route('**/api/trader/watchlist**', (route) => {
     const method = route.request().method()
     if (method === 'GET') {
+      const url = route.request().url()
+      // Lightweight check: return empty so watchedIds = {} and stars show as ☆ (first click = POST)
+      if (url.includes('limit=1000')) {
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ data: [], pagination: { total: 0, page: 1, limit: 1000, pages: 0 } }),
+        })
+      }
+      // Watchlist tab data
       return route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({

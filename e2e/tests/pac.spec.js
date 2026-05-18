@@ -32,21 +32,19 @@ async function stubPacApi(page) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
   })
 
-  // Missions list
+  // Missions list — backend returns a bare array (not wrapped in { data: [] })
   await page.route('**/api/pac/missions', (route) =>
     route.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({
-        data: [
-          { id: 1, company_name: 'Acme Corp', location: 'Paris', type: 'on_site',
-            fee: 500, status: 'available', description: 'ISO 14001 audit' },
-          { id: 2, company_name: 'Beta Ltd',  location: 'Lyon',  type: 'on_site',
-            fee: 750, status: 'assigned',  description: 'AML compliance review' },
-          { id: 3, company_name: 'Gamma Inc', location: 'Nice',  type: 'on_site',
-            fee: 600, status: 'completed', description: 'Quality audit',
-            completedAt: '2025-03-01T00:00:00Z' },
-        ],
-      }),
+      body: JSON.stringify([
+        { id: 1, company_name: 'Acme Corp', location: 'Paris', type: 'on_site',
+          fee: 500, status: 'available', description: 'ISO 14001 audit' },
+        { id: 2, company_name: 'Beta Ltd',  location: 'Lyon',  type: 'on_site',
+          fee: 750, status: 'assigned',  description: 'AML compliance review' },
+        { id: 3, company_name: 'Gamma Inc', location: 'Nice',  type: 'on_site',
+          fee: 600, status: 'completed', description: 'Quality audit',
+          completedAt: '2025-03-01T00:00:00Z' },
+      ]),
     })
   )
 
