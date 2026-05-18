@@ -151,6 +151,18 @@ const requireAdmin = (req, res, next) => {
   return next()
 }
 
+/**
+ * requireRole(...roles) — factory that returns middleware enforcing one or more
+ * allowed roles. Must come after auth. Example:
+ *   router.get('/stats', auth, requireRole('trader', 'admin'), handler)
+ */
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user || !roles.includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  return next()
+}
+
 // ── Password strength ─────────────────────────────────────────────────────────
 
 /**
@@ -184,6 +196,7 @@ module.exports = {
   // middleware
   auth,
   requireAdmin,
+  requireRole,
   // validators
   validatePassword,
 }

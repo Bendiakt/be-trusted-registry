@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (never commit terraform.tfvars — it contains your token)
+#
+# How to find each value:
+#   sentry_token  → sentry.io → Settings → Auth Tokens → Create New Token
+#                   Required scopes: project:write, alerts:write, org:read
+#   org_slug      → visible in the URL: sentry.io/organizations/<slug>/
+#   project_slug  → sentry.io/organizations/<org>/projects/<slug>/
+#   alert_email   → email address that will receive alert notifications
+
+sentry_token = "sntrys_CHANGE_ME"
+org_slug     = "b-e-consult"
+project_slug = "mydd-backend"
+alert_email  = "ben.diakhate@b-econsult.com"
+team_id      = "CHANGE_ME"  # Settings → Teams → <team> → numeric ID in the URL

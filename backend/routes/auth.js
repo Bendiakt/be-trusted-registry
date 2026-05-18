@@ -3,26 +3,27 @@
 const express   = require('express')
 const bcrypt    = require('bcryptjs')
 const crypto    = require('crypto')
-const rateLimit = require('express-rate-limit')
+const { makeRateLimiter } = require('../lib/rateLimiter')
 const router    = express.Router()
 
 const { query }                                  = require('../db')
 const { auth, hashToken, issueAccessToken,
         issueRefreshToken, SECRET, REFRESH_SECRET } = require('../lib/authUtils')
 const { logAudit }                               = require('../lib/audit')
+const { AUDIT }                                  = require('../lib/auditActions')
 const { checkFraud }                             = require('../lib/fraudDetection')
 const { sendWelcome, sendPasswordReset,
         sendEmailVerification }                  = require('../lib/mailer')
 const { validate, schemas }                      = require('../lib/validators')
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
-const registerLimiter = rateLimit({
+const registerLimiter = makeRateLimiter({
   windowMs: 60 * 60 * 1000, max: 5,
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many registration attempts. Try again later.' },
 })
 
-const loginLimiter = rateLimit({
+const loginLimiter = makeRateLimiter({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
   keyGenerator: (req, _res) => {
@@ -34,24 +35,24 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts. Try again later.' },
 })
 
-const resendVerifyLimiter = rateLimit({
+const resendVerifyLimiter = makeRateLimiter({
   windowMs: 15 * 60 * 1000, max: 3,
   standardHeaders: true, legacyHeaders: false,
 })
 
-const forgotLimiter = rateLimit({
+const forgotLimiter = makeRateLimiter({
   windowMs: 15 * 60 * 1000, max: 5,
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many password reset requests. Try again later.' },
 })
 
-const resetPasswordLimiter = rateLimit({
+const resetPasswordLimiter = makeRateLimiter({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many reset attempts. Try again later.' },
 })
 
-const profileLimiter = rateLimit({
+const profileLimiter = makeRateLimiter({
   windowMs: 15 * 60 * 1000, max: 10,
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many profile update attempts. Try again later.' },
@@ -86,7 +87,7 @@ const clearAuthCookies = (res) => {
 // ── POST /register ────────────────────────────────────────────────────────────
 router.post('/register', registerLimiter, validate(schemas.register), async (req, res) => {
   try {
-    const { name, email, password, role } = req.body
+    const { name, email, password, role, tos_version } = req.body
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields required' })
 
     const nameStr     = String(name).trim()
@@ -111,14 +112,24 @@ router.post('/register', registerLimiter, validate(schemas.register), async (req
     const hash          = await bcrypt.hash(passwordStr, 10)
     const verifyToken   = crypto.randomBytes(32).toString('hex')
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    const tosVersion    = tos_version ? String(tos_version).trim().slice(0, 20) : null
+
+    // Auto-verify internal smoke-test domain (never a real user)
+    const isSmokeEmail = emailStr.endsWith('@test-mydd.internal')
+
     await query(
-      `INSERT INTO users (name, email, password, role, email_verify_token, email_verify_expires)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [nameStr, emailStr, hash, resolvedRole, verifyToken, verifyExpires],
+      `INSERT INTO users (name, email, password, role, email_verify_token, email_verify_expires,
+                          email_verified, tos_version, tos_accepted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [nameStr, emailStr, hash, resolvedRole,
+       isSmokeEmail ? null        : verifyToken,
+       isSmokeEmail ? null        : verifyExpires,
+       isSmokeEmail ? true        : false,
+       tosVersion, tosVersion ? new Date() : null],
     )
 
     res.json({ message: 'Registered successfully. Please check your email to verify your account.' })
-    logAudit(null, 'user_register', 'users', req.ip, { email: emailStr, role: resolvedRole })
+    logAudit(null, AUDIT.USER_REGISTER, 'users', req.ip, { email: emailStr, role: resolvedRole })
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
     sendEmailVerification({ email: emailStr, name: nameStr, verifyUrl: `${frontendUrl}/verify-email?token=${verifyToken}` }).catch(() => {})
@@ -145,7 +156,7 @@ router.get('/verify-email', async (req, res) => {
       [token],
     )
     if (!result.rows.length) return res.status(400).json({ error: 'Invalid or expired token' })
-    logAudit(result.rows[0].id, 'email_verified', 'users', req.ip, { email: result.rows[0].email })
+    logAudit(result.rows[0].id, AUDIT.EMAIL_VERIFIED, 'users', req.ip, { email: result.rows[0].email })
     res.json({ message: 'Email verified successfully' })
   } catch (err) {
     console.error(JSON.stringify({ event: 'email_verify_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
@@ -199,7 +210,7 @@ router.post('/resend-verification-public', resendVerifyLimiter, validate(schemas
     )
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
     sendEmailVerification({ email: user.email, name: user.name, verifyUrl: `${frontendUrl}/verify-email?token=${newToken}` }).catch(() => {})
-    logAudit(user.id, 'resend_verify_public', 'users', req.ip, { email: emailStr })
+    logAudit(user.id, AUDIT.RESEND_VERIFY_PUBLIC, 'users', req.ip, { email: emailStr })
   } catch (err) {
     console.error(JSON.stringify({ event: 'resend_verify_public_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     // Response already sent — swallow error silently
@@ -236,7 +247,7 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
     // ── Account lockout check ─────────────────────────────────────────────────
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
       const minutesLeft = Math.ceil((new Date(user.locked_until) - Date.now()) / 60000)
-      logAudit(user.id, 'login_blocked_lockout', 'users', req.ip, { email: emailStr })
+      logAudit(user.id, AUDIT.LOGIN_BLOCKED_LOCKOUT, 'users', req.ip, { email: emailStr })
       return res.status(429).json({ error: `Account temporarily locked. Try again in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}.` })
     }
 
@@ -252,7 +263,7 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
           WHERE id = $2`,
         [newAttempts, user.id],
       )
-      logAudit(user.id, 'login_failed', 'users', req.ip, { email: emailStr, attempt: newAttempts, locked: shouldLock })
+      logAudit(user.id, AUDIT.LOGIN_FAILED, 'users', req.ip, { email: emailStr, attempt: newAttempts, locked: shouldLock })
       if (shouldLock) {
         return res.status(429).json({ error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.` })
       }
@@ -285,7 +296,7 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
          ON CONFLICT (token_hash) DO NOTHING`,
         [user.id, tempHash],
       )
-      logAudit(user.id, 'login_2fa_required', 'users', req.ip, { email: emailStr })
+      logAudit(user.id, AUDIT.LOGIN_2FA_REQUIRED, 'users', req.ip, { email: emailStr })
       return res.json({ requires2fa: true, tempToken: rawTemp })
     }
 
@@ -309,7 +320,7 @@ router.post('/login', loginLimiter, validate(schemas.login), async (req, res) =>
     // Set httpOnly cookies (web frontend) — tokens also returned in body for API clients
     setAuthCookies(res, token, refreshToken)
     res.json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
-    logAudit(user.id, 'user_login', 'users', req.ip, { email: emailStr, jti })
+    logAudit(user.id, AUDIT.USER_LOGIN, 'users', req.ip, { email: emailStr, jti })
   } catch (err) {
     console.error(JSON.stringify({ event: 'login_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Login failed' })
@@ -377,6 +388,7 @@ router.post('/logout', auth, async (req, res) => {
     }
     await query('DELETE FROM token_blacklist WHERE expires_at <= NOW()')
     await query('DELETE FROM refresh_tokens  WHERE expires_at <= NOW()')
+    logAudit(decoded?.id || null, AUDIT.USER_LOGOUT, 'users', req.ip, {})
     // Clear httpOnly cookies (web sessions)
     clearAuthCookies(res)
     return res.json({ message: 'Logged out' })
@@ -407,6 +419,7 @@ router.post('/forgot-password', forgotLimiter, validate(schemas.forgotPassword),
     )
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
     sendPasswordReset({ email: user.email, name: user.name, resetUrl: `${frontendUrl}/reset-password/${rawToken}` }).catch(() => {})
+    logAudit(user.id, AUDIT.PASSWORD_RESET_REQUEST, 'users', req.ip, { email: user.email })
   } catch (err) {
     console.error(JSON.stringify({ event: 'forgot_password_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
   }
@@ -438,7 +451,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(schemas.resetPassw
       query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [user_id]),
     ])
 
-    logAudit(user_id, 'password_reset', 'users', req.ip, {})
+    logAudit(user_id, AUDIT.PASSWORD_RESET, 'users', req.ip, {})
     res.json({ message: 'Password reset successfully' })
   } catch (err) {
     console.error(JSON.stringify({ event: 'reset_password_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
@@ -485,7 +498,7 @@ router.patch('/profile', profileLimiter, auth, validate(schemas.updateProfile), 
     params.push(req.user.id)
     await query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${pi}`, params)
 
-    logAudit(req.user.id, 'profile_update', 'users', req.ip, {
+    logAudit(req.user.id, AUDIT.PROFILE_UPDATE, 'users', req.ip, {
       nameChanged:     name !== undefined,
       passwordChanged: newPassword !== undefined && newPassword !== '',
     })
@@ -513,6 +526,97 @@ router.get('/csrf-token', (req, res) => {
     maxAge: 24 * 60 * 60 * 1000, // 24 h
   })
   res.json({ ok: true })
+})
+
+// ── GDPR — right of access (Art. 15 GDPR) ────────────────────────────────────
+// GET /api/auth/me/export — download a JSON file of all personal data we hold.
+const gdprLimiter = makeRateLimiter({
+  windowMs: 60 * 60 * 1000, max: 5,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many export requests. Try again in an hour.' },
+})
+
+router.get('/me/export', auth, gdprLimiter, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const [userRow, companyRow, auditRows, certRows, notifRows, apiKeyRows] = await Promise.all([
+      query('SELECT id, name, email, role, created_at FROM users WHERE id = $1 LIMIT 1', [userId]),
+      query('SELECT name, company_name, industry, sector, country, description, website, status, certification_level, created_at, updated_at FROM companies WHERE user_id = $1 LIMIT 1', [userId]),
+      query('SELECT action, resource, ip_address, created_at FROM audit_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200', [userId]),
+      query('SELECT level, status, granted_at, expires_at, created_at FROM certifications c JOIN companies co ON co.id = c.company_id WHERE co.user_id = $1 ORDER BY c.created_at DESC', [userId]),
+      query('SELECT message, type, read, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100', [userId]),
+      // API keys — prefix only, never the hash
+      query('SELECT id, name, prefix, scopes, rate_limit, last_used_at, expires_at, revoked, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
+    ])
+
+    logAudit(userId, AUDIT.USER_DATA_EXPORT, 'users', req.ip)
+
+    const payload = {
+      exported_at: new Date().toISOString(),
+      user:        userRow.rows[0] || null,
+      company:     companyRow.rows[0] || null,
+      certifications: certRows.rows,
+      audit_log:   auditRows.rows,
+      notifications: notifRows.rows,
+      api_keys:    apiKeyRows.rows,   // hashed_key is never included
+    }
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="mydata-${userId}-${new Date().toISOString().slice(0,10)}.json"`)
+    res.json(payload)
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'gdpr_export_error', userId: req.user?.id, err: err.message }))
+    res.status(500).json({ error: 'Export failed' })
+  }
+})
+
+// ── GDPR — right to erasure (Art. 17 GDPR) ───────────────────────────────────
+// DELETE /api/auth/me — anonymise account (soft-delete — preserves audit trail).
+// Requires password confirmation in request body for safety.
+router.delete('/me', auth, profileLimiter, validate(schemas.deleteAccount), async (req, res) => {
+  try {
+    const userId = req.user.id
+    const { password } = req.body
+
+    if (!password) return res.status(400).json({ error: 'Password confirmation required' })
+
+    const userRow = await query('SELECT password FROM users WHERE id = $1 LIMIT 1', [userId])
+    if (!userRow.rows.length) return res.status(404).json({ error: 'User not found' })
+
+    const valid = await bcrypt.compare(password, userRow.rows[0].password)
+    if (!valid) return res.status(403).json({ error: 'Invalid password' })
+
+    // Soft-delete: anonymise PII, preserve audit log integrity
+    const anon = `deleted_${userId}_${Date.now()}`
+    await query(
+      `UPDATE users
+          SET name      = 'Deleted User',
+              email     = $2,
+              password  = '',
+              role      = 'company',
+              updated_at = NOW()
+        WHERE id = $1`,
+      [userId, `${anon}@deleted.invalid`]
+    )
+
+    // Detach company from user (company data stays for audit / cert records)
+    await query('UPDATE companies SET user_id = NULL WHERE user_id = $1', [userId])
+
+    // Purge auth tokens
+    await query('DELETE FROM refresh_tokens   WHERE user_id = $1', [userId])
+    await query('DELETE FROM token_blacklist  WHERE user_id = $1', [userId])
+    await query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId])
+
+    logAudit(userId, AUDIT.USER_ACCOUNT_DELETED, 'users', req.ip)
+
+    // Clear auth cookies
+    res.clearCookie('token')
+    res.clearCookie('refresh_token')
+    res.json({ message: 'Account deleted. Your personal data has been anonymised.' })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'gdpr_delete_error', userId: req.user?.id, err: err.message }))
+    res.status(500).json({ error: 'Account deletion failed' })
+  }
 })
 
 module.exports = router

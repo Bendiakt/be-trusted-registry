@@ -2,6 +2,8 @@ const express = require('express')
 const router = express.Router()
 const Stripe = require('stripe')
 const { query } = require('../db')
+const { auth } = require('../lib/authUtils')
+const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
 const { sendPaymentConfirmation } = require('../lib/mailer')
 const { isBlockedCompany } = require('../lib/blocklist')
@@ -26,12 +28,18 @@ const getStripe = () => {
 }
 
 const PLANS = {
-  level1: { name: 'B&E Level 1 — Document Verification', price: 49000 },
-  level2: { name: 'B&E Level 2 — KYC Full Validation', price: 99000 },
-  level3: { name: 'B&E Level 3 — Physical Site Inspection', price: 249000 },
+  level1: { name: 'B&E Level 1 — Document Verification',    price: 49900  }, // $499/year
+  level2: { name: 'B&E Level 2 — KYC Full Validation',      price: 99900  }, // $999/year
+  level3: { name: 'B&E Level 3 — Physical Site Inspection', price: 249900 }, // $2,499/year
 }
 
-router.post('/create-checkout-session', async (req, res) => {
+// Trader Portal subscriptions — recurring
+const TRADER_PLANS = {
+  trader_monthly: { name: 'MyDD Trader Portal — Monthly', price: 4900,  interval: 'month' },
+  trader_annual:  { name: 'MyDD Trader Portal — Annual',  price: 49900, interval: 'year'  },
+}
+
+router.post('/create-checkout-session', auth, validate(schemas.createCheckoutSession), async (req, res) => {
   try {
     const { planId, certificationId } = req.body
     const plan = PLANS[planId]
@@ -55,20 +63,31 @@ router.post('/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
-          currency: 'usd',
-          product_data: { name: plan.name, description: 'MyDD Certification' },
-          unit_amount: plan.price,
+          currency:     'usd',
+          product_data: { name: plan.name, description: 'MyDD Certification — Annual subscription' },
+          unit_amount:  plan.price,
+          recurring:    { interval: 'year' },
         },
         quantity: 1,
       }],
-      mode: 'payment',
+      mode: 'subscription',
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&plan=${planId}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
+      subscription_data: {
+        metadata: {
+          planId,
+          companyId:        resolvedCompanyId,
+          userId:           String(req.user.id),
+          certificationId:  certificationId ? String(certificationId) : '',
+          subscriptionType: 'company_certification',
+        },
+      },
       metadata: {
         planId,
-        companyId: resolvedCompanyId,
-        userId: String(req.user.id),
-        certificationId: certificationId ? String(certificationId) : '',
+        companyId:        resolvedCompanyId,
+        userId:           String(req.user.id),
+        certificationId:  certificationId ? String(certificationId) : '',
+        subscriptionType: 'company_certification',
       },
       customer_email: req.user.email || undefined,
     })
@@ -88,7 +107,7 @@ router.post('/create-checkout-session', async (req, res) => {
 
     res.json({ url: session.url })
   } catch (err) {
-    console.error('Stripe error:', err.message, err.code, err.type)
+    console.error(JSON.stringify({ event: 'payments.checkout.error', userId: req.user?.id, err: err.message, code: err.code, type: err.type }))
     if (err.message === 'Missing STRIPE_SECRET_KEY') {
       return res.status(500).json({ error: 'Server payment configuration is incomplete' })
     }
@@ -114,11 +133,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
   // Early guard: stripe-signature header must be present
   if (!sig) {
-    console.warn('Webhook rejected: missing stripe-signature header', {
-      timestamp: new Date().toISOString(),
-      path: '/api/payments/webhook',
-      reason: 'missing_header'
-    })
+    console.warn(JSON.stringify({ event: 'stripe.webhook.rejected', reason: 'missing_header', path: '/api/payments/webhook', ts: new Date().toISOString() }))
     return res.status(400).send('Missing stripe-signature header')
   }
 
@@ -134,11 +149,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       stripeEventType: event.type,
     }))
   } catch (err) {
-    console.warn('Webhook signature verification failed', {
-      timestamp: new Date().toISOString(),
-      error: err.message,
-      code: err.code
-    })
+    console.warn(JSON.stringify({ event: 'stripe.webhook.sig_failed', err: err.message, code: err.code, ts: new Date().toISOString() }))
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
   try {
@@ -256,7 +267,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             companyRow.country || null,
             `Site inspection for Level 3 certification — ${companyRow.name || 'company #' + resolvedCompanyId}`,
           ]
-        ).catch((e) => console.error('Mission auto-create error:', e.message))
+        ).catch((e) => console.error(JSON.stringify({ event: 'payments.mission_auto_create.error', err: e.message })))
         console.log(JSON.stringify({ event: 'mission.created', companyId: resolvedCompanyId, level: 3 }))
       }
 
@@ -284,7 +295,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             disputed: stripeDisputed,
           }))
         } catch (riskErr) {
-          console.warn('Unable to fetch Stripe risk signal:', riskErr.message)
+          console.warn(JSON.stringify({ event: 'stripe.risk.fetch_failed', err: riskErr.message }))
         }
       }
 
@@ -295,7 +306,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         stripeRiskLevel,
         stripeDisputed,
       }).catch((fraudErr) => {
-        console.error('Stripe fraud check error:', fraudErr.message)
+        console.error(JSON.stringify({ event: 'payments.fraud_check.error', err: fraudErr.message }))
       })
     }
 
@@ -322,9 +333,295 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       )
     }
 
+    // ── invoice.paid ────────────────────────────────────────────────────────────
+    // Fires when a subscription renews automatically (or first invoice on subscribe).
+    // Handles two subscription types:
+    //   - trader_portal  → activate/renew trader access on users table
+    //   - company cert   → extend certification by 1 year on certifications table
+    if (event.type === 'invoice.paid') {
+      const invoice = event.data.object
+
+      // Only process subscription invoices (not one-time charges)
+      if (!invoice.subscription) {
+        console.log(JSON.stringify({ event: 'stripe.invoice.paid.skipped', reason: 'no_subscription', invoiceId: invoice.id }))
+        return res.json({ received: true })
+      }
+
+      const customerId = invoice.customer
+      if (!customerId) {
+        console.warn(JSON.stringify({ event: 'stripe.invoice.paid.no_customer', invoiceId: invoice.id }))
+        return res.json({ received: true })
+      }
+
+      // Resolve plan from subscription line items metadata or price metadata
+      const lineItem        = invoice.lines?.data?.[0]
+      const planId          = lineItem?.metadata?.planId
+                           || lineItem?.price?.metadata?.planId
+                           || null
+      const subscriptionType = lineItem?.metadata?.subscriptionType
+                            || lineItem?.price?.metadata?.subscriptionType
+                            || null
+      const isTrader        = subscriptionType === 'trader_portal'
+                           || planId === 'trader_monthly'
+                           || planId === 'trader_annual'
+
+      // ── TRADER subscription ──────────────────────────────────────────────────
+      if (isTrader) {
+        const userResult = await query(
+          'SELECT id, email, name FROM users WHERE stripe_customer_id = $1 LIMIT 1',
+          [customerId]
+        )
+        let user = userResult.rows[0]
+
+        // First invoice: store stripe_customer_id on the user
+        if (!user) {
+          // Try to find by email from invoice
+          const email = invoice.customer_email
+          if (email) {
+            const byEmail = await query('SELECT id, email, name FROM users WHERE email = $1 LIMIT 1', [email])
+            user = byEmail.rows[0]
+          }
+          if (user) {
+            await query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, user.id])
+          }
+        }
+
+        if (!user) {
+          console.warn(JSON.stringify({ event: 'stripe.invoice.paid.trader_not_found', customerId, invoiceId: invoice.id }))
+          return res.json({ received: true })
+        }
+
+        // Retrieve subscription to get period end
+        const sub = await getStripe().subscriptions.retrieve(invoice.subscription)
+        const periodEnd = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null
+
+        await query(
+          `UPDATE users
+           SET stripe_customer_id      = $1,
+               stripe_subscription_id  = $2,
+               subscription_status     = 'active',
+               subscription_plan       = $3,
+               subscription_period_end = $4,
+               updated_at              = NOW()
+           WHERE id = $5`,
+          [customerId, invoice.subscription, planId || 'trader_monthly', periodEnd, user.id]
+        )
+
+        console.log(JSON.stringify({
+          event:          'trader.subscription.activated',
+          userId:         user.id,
+          planId,
+          invoiceId:      invoice.id,
+          subscriptionId: invoice.subscription,
+          periodEnd,
+        }))
+
+        return res.json({ received: true })
+      }
+
+      // ── COMPANY certification subscription ───────────────────────────────────
+      const planLevel = levelFromPlanId(planId)
+
+      const companyResult = await query(
+        'SELECT id, name, user_id FROM companies WHERE stripe_customer_id = $1 LIMIT 1',
+        [customerId]
+      )
+      const company = companyResult.rows[0]
+
+      if (!company) {
+        console.warn(JSON.stringify({
+          event:      'stripe.invoice.paid.company_not_found',
+          customerId,
+          invoiceId:  invoice.id,
+        }))
+        return res.json({ received: true })
+      }
+
+      console.log(JSON.stringify({
+        event:          'stripe.invoice.paid',
+        invoiceId:      invoice.id,
+        customerId,
+        companyId:      company.id,
+        subscriptionId: invoice.subscription,
+        amountPaid:     invoice.amount_paid,
+        planId,
+        planLevel,
+      }))
+
+      // Record the payment row (idempotent via invoice.id as unique key)
+      await query(
+        `INSERT INTO payments
+           (user_id, company_id, stripe_session_id, stripe_payment_intent_id,
+            amount_cents, currency, plan_id, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'completed')
+         ON CONFLICT (stripe_session_id) DO NOTHING`,
+        [
+          company.user_id,
+          company.id,
+          invoice.id,
+          invoice.payment_intent ? String(invoice.payment_intent) : null,
+          invoice.amount_paid || 0,
+          invoice.currency || 'usd',
+          planId || null,
+        ]
+      )
+
+      // Extend or create certification: push expires_at forward by 1 year
+      if (planLevel) {
+        const certResult = await query(
+          `SELECT id, expires_at FROM certifications
+           WHERE company_id = $1
+             AND level = $2
+             AND status IN ('active', 'expired')
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [company.id, planLevel]
+        )
+        const cert = certResult.rows[0]
+
+        if (cert) {
+          await query(
+            `UPDATE certifications
+             SET expires_at  = GREATEST(expires_at, NOW()) + INTERVAL '1 year',
+                 status      = 'active',
+                 updated_at  = NOW()
+             WHERE id = $1`,
+            [cert.id]
+          )
+          console.log(JSON.stringify({
+            event:           'certification.renewed',
+            companyId:       company.id,
+            certificationId: cert.id,
+            planLevel,
+            invoiceId:       invoice.id,
+          }))
+          await query(
+            `UPDATE payments SET certification_id = $1 WHERE stripe_session_id = $2`,
+            [cert.id, invoice.id]
+          )
+        } else {
+          const newCert = await query(
+            `INSERT INTO certifications (company_id, level, status, payment_confirmed, granted_at, expires_at)
+             VALUES ($1, $2, 'active', TRUE, NOW(), NOW() + INTERVAL '1 year')
+             RETURNING id`,
+            [company.id, planLevel]
+          )
+          const newCertId = newCert.rows[0]?.id
+          console.log(JSON.stringify({
+            event:           'certification.created_via_subscription',
+            companyId:       company.id,
+            certificationId: newCertId,
+            planLevel,
+            invoiceId:       invoice.id,
+          }))
+          await query(
+            `UPDATE payments SET certification_id = $1 WHERE stripe_session_id = $2`,
+            [newCertId, invoice.id]
+          )
+        }
+
+        await query(
+          `UPDATE companies
+           SET certification_level = GREATEST(certification_level, $1),
+               updated_at          = NOW()
+           WHERE id = $2`,
+          [planLevel, company.id]
+        )
+      }
+
+      await sendPaymentConfirmation({
+        email:       invoice.customer_email || null,
+        amountCents: invoice.amount_paid || 0,
+        level:       planLevel,
+        companyName: company.name || null,
+      }).catch((mailErr) => {
+        console.error(JSON.stringify({ event: 'invoice.paid.mail_failed', err: mailErr.message }))
+      })
+    }
+
+    // ── customer.subscription.deleted ───────────────────────────────────────────
+    // Fires when a subscription is cancelled (immediately or at period end).
+    // Handles both trader portal cancellation and company certification expiry.
+    if (event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object
+      const customerId   = subscription.customer
+
+      if (!customerId) {
+        console.warn(JSON.stringify({ event: 'stripe.subscription.deleted.no_customer', subscriptionId: subscription.id }))
+        return res.json({ received: true })
+      }
+
+      // Check if this is a trader subscription
+      const traderResult = await query(
+        'SELECT id, name FROM users WHERE stripe_customer_id = $1 AND role = $2 LIMIT 1',
+        [customerId, 'trader']
+      )
+      const traderUser = traderResult.rows[0]
+
+      if (traderUser) {
+        await query(
+          `UPDATE users
+           SET subscription_status    = 'cancelled',
+               stripe_subscription_id = NULL,
+               updated_at             = NOW()
+           WHERE id = $1`,
+          [traderUser.id]
+        )
+        console.log(JSON.stringify({
+          event:          'trader.subscription.cancelled',
+          userId:         traderUser.id,
+          subscriptionId: subscription.id,
+        }))
+        return res.json({ received: true })
+      }
+
+      // Otherwise treat as company certification subscription
+      const companyResult = await query(
+        'SELECT id, name FROM companies WHERE stripe_customer_id = $1 LIMIT 1',
+        [customerId]
+      )
+      const company = companyResult.rows[0]
+
+      if (!company) {
+        console.warn(JSON.stringify({
+          event:          'stripe.subscription.deleted.entity_not_found',
+          customerId,
+          subscriptionId: subscription.id,
+        }))
+        return res.json({ received: true })
+      }
+
+      await query(
+        `UPDATE certifications
+         SET status     = 'expired',
+             updated_at = NOW()
+         WHERE company_id = $1
+           AND status = 'active'`,
+        [company.id]
+      )
+
+      await query(
+        `UPDATE companies
+         SET certification_level = 0,
+             updated_at          = NOW()
+         WHERE id = $1`,
+        [company.id]
+      )
+
+      console.log(JSON.stringify({
+        event:          'subscription.cancelled',
+        companyId:      company.id,
+        companyName:    company.name,
+        subscriptionId: subscription.id,
+        customerId,
+      }))
+    }
+
     res.json({ received: true })
   } catch (err) {
-    console.error('Webhook processing error:', err.message)
+    console.error(JSON.stringify({ event: 'stripe.webhook.processing_error', err: err.message }))
     res.status(500).send('Webhook processing failed')
   }
 })
@@ -344,14 +641,13 @@ router.get('/stats', async (req, res) => {
       payments_completed: parseInt(row.payments_completed || '0', 10),
     })
   } catch (err) {
-    console.error('Payments stats error:', err.message)
+    console.error(JSON.stringify({ event: 'payments.stats.error', err: err.message }))
     res.status(500).json({ error: 'Failed to load payment stats' })
   }
 })
 
 // POST /api/payments/portal — Stripe Customer Portal for billing history & receipts
-router.post('/portal', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+router.post('/portal', auth, async (req, res) => {
   try {
     const stripe = getStripe()
 
@@ -387,7 +683,7 @@ router.post('/portal', async (req, res) => {
     })
     res.json({ url: session.url })
   } catch (err) {
-    console.error('Billing portal error:', err.message)
+    console.error(JSON.stringify({ event: 'payments.portal.error', userId: req.user?.id, err: err.message }))
     if (err.type === 'StripeInvalidRequestError') {
       return res.status(400).json({ error: 'Billing portal unavailable. Please contact support.' })
     }
@@ -399,8 +695,7 @@ router.post('/portal', async (req, res) => {
 // Creates a Stripe Checkout session specifically for renewing an active or
 // recently-expired certification. The new session links to the existing cert
 // so the webhook can extend expires_at rather than creating a duplicate cert.
-router.post('/renewal-checkout', async (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' })
+router.post('/renewal-checkout', auth, validate(schemas.renewalCheckout), async (req, res) => {
   try {
     const companyResult = await query(
       'SELECT id, name FROM companies WHERE user_id = $1 LIMIT 1',
@@ -435,24 +730,36 @@ router.post('/renewal-checkout', async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
-          currency: 'usd',
+          currency:     'usd',
           product_data: {
             name:        `${plan.name} — Renewal`,
-            description: `Renewing certification for ${company.name}`,
+            description: `Renewing annual certification for ${company.name}`,
           },
           unit_amount: plan.price,
+          recurring:   { interval: 'year' },
         },
         quantity: 1,
       }],
-      mode: 'payment',
+      mode: 'subscription',
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&plan=${planId}&renewal=1`,
       cancel_url:  `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
+      subscription_data: {
+        metadata: {
+          planId,
+          companyId:        String(company.id),
+          userId:           String(req.user.id),
+          certificationId:  String(cert.id),
+          isRenewal:        'true',
+          subscriptionType: 'company_certification',
+        },
+      },
       metadata: {
         planId,
-        companyId:       String(company.id),
-        userId:          String(req.user.id),
-        certificationId: String(cert.id),
-        isRenewal:       'true',
+        companyId:        String(company.id),
+        userId:           String(req.user.id),
+        certificationId:  String(cert.id),
+        isRenewal:        'true',
+        subscriptionType: 'company_certification',
       },
       customer_email: req.user.email || undefined,
     })
@@ -466,7 +773,7 @@ router.post('/renewal-checkout', async (req, res) => {
 
     res.json({ url: session.url, certId: cert.id, level: cert.level })
   } catch (err) {
-    console.error('Renewal checkout error:', err.message)
+    console.error(JSON.stringify({ event: 'payments.renewal_checkout.error', userId: req.user?.id, err: err.message }))
     if (err.message === 'Missing STRIPE_SECRET_KEY') {
       return res.status(500).json({ error: 'Server payment configuration is incomplete' })
     }
@@ -474,4 +781,85 @@ router.post('/renewal-checkout', async (req, res) => {
   }
 })
 
-module.exports = { router }
+// ── POST /api/payments/trader-checkout ───────────────────────────────────────
+// Creates a Stripe Subscription Checkout session for Trader Portal access.
+// planId: 'trader_monthly' ($49/mo) or 'trader_annual' ($499/yr)
+// On success Stripe fires invoice.paid → we activate the user's subscription.
+router.post('/trader-checkout', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'trader') {
+      return res.status(403).json({ error: 'Only trader accounts can subscribe to the Trader Portal' })
+    }
+
+    const { planId } = req.body
+    if (!planId || !TRADER_PLANS[planId]) {
+      return res.status(400).json({ error: 'Invalid planId. Use trader_monthly or trader_annual' })
+    }
+
+    const plan = TRADER_PLANS[planId]
+
+    const session = await getStripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [{
+        price_data: {
+          currency:    'usd',
+          product_data: { name: plan.name, description: 'MyDD Trader Portal access' },
+          unit_amount:  plan.price,
+          recurring:    { interval: plan.interval },
+        },
+        quantity: 1,
+      }],
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/trader?subscription=success&plan=${planId}`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'http://localhost:5173'}/trader?subscription=cancelled`,
+      customer_email: req.user.email || undefined,
+      metadata: {
+        userId: String(req.user.id),
+        planId,
+        subscriptionType: 'trader_portal',
+      },
+    })
+
+    console.log(JSON.stringify({
+      event:   'trader.checkout.created',
+      userId:  req.user.id,
+      planId,
+      session: session.id,
+    }))
+
+    res.json({ url: session.url })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'payments.trader_checkout.error', userId: req.user?.id, err: err.message }))
+    if (err.message === 'Missing STRIPE_SECRET_KEY') {
+      return res.status(500).json({ error: 'Server payment configuration is incomplete' })
+    }
+    res.status(500).json({ error: 'Failed to create trader subscription session' })
+  }
+})
+
+// ── GET /api/payments/trader-subscription ────────────────────────────────────
+// Returns the current trader's subscription status (used by frontend gating).
+router.get('/trader-subscription', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'trader' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+    const result = await query(
+      `SELECT subscription_status, subscription_plan, subscription_period_end
+         FROM users WHERE id = $1`,
+      [req.user.id]
+    )
+    const row = result.rows[0] || {}
+    res.json({
+      status:    row.subscription_status    || 'inactive',
+      plan:      row.subscription_plan      || null,
+      periodEnd: row.subscription_period_end || null,
+      active:    row.subscription_status === 'active',
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'payments.trader_subscription.error', userId: req.user?.id, err: err.message }))
+    res.status(500).json({ error: 'Failed to load subscription status' })
+  }
+})
+
+module.exports = { router, TRADER_PLANS }
