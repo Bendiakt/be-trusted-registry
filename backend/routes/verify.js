@@ -4,17 +4,25 @@
  *
  * GET /api/verify/:id  — returns full company profile + live cert info.
  * Mounted in server.js at /api/verify (no auth required).
+ *
+ * B2B access: supply X-API-Key: mydd_... header with scope "verify:read"
+ * to authenticate, meter usage, and receive a higher rate limit (300 req/min).
  */
 
 const express = require('express')
-const { publicReadLimiter } = require('../lib/auth')
-const { query }             = require('../db')
-const { mapCompanyRow }     = require('../lib/mappers')
+const { publicReadLimiter, apiKeyReadLimiter } = require('../lib/auth')
+const { apiKeyAuth } = require('../lib/apiKeyAuth')
+const { query }      = require('../db')
+const { mapCompanyRow } = require('../lib/mappers')
 
 const router = express.Router()
 
+const optionalApiKey = apiKeyAuth('verify:read')
+const smartLimiter   = (req, res, next) =>
+  req.apiKey ? apiKeyReadLimiter(req, res, next) : publicReadLimiter(req, res, next)
+
 // GET /api/verify/:id
-router.get('/:id', publicReadLimiter, async (req, res) => {
+router.get('/:id', optionalApiKey, smartLimiter, async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
