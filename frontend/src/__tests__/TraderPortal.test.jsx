@@ -1,13 +1,14 @@
 /**
  * Tests for TraderPortal page.
  *
- * Auth guard: redirects to /login if no session, /pac if pac role, /admin if admin.
+ * Auth guard: redirects to /login if no session, /pac if pac role.
+ * Admin users are allowed (RoleRoute in App.jsx gates this; internal component does not re-redirect).
  * Default tab: 'registry' — calls /api/registry + /api/trader/watchlist + /api/trader/stats.
  *
  * Covers:
  *  - Redirects to /login when no session
  *  - Redirects to /pac for pac role
- *  - Redirects to /admin for admin role
+ *  - Admin user is allowed (does NOT redirect to /admin)
  *  - Renders portal title for trader role
  *  - Registry and Watchlist tab buttons are present
  *  - Calls /api/registry on mount
@@ -81,11 +82,11 @@ describe('TraderPortal — auth guard', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/pac')
   })
 
-  it('redirects to /admin for admin role', () => {
-    getSession.mockReturnValue({ role: 'admin' })
+  it('admin role is allowed (does not redirect away)', async () => {
+    getSession.mockReturnValue({ role: 'admin', name: 'Admin', email: 'admin@test.com' })
     api.get.mockResolvedValue({ data: { data: [], pagination: { total: 0, pages: 0 } } })
     render(<TraderPortal />)
-    expect(mockNavigate).toHaveBeenCalledWith('/admin')
+    await waitFor(() => expect(mockNavigate).not.toHaveBeenCalledWith('/admin'))
   })
 })
 
