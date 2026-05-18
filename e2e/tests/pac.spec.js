@@ -153,7 +153,7 @@ test.describe('PAC — missions tab', () => {
     await submitBtn.click()
 
     expect(completeCalled).toBe(true)
-    await expect(page.getByText(/submitted|completed/i)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/Report submitted/i).first()).toBeVisible({ timeout: 5000 })
   })
 })
 
@@ -174,8 +174,8 @@ test.describe('PAC — profile tab', () => {
     await expect(profileTab).toBeVisible({ timeout: 5000 })
     await profileTab.click()
 
-    // Profile data from stub should appear
-    await expect(page.getByDisplayValue('Alice PAC')).toBeVisible({ timeout: 5000 })
+    // Profile data from stub should appear in the name input field
+    await expect(page.locator('input').first()).toHaveValue('Alice PAC', { timeout: 5000 })
   })
 
   test('saving profile triggers PATCH and shows success', async ({ page }) => {
