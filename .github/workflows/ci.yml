@@ -33,6 +33,8 @@ jobs:
           node --test tests/encryption.test.js
           node --test tests/fraud.test.js
           node --test tests/webhook.test.js
+          node --test tests/validators.test.js
+          node --test tests/lib.test.js
 
   test:
     name: Backend lint & health check
