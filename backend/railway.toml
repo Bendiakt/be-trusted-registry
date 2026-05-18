@@ -6,7 +6,8 @@ buildCommand = "npm install"
 NODE_VERSION = "22.12.0"
 
 [deploy]
-startCommand = "npm run start:preprod"
+preDeployCommand = "npm run migrate"
+startCommand = "npm start"
 healthcheckPath = "/api/health/ready"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
