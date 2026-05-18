@@ -81,11 +81,11 @@ describe('TraderPortal — auth guard', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/pac')
   })
 
-  it('redirects to /admin for admin role', () => {
+  it('redirects to /admin for admin role', async () => {
     getSession.mockReturnValue({ role: 'admin' })
     api.get.mockResolvedValue({ data: { data: [], pagination: { total: 0, pages: 0 } } })
     render(<TraderPortal />)
-    expect(mockNavigate).toHaveBeenCalledWith('/admin')
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/admin'))
   })
 })
 

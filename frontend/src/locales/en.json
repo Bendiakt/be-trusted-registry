@@ -154,6 +154,8 @@
       "industry_placeholder": "e.g. Manufacturing, Agriculture, Trading",
       "sector": "Sector / Industry",
       "sector_placeholder": "e.g. Manufacturing, Trading, Agriculture",
+      "industry": "Industry",
+      "industry_placeholder": "e.g. Industry, Commerce",
       "country": "Country",
       "country_placeholder": "e.g. United Arab Emirates",
       "website": "Website",
