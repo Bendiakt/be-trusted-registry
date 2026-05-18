@@ -55,6 +55,11 @@ if (process.env.SENTRY_DSN) {
 
 const app = express()
 
+// Railway (and most PaaS) terminate TLS at a reverse proxy and forward
+// the real client IP via X-Forwarded-For. Trust that single proxy hop so
+// express-rate-limit can identify clients correctly.
+app.set('trust proxy', 1)
+
 const resolveAllowedOrigins = () => {
   const configured = process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173'
   return configured
