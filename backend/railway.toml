@@ -6,6 +6,7 @@ buildCommand = "npm install"
 NODE_VERSION = "22.12.0"
 
 [deploy]
+preDeployCommand = "npm run migrate"
 startCommand = "node server.js"
 healthcheckPath = "/api/health/ready"
 healthcheckTimeout = 300

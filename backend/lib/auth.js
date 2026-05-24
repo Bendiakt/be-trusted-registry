@@ -75,6 +75,20 @@ const publicReadLimiter = makeRateLimiter({
   message:  { error: 'Too many requests. Slow down.' },
 })
 
+/**
+ * B2B API key read limiter — higher throughput for authenticated integrations.
+ * Applied when a valid X-API-Key header is present on public routes.
+ * Rate limit per key ID, not per IP.
+ */
+const apiKeyReadLimiter = makeRateLimiter({
+  _prefix:  'rl:apikey:',
+  windowMs: 60 * 1000,
+  max:      300,
+  keyGenerator: (req) => `key:${req.apiKey?.id || 'unknown'}`,
+  validate: { keyGeneratorIpFallback: false },
+  message:  { error: 'API key rate limit exceeded. Reduce request frequency.' },
+})
+
 /** Per-IP + per-email login limiter. */
 const loginLimiter = makeRateLimiter({
   _prefix:  'rl:login:',
@@ -188,6 +202,7 @@ module.exports = {
   // limiters
   registerLimiter,
   publicReadLimiter,
+  apiKeyReadLimiter,
   loginLimiter,
   verifyEmailLimiter,
   resendVerifyLimiter,

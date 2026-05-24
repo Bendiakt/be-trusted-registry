@@ -58,9 +58,9 @@ export default function TraderPortal() {
   // ── auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     const user = getSession()
-    if (!user)               { navigate('/login'); return }
-    if (user.role === 'pac')   navigate('/pac')
-    if (user.role === 'admin') navigate('/admin')
+    if (!user)             { navigate('/login'); return }
+    if (user.role === 'pac') { navigate('/pac'); return }
+    // admin and trader are both allowed — RoleRoute in App.jsx already enforces this
     setUser({ name: user.name, email: user.email, role: user.role })
     document.title = 'Supplier Registry — MyDD'
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

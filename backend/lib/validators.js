@@ -177,6 +177,12 @@ const schemas = {
   reviewDocument: z.object({
     status:  z.enum(['approved', 'rejected'], { required_error: 'status required' }),
     comment: str(500).optional(),
+    note:    str(1000).optional(),
+  }),
+
+  /** DELETE /api/auth/me — account deletion confirmation */
+  deleteAccount: z.object({
+    password: str(128).min(1, 'password required'),
   }),
 
   // ── Payments ──────────────────────────────────────────────────────────────
