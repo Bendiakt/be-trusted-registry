@@ -30,7 +30,18 @@
     "db:audit:launchagent:install": "bash scripts/install-audit-launchagent.sh",
     "db:audit:launchagent:run": "bash scripts/run-audit-launchagent-now.sh",
     "db:restore": "bash scripts/db-restore.sh",
-    "db:restore:dry-run": "bash scripts/db-restore-dry-run.sh"
+    "db:restore:dry-run": "bash scripts/db-restore-dry-run.sh",
+    "load:test": "node scripts/load-test.js",
+    "load:test:staging": "node scripts/load-test.js --url https://api-staging.mydd.work --rps-target 20",
+    "load:test:hard": "node scripts/load-test.js --concurrency 50 --duration 60 --rps-target 100",
+    "stripe:portal:configure": "node scripts/configure-stripe-portal.js",
+    "staging:sync": "git fetch origin && git checkout staging && git merge origin/main --no-edit && git push origin staging && git checkout main",
+    "verify:dns": "node scripts/verify-dns.js",
+    "verify:health": "node scripts/verify-health.js",
+    "verify:stripe": "node scripts/verify-stripe.js",
+    "verify:email": "node scripts/verify-email.js",
+    "deploy:validate": "node scripts/deploy-validate.js",
+    "deploy:validate:staging": "node scripts/deploy-validate.js --env staging --skip-dns --skip-stripe --skip-email"
   },
   "engines": {
     "node": ">=22.12.0"
