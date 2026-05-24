@@ -8,7 +8,7 @@
 #   alert_email   → email address that will receive alert notifications
 
 sentry_token = "sntrys_CHANGE_ME"
-org_slug     = "b-e-consult"
+org_slug     = "be-consult"
 project_slug = "mydd-backend"
 alert_email  = "ben.diakhate@b-econsult.com"
 team_id      = "CHANGE_ME"  # Settings → Teams → <team> → numeric ID in the URL
