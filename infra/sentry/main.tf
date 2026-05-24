@@ -10,8 +10,8 @@ terraform {
 }
 
 provider "sentry" {
-  token = var.sentry_token
-  # base_url defaults to https://sentry.io/api/0/ — do not override for sentry.io
+  token    = var.sentry_token
+  base_url = "https://sentry.io/api/"
 }
 
 # ── Alert 1 — Error spike (> 10 erreurs en 5 minutes) ────────────────────────
