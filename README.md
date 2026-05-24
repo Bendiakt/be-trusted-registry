@@ -1,6 +1,6 @@
-# MyDD — B&E Trusted Registry
+# MyDD — Trusted Registry
 
-**MyDD** is a B2B SaaS supplier certification platform. Companies get certified across 3 tiers (document review → full KYC → on-site PAC inspection), appear in the B&E Trusted Registry, and issue a verifiable public badge to their buyers.
+**MyDD** is a B2B SaaS supplier certification platform. Companies get certified across 3 tiers (document review → full KYC → on-site PAC inspection), appear in the Trusted Registry, and issue a verifiable public badge to their buyers.
 
 - **Production:** [mydd.work](https://mydd.work) · API [api.mydd.work](https://api.mydd.work)
 - **API docs:** [api.mydd.work/api/docs](https://api.mydd.work/api/docs)
