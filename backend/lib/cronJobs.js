@@ -8,6 +8,7 @@
  *
  * Jobs:
  *  - Token cleanup       — every 1 h   (removes expired JWT blacklist/refresh tokens)
+ *  - PAC bonus M+1       — 1st of month at 02:00 UTC (computes supervision bonuses)
  *  - Renewal reminder    — every 24 h  (D-30 email for certs expiring in 25-35 days)
  *  - Urgent reminder     — every 24 h  (D-7 email for certs expiring in 5-7 days)
  *  - Cert expiry         — every 24 h  (marks active→expired, revokes cert level)
@@ -200,6 +201,10 @@ const startCronJobs = () => {
   // PII retention — delayed 15 min from boot, then every 24 h
   setTimeout(runPiiRetention,  15 * 60 * 1000)
   setInterval(runPiiRetention, 24 * 60 * 60 * 1000)
+
+  // PAC bonus M+1 — scheduled for 1st of next month at 02:00 UTC
+  const { schedulePacBonusCron } = require('./pacBonusCron')
+  schedulePacBonusCron()
 }
 
 module.exports = { startCronJobs, runPiiRetention }
