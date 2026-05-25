@@ -198,6 +198,10 @@ export default function Landing() {
           <Link to="/login" style={{ color: '#444', textDecoration: 'none' }}>Sign in</Link>
           {' · '}
           <Link to="/register" style={{ color: '#444', textDecoration: 'none' }}>Register</Link>
+          {' · '}
+          <Link to="/terms" style={{ color: '#444', textDecoration: 'none' }}>CGU</Link>
+          {' · '}
+          <Link to="/privacy" style={{ color: '#444', textDecoration: 'none' }}>Privacy Policy</Link>
         </div>
       </footer>
     </div>
