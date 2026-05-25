@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 import { getSession, clearSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import PACSupervisionDashboard from '../components/PACSupervisionDashboard'
 
 const OUTCOME_COLORS = {
   pass:        { bg: 'rgba(46,204,113,0.12)',  border: 'rgba(46,204,113,0.4)',  text: '#2ecc71' },
@@ -15,6 +16,7 @@ export default function PACPortal() {
   const { t } = useTranslation()
   const [missions, setMissions]         = useState([])
   const [profile, setProfile]           = useState({ name: '', location: '', languages: '', certifications: '', bio: '' })
+  const [pacTier, setPacTier]           = useState('S1')
   const [msg, setMsg]                   = useState({ text: '', type: '' })
   const [tab, setTab]                   = useState('missions')
   const [reportForms, setReportForms]   = useState({})   // { [missionId]: { open, text, outcome, submitting } }
@@ -30,7 +32,12 @@ export default function PACPortal() {
     api.get('/api/pac/missions')
       .then(res => setMissions(res.data)).catch(() => {})
     api.get('/api/pac/profile')
-      .then(res => { if (res.data && Object.keys(res.data).length > 0) setProfile(p => ({ ...p, ...res.data })) })
+      .then(res => {
+        if (res.data && Object.keys(res.data).length > 0) {
+          setProfile(p => ({ ...p, ...res.data }))
+          if (res.data.pac_tier) setPacTier(res.data.pac_tier)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -87,8 +94,11 @@ export default function PACPortal() {
   }
 
   const TABS = [
-    { id: 'missions', label: t('pac.tabs.missions') },
-    { id: 'profile',  label: t('pac.tabs.profile') },
+    { id: 'missions',    label: t('pac.tabs.missions') },
+    { id: 'profile',     label: t('pac.tabs.profile') },
+    ...(pacTier === 'S2' || pacTier === 'S3'
+      ? [{ id: 'supervision', label: pacTier === 'S3' ? 'Mentoring S3' : 'Supervision S2' }]
+      : []),
   ]
 
   const inp = { width: '100%', padding: '0.7rem 1rem', background: '#1f1f1f', border: '1px solid #2e2e2e', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }
@@ -299,6 +309,12 @@ export default function PACPortal() {
                 {t('pac.profile.save')}
               </button>
             </form>
+          </div>
+        )}
+
+        {tab === 'supervision' && (
+          <div style={{ padding: '0 2rem 2rem' }}>
+            <PACSupervisionDashboard pacTier={pacTier} />
           </div>
         )}
       </div>
