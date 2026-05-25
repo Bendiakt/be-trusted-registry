@@ -19,11 +19,51 @@ CREATE INDEX IF NOT EXISTS idx_certifications_status_expires
   ON certifications (status, expires_at)
   WHERE expires_at IS NOT NULL;
 
+-- ── documents table (created here if missing — was only in PROD_SETUP.sql) ───
+-- This table was bootstrapped on production via the manual PROD_SETUP.sql script
+-- and was never part of the numbered migration sequence. Creating it here with
+-- IF NOT EXISTS is safe on production (no-op) and required on fresh databases.
+CREATE TABLE IF NOT EXISTS documents (
+  id            SERIAL       PRIMARY KEY,
+  company_id    INT          NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  user_id       INT          NOT NULL REFERENCES users(id)     ON DELETE CASCADE,
+  file_name     TEXT         NOT NULL,
+  original_name TEXT         NOT NULL,
+  mime_type     TEXT         NOT NULL,
+  size_bytes    INT          NOT NULL,
+  storage_path  TEXT         NOT NULL,
+  doc_type      TEXT         NOT NULL DEFAULT 'general',
+  status        TEXT         NOT NULL DEFAULT 'pending',
+  reviewed_by   INT          REFERENCES users(id),
+  reviewed_at   TIMESTAMPTZ,
+  review_note   TEXT,
+  uploaded_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_company ON documents (company_id);
+CREATE INDEX IF NOT EXISTS idx_documents_status  ON documents (status);
+
 -- ── documents: user_id ────────────────────────────────────────────────────────
 -- DELETE /api/documents/:id queries: WHERE id = $1 AND user_id = $2 AND status = 'pending'
 -- The existing idx_documents_company covers company-level queries; user-level delete needs this.
 CREATE INDEX IF NOT EXISTS idx_documents_user_status
   ON documents (user_id, status);
+
+-- ── notifications table (created here if missing — was only in PROD_SETUP.sql) ─
+CREATE TABLE IF NOT EXISTS notifications (
+  id         SERIAL      PRIMARY KEY,
+  user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type       TEXT        NOT NULL DEFAULT 'info',
+  title      TEXT        NOT NULL,
+  body       TEXT,
+  link       TEXT,
+  read_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications (user_id, created_at DESC)
+  WHERE read_at IS NULL;
 
 -- ── notifications: all rows per user (non-partial) ───────────────────────────
 -- GET /api/notifications lists ALL notifications (read + unread) ordered by created_at.
