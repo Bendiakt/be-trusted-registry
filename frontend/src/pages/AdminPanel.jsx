@@ -30,6 +30,20 @@ export default function AdminPanel() {
   const [expandedDocs, setExpandedDocs]     = useState(null)   // companyId
   const [companyDocs, setCompanyDocs]       = useState({})     // { [companyId]: docs[] }
   const [docReviewing, setDocReviewing]     = useState({})
+  // PAC state
+  const [pacSubTab, setPacSubTab]           = useState('agents')
+  const [pacAgents, setPacAgents]           = useState([])
+  const [pacAgentFilter, setPacAgentFilter] = useState({ tier: '', kyc_status: '' })
+  const [pacSupervision, setPacSupervision] = useState([])
+  const [pacBonus, setPacBonus]             = useState([])
+  const [kycModal, setKycModal]             = useState(null)   // { pacId, name, tier }
+  const [kycForm, setKycForm]               = useState({ kyc_status: 'approved', pac_tier: '', notes: '' })
+  const [kycSaving, setKycSaving]           = useState(false)
+  const [supActioning, setSupActioning]     = useState({})
+  const [bonusActioning, setBonusActioning] = useState({})
+  const [missionScoreModal, setMissionScoreModal] = useState(null)
+  const [missionScoreForm, setMissionScoreForm]   = useState({ admin_score: '', payment_confirmed: false, stripe_invoice_id: '' })
+  const [missionScoreSaving, setMissionScoreSaving] = useState(false)
 
   useEffect(() => {
     const user = getSession()
@@ -42,7 +56,14 @@ export default function AdminPanel() {
     if (tab === 'companies') fetchCompanies(1)
     if (tab === 'missions')  fetchMissions(1)
     if (tab === 'audit')     fetchAuditLog(1)
+    if (tab === 'pac')       fetchPacAgents()
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tab === 'pac' && pacSubTab === 'agents')     fetchPacAgents()
+    if (tab === 'pac' && pacSubTab === 'supervision') fetchPacSupervision()
+    if (tab === 'pac' && pacSubTab === 'bonus')       fetchPacBonus()
+  }, [pacSubTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStats = async () => {
     try {
@@ -152,6 +173,114 @@ export default function AdminPanel() {
     navigate('/login')
   }
 
+  // ── PAC helpers ──────────────────────────────────────────────────────────────
+  const fetchPacAgents = async () => {
+    try {
+      const qs = new URLSearchParams()
+      if (pacAgentFilter.tier)       qs.set('tier', pacAgentFilter.tier)
+      if (pacAgentFilter.kyc_status) qs.set('kyc_status', pacAgentFilter.kyc_status)
+      qs.set('limit', '100')
+      const res = await api.get(`/api/admin/pac/agents?${qs}`)
+      setPacAgents(res.data.agents || res.data.data || [])
+    } catch { /* silent */ }
+  }
+
+  const fetchPacSupervision = async () => {
+    try {
+      const res = await api.get('/api/pac/admin/supervision/pending')
+      setPacSupervision(res.data.requests || [])
+    } catch { /* silent */ }
+  }
+
+  const fetchPacBonus = async () => {
+    try {
+      const res = await api.get('/api/pac/admin/bonus/statements')
+      setPacBonus(res.data.statements || [])
+    } catch { /* silent */ }
+  }
+
+  const openKycModal = (agent) => {
+    setKycModal(agent)
+    setKycForm({ kyc_status: 'approved', pac_tier: agent.pac_tier || '', notes: '' })
+  }
+
+  const submitKyc = async () => {
+    if (!kycModal) return
+    setKycSaving(true)
+    try {
+      await api.patch(`/api/admin/pac/agents/${kycModal.id}/kyc`, kycForm)
+      setKycModal(null)
+      fetchPacAgents()
+    } catch { /* silent */ }
+    finally { setKycSaving(false) }
+  }
+
+  const actionSupervision = async (id, action) => {
+    setSupActioning(s => ({ ...s, [id]: true }))
+    try {
+      await api.post(`/api/pac/admin/supervision/${id}/${action}`)
+      fetchPacSupervision()
+    } catch { /* silent */ }
+    finally { setSupActioning(s => ({ ...s, [id]: false })) }
+  }
+
+  const actionBonus = async (id, action) => {
+    let body = {}
+    if (action === 'pay') {
+      const ref = window.prompt('Enter payment reference (SWIFT/SEPA/transfer ref):')
+      if (!ref) return
+      body = { payment_reference: ref }
+    }
+    setBonusActioning(s => ({ ...s, [id]: true }))
+    try {
+      await api.post(`/api/pac/admin/bonus/${id}/${action}`, body)
+      fetchPacBonus()
+    } catch { /* silent */ }
+    finally { setBonusActioning(s => ({ ...s, [id]: false })) }
+  }
+
+  const openMissionScore = (mission) => {
+    setMissionScoreModal(mission)
+    setMissionScoreForm({
+      admin_score: mission.admin_score || '',
+      payment_confirmed: !!mission.payment_confirmed_at,
+      stripe_invoice_id: mission.stripe_invoice_id || '',
+    })
+  }
+
+  const submitMissionScore = async () => {
+    if (!missionScoreModal) return
+    setMissionScoreSaving(true)
+    try {
+      const body = {}
+      if (missionScoreForm.admin_score)      body.admin_score       = parseInt(missionScoreForm.admin_score, 10)
+      if (missionScoreForm.payment_confirmed) body.payment_confirmed = true
+      if (missionScoreForm.stripe_invoice_id) body.stripe_invoice_id = missionScoreForm.stripe_invoice_id
+      await api.patch(`/api/admin/missions/${missionScoreModal.id}/score`, body)
+      setMissions(prev => prev.map(m => m.id === missionScoreModal.id
+        ? { ...m, admin_score: body.admin_score || m.admin_score, payment_confirmed_at: body.payment_confirmed ? new Date().toISOString() : m.payment_confirmed_at }
+        : m
+      ))
+      setMissionScoreModal(null)
+    } catch { /* silent */ }
+    finally { setMissionScoreSaving(false) }
+  }
+
+  const KYC_COLORS = {
+    pending:   { bg: 'rgba(243,156,18,0.12)',  text: '#f39c12' },
+    approved:  { bg: 'rgba(46,204,113,0.12)',  text: '#2ecc71' },
+    rejected:  { bg: 'rgba(231,76,60,0.12)',   text: '#ff6b6b' },
+    suspended: { bg: 'rgba(160,160,160,0.10)', text: '#888' },
+  }
+  const TIER_COLORS = { S1: '#4a90e2', S2: '#C9A84C', S3: '#e056fd' }
+  const BONUS_COLORS = {
+    draft:     { bg: 'rgba(243,156,18,0.12)',  text: '#f39c12' },
+    validated: { bg: 'rgba(74,144,226,0.12)',  text: '#4a90e2' },
+    paid:      { bg: 'rgba(46,204,113,0.12)',  text: '#2ecc71' },
+    suspended: { bg: 'rgba(231,76,60,0.12)',   text: '#ff6b6b' },
+    cancelled: { bg: 'rgba(160,160,160,0.10)', text: '#888' },
+  }
+
   const LEVEL_COLORS  = { 0: '#555', 1: '#CD7F32', 2: '#C0C0C0', 3: '#C9A84C' }
   const STATUS_COLORS = {
     available:  { bg: 'rgba(201,168,76,0.12)',  text: '#C9A84C' },
@@ -183,6 +312,7 @@ export default function AdminPanel() {
     { id: 'users',     label: t('admin.tabs.users') },
     { id: 'companies', label: t('admin.tabs.companies') },
     { id: 'missions',  label: t('admin.tabs.missions') },
+    { id: 'pac',       label: 'PAC Network' },
     { id: 'audit',     label: t('admin.tabs.audit') },
   ]
 
@@ -470,6 +600,28 @@ export default function AdminPanel() {
                           </Link>
                         )}
 
+                        {/* Admin score badge */}
+                        {m.admin_score && (
+                          <span style={{ background: 'rgba(201,168,76,0.12)', color: '#C9A84C', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                            ★ {m.admin_score}/5
+                          </span>
+                        )}
+                        {m.payment_confirmed_at && (
+                          <span style={{ background: 'rgba(46,204,113,0.1)', color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                            ✓ Paid
+                          </span>
+                        )}
+
+                        {/* Score mission button (completed PAC missions) */}
+                        {m.status === 'completed' && m.pac_name && (
+                          <button
+                            onClick={() => openMissionScore(m)}
+                            style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#e056fd', border: '1px solid rgba(224,86,253,0.3)' }}
+                          >
+                            ⭐ Score
+                          </button>
+                        )}
+
                         {/* Verify link */}
                         {m.company_id && (
                           <Link to={`/verify/${m.company_id}`} target="_blank" style={{ color: '#555', fontSize: '0.7rem', border: '1px solid #2a2a2a', padding: '0.2rem 0.5rem', borderRadius: '4px', textDecoration: 'none' }}>
@@ -523,6 +675,228 @@ export default function AdminPanel() {
               })}
             </div>
             <PaginationBar pag={pagination.missions} onPage={p => fetchMissions(p)} G={G} />
+          </div>
+        )}
+
+        {/* ── PAC Network Tab ───────────────────────────────────────────── */}
+        {tab === 'pac' && (
+          <div>
+            {/* Sub-tabs */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              {[
+                { id: 'agents',     label: '👤 Agents & KYC' },
+                { id: 'supervision',label: '🔗 Supervision Requests' },
+                { id: 'bonus',      label: '💰 Bonus Statements' },
+              ].map(({ id, label }) => (
+                <button key={id} onClick={() => setPacSubTab(id)} style={{
+                  padding: '0.5rem 1.1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: pacSubTab === id ? '700' : '500',
+                  background: pacSubTab === id ? 'rgba(201,168,76,0.15)' : '#1a1a1a',
+                  color: pacSubTab === id ? '#C9A84C' : '#555',
+                  outline: pacSubTab === id ? '1px solid rgba(201,168,76,0.3)' : '1px solid #222',
+                }}>{label}</button>
+              ))}
+            </div>
+
+            {/* Agents & KYC */}
+            {pacSubTab === 'agents' && (
+              <div style={G.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div style={{ fontWeight: '700', fontSize: '1rem' }}>PAC Agents — KYC Queue</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select value={pacAgentFilter.tier} onChange={e => setPacAgentFilter(f => ({ ...f, tier: e.target.value }))} style={{ ...G.inp, fontSize: '0.75rem' }}>
+                      <option value="">All tiers</option>
+                      <option value="S1">S1</option>
+                      <option value="S2">S2</option>
+                      <option value="S3">S3</option>
+                    </select>
+                    <select value={pacAgentFilter.kyc_status} onChange={e => setPacAgentFilter(f => ({ ...f, kyc_status: e.target.value }))} style={{ ...G.inp, fontSize: '0.75rem' }}>
+                      <option value="">All KYC statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                    <button onClick={fetchPacAgents} style={G.btn}>Filter</button>
+                  </div>
+                </div>
+                {pacAgents.length === 0 ? (
+                  <div style={{ color: '#444', textAlign: 'center', padding: '2rem', fontSize: '0.85rem' }}>No PAC agents found.</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Agent', 'Email', 'Tier', 'KYC Status', 'Supervisees', 'Missions', 'Pending Bonus', 'Action'].map(h => (
+                            <th key={h} style={G.th}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pacAgents.map(a => {
+                          const kc = KYC_COLORS[a.kyc_status] || KYC_COLORS.pending
+                          const tc = TIER_COLORS[a.pac_tier] || '#555'
+                          return (
+                            <tr key={a.id} style={{ borderBottom: '1px solid #1c1c1c' }}>
+                              <td style={G.td}>
+                                <div style={{ fontWeight: '600', color: '#eee' }}>{a.full_name || '—'}</div>
+                                <div style={{ color: '#444', fontSize: '0.7rem' }}>PAC #{a.id}</div>
+                              </td>
+                              <td style={{ ...G.td, color: '#666', fontSize: '0.75rem' }}>{a.email}</td>
+                              <td style={G.td}>
+                                <span style={{ background: `${tc}22`, color: tc, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                                  {a.pac_tier}
+                                </span>
+                              </td>
+                              <td style={G.td}>
+                                <span style={{ background: kc.bg, color: kc.text, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                  {a.kyc_status}
+                                </span>
+                              </td>
+                              <td style={{ ...G.td, textAlign: 'center' }}>{a.active_supervisees ?? '—'}</td>
+                              <td style={{ ...G.td, textAlign: 'center' }}>{a.missions_completed ?? '—'}</td>
+                              <td style={{ ...G.td, color: '#C9A84C', fontWeight: '600' }}>
+                                {a.pending_bonus_cents > 0 ? `$${(a.pending_bonus_cents / 100).toFixed(2)}` : '—'}
+                              </td>
+                              <td style={G.td}>
+                                <button
+                                  onClick={() => openKycModal(a)}
+                                  style={{ ...G.btn, padding: '0.25rem 0.75rem', fontSize: '0.7rem' }}
+                                >
+                                  KYC Review
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Supervision Requests */}
+            {pacSubTab === 'supervision' && (
+              <div style={G.card}>
+                <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '1.25rem' }}>Pending Supervision Requests</div>
+                {pacSupervision.length === 0 ? (
+                  <div style={{ color: '#444', textAlign: 'center', padding: '2rem', fontSize: '0.85rem' }}>No pending requests.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {pacSupervision.map(req => (
+                      <div key={req.id} style={{ background: '#141414', border: '1px solid #222', borderRadius: '10px', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1, minWidth: '220px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: '700', color: '#eee' }}>{req.supervisor_name}</span>
+                            <span style={{ background: `${TIER_COLORS[req.supervisor_tier_profile] || '#555'}22`, color: TIER_COLORS[req.supervisor_tier_profile] || '#555', fontSize: '0.65rem', fontWeight: '700', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{req.supervisor_tier_profile}</span>
+                            <span style={{ color: '#444', fontSize: '0.75rem' }}>→ supervise →</span>
+                            <span style={{ fontWeight: '700', color: '#eee' }}>{req.supervised_name}</span>
+                            <span style={{ background: `${TIER_COLORS[req.supervised_tier] || '#555'}22`, color: TIER_COLORS[req.supervised_tier] || '#555', fontSize: '0.65rem', fontWeight: '700', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{req.supervised_tier}</span>
+                          </div>
+                          <div style={{ color: '#555', fontSize: '0.7rem' }}>
+                            {req.supervisor_email} → {req.supervised_email}
+                          </div>
+                          <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.2rem' }}>
+                            Requested: {new Date(req.requested_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            onClick={() => actionSupervision(req.id, 'approve')}
+                            disabled={supActioning[req.id]}
+                            style={{ ...G.btn, padding: '0.35rem 0.9rem' }}
+                          >
+                            {supActioning[req.id] ? '…' : '✓ Approve'}
+                          </button>
+                          <button
+                            onClick={() => actionSupervision(req.id, 'reject')}
+                            disabled={supActioning[req.id]}
+                            style={{ ...G.outline, padding: '0.35rem 0.9rem', color: '#ff6b6b', border: '1px solid rgba(231,76,60,0.3)' }}
+                          >
+                            {supActioning[req.id] ? '…' : '✕ Reject'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bonus Statements */}
+            {pacSubTab === 'bonus' && (
+              <div style={G.card}>
+                <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '1.25rem' }}>Bonus Statements</div>
+                {pacBonus.length === 0 ? (
+                  <div style={{ color: '#444', textAlign: 'center', padding: '2rem', fontSize: '0.85rem' }}>No bonus statements found.</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Agent', 'Period', 'Level', 'Missions', 'Net B&E Revenue', 'Rate', 'Completion', 'Multiplier', 'Final Bonus', 'Status', 'Actions'].map(h => (
+                            <th key={h} style={G.th}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pacBonus.map(b => {
+                          const bc = BONUS_COLORS[b.status] || BONUS_COLORS.draft
+                          return (
+                            <tr key={b.id} style={{ borderBottom: '1px solid #1c1c1c' }}>
+                              <td style={G.td}>
+                                <div style={{ fontWeight: '600', color: '#eee', fontSize: '0.8rem' }}>{b.full_name || '—'}</div>
+                                <span style={{ background: `${TIER_COLORS[b.pac_tier] || '#555'}22`, color: TIER_COLORS[b.pac_tier] || '#555', fontSize: '0.65rem', fontWeight: '700', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{b.pac_tier}</span>
+                              </td>
+                              <td style={{ ...G.td, color: '#888', fontFamily: 'monospace', fontSize: '0.75rem' }}>{b.period_year}-{String(b.period_month).padStart(2,'0')}</td>
+                              <td style={{ ...G.td, color: '#C9A84C', fontWeight: '700' }}>{b.bonus_level}</td>
+                              <td style={{ ...G.td, textAlign: 'center' }}>{b.missions_count}</td>
+                              <td style={{ ...G.td, color: '#C9A84C' }}>${(b.net_be_revenue_cents / 100).toFixed(2)}</td>
+                              <td style={{ ...G.td, color: '#888' }}>{(b.bonus_rate * 100).toFixed(0)}%</td>
+                              <td style={G.td}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <div style={{ flex: 1, height: '6px', background: '#111', borderRadius: '3px', minWidth: '60px' }}>
+                                    <div style={{ height: '100%', borderRadius: '3px', width: `${b.task_completion_pct}%`, background: b.task_completion_pct >= 80 ? '#2ecc71' : b.task_completion_pct >= 70 ? '#f39c12' : '#e74c3c' }} />
+                                  </div>
+                                  <span style={{ fontSize: '0.7rem', color: '#888' }}>{b.task_completion_pct}%</span>
+                                </div>
+                              </td>
+                              <td style={{ ...G.td, textAlign: 'center', color: b.bonus_multiplier === 1 ? '#2ecc71' : b.bonus_multiplier === 0.5 ? '#f39c12' : '#ff6b6b', fontWeight: '700' }}>
+                                ×{b.bonus_multiplier}
+                              </td>
+                              <td style={{ ...G.td, color: '#C9A84C', fontWeight: '700' }}>
+                                ${(b.final_bonus_cents / 100).toFixed(2)}
+                              </td>
+                              <td style={G.td}>
+                                <span style={{ background: bc.bg, color: bc.text, fontWeight: '700', fontSize: '0.65rem', padding: '0.15rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                  {b.status}
+                                </span>
+                              </td>
+                              <td style={G.td}>
+                                <div style={{ display: 'flex', gap: '0.3rem' }}>
+                                  {b.status === 'draft' && (
+                                    <button onClick={() => actionBonus(b.id, 'validate')} disabled={bonusActioning[b.id]}
+                                      style={{ ...G.btn, padding: '0.2rem 0.6rem', fontSize: '0.65rem' }}>
+                                      {bonusActioning[b.id] ? '…' : 'Validate'}
+                                    </button>
+                                  )}
+                                  {b.status === 'validated' && (
+                                    <button onClick={() => actionBonus(b.id, 'pay')} disabled={bonusActioning[b.id]}
+                                      style={{ ...G.btn, padding: '0.2rem 0.6rem', fontSize: '0.65rem', background: 'linear-gradient(135deg,#2ecc71,#27ae60)', color: '#111' }}>
+                                      {bonusActioning[b.id] ? '…' : '✓ Mark Paid'}
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -593,6 +967,120 @@ export default function AdminPanel() {
           </div>
         )}
       </main>
+
+      {/* ── KYC Review Modal ───────────────────────────────────────────── */}
+      {kycModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '2rem', maxWidth: '460px', width: '100%' }}>
+            <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '0.25rem', color: '#C9A84C' }}>PAC KYC Review</div>
+            <div style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              {kycModal.full_name} · <span style={{ color: TIER_COLORS[kycModal.pac_tier] || '#888' }}>{kycModal.pac_tier}</span> · {kycModal.email}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>KYC Decision</div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {['approved', 'rejected', 'suspended'].map(s => (
+                    <button key={s} onClick={() => setKycForm(f => ({ ...f, kyc_status: s }))} style={{
+                      flex: 1, padding: '0.5rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase',
+                      background: kycForm.kyc_status === s ? (s === 'approved' ? 'rgba(46,204,113,0.2)' : s === 'rejected' ? 'rgba(231,76,60,0.2)' : 'rgba(160,160,160,0.15)') : '#111',
+                      color: kycForm.kyc_status === s ? (s === 'approved' ? '#2ecc71' : s === 'rejected' ? '#ff6b6b' : '#888') : '#444',
+                      outline: kycForm.kyc_status === s ? `1px solid ${s === 'approved' ? '#2ecc71' : s === 'rejected' ? '#e74c3c' : '#555'}` : '1px solid #222',
+                    }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Tier (optional override)</div>
+                <select value={kycForm.pac_tier} onChange={e => setKycForm(f => ({ ...f, pac_tier: e.target.value }))} style={{ ...G.inp, width: '100%' }}>
+                  <option value="">Keep current ({kycModal.pac_tier})</option>
+                  <option value="S1">S1 — Agent</option>
+                  <option value="S2">S2 — Certified Supervisor</option>
+                  <option value="S3">S3 — Senior Mentor</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Notes (sent to agent)</div>
+                <textarea
+                  rows={3}
+                  value={kycForm.notes}
+                  onChange={e => setKycForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional note to include in the notification…"
+                  style={{ ...G.inp, width: '100%', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setKycModal(null)} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Cancel</button>
+              <button onClick={submitKyc} disabled={kycSaving} style={{ ...G.btn, padding: '0.5rem 1.25rem' }}>
+                {kycSaving ? '…' : 'Submit Decision'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mission Score Modal ─────────────────────────────────────────── */}
+      {missionScoreModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '2rem', maxWidth: '440px', width: '100%' }}>
+            <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '0.25rem', color: '#e056fd' }}>Score Mission #{missionScoreModal.id}</div>
+            <div style={{ color: '#888', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              {missionScoreModal.company_name} · PAC: {missionScoreModal.pac_name}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Admin Score (1–5 stars)</div>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} onClick={() => setMissionScoreForm(f => ({ ...f, admin_score: n }))} style={{
+                      flex: 1, padding: '0.6rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '1.1rem',
+                      background: missionScoreForm.admin_score >= n ? 'rgba(201,168,76,0.2)' : '#111',
+                      color: missionScoreForm.admin_score >= n ? '#C9A84C' : '#333',
+                      outline: missionScoreForm.admin_score >= n ? '1px solid rgba(201,168,76,0.4)' : '1px solid #1f1f1f',
+                    }}>★</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Stripe Invoice ID (optional)</div>
+                <input
+                  value={missionScoreForm.stripe_invoice_id}
+                  onChange={e => setMissionScoreForm(f => ({ ...f, stripe_invoice_id: e.target.value }))}
+                  placeholder="in_xxx…"
+                  style={{ ...G.inp, width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.75rem', background: '#111', borderRadius: '8px', border: '1px solid #1f1f1f' }}>
+                <input
+                  type="checkbox"
+                  checked={missionScoreForm.payment_confirmed}
+                  onChange={e => setMissionScoreForm(f => ({ ...f, payment_confirmed: e.target.checked }))}
+                  style={{ width: '16px', height: '16px', accentColor: '#2ecc71', cursor: 'pointer' }}
+                />
+                <div>
+                  <div style={{ fontWeight: '600', color: '#eee', fontSize: '0.85rem' }}>Confirm Client Payment</div>
+                  <div style={{ color: '#555', fontSize: '0.72rem' }}>Sets payment_confirmed_at — triggers M+1 PAC bonus calculation</div>
+                </div>
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setMissionScoreModal(null)} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Cancel</button>
+              <button onClick={submitMissionScore} disabled={missionScoreSaving} style={{ ...G.btn, padding: '0.5rem 1.25rem' }}>
+                {missionScoreSaving ? '…' : 'Save Score'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Suspend confirmation modal ──────────────────────────────────── */}
       {suspendModal && (
