@@ -11,9 +11,10 @@
  *   STRIPE_SECRET_KEY=sk_test_xxx node scripts/configure-pac-memberships.js
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../backend/.env') })
+// Load .env from backend if present (optional — key can also be passed inline)
+try { require('dotenv').config({ path: require('path').join(__dirname, '../backend/.env') }) } catch (_) {}
 
-const Stripe = require('stripe')
+const Stripe = require(require('path').join(__dirname, '../backend/node_modules/stripe'))
 
 const key = process.env.STRIPE_SECRET_KEY
 if (!key) { console.error('❌  STRIPE_SECRET_KEY not set'); process.exit(1) }
