@@ -195,14 +195,14 @@ async function setupPortal (priceIds) {
   if (existing.data.length > 0) {
     const cfg = await stripe.billingPortal.configurations.update(existing.data[0].id, {
       features,
-      business_profile: { return_url: `${FRONTEND_URL}/dashboard` },
+      default_return_url: `${FRONTEND_URL}/dashboard`,
     })
     console.log(`  ♻️  Updated Customer Portal ${cfg.id}`)
     return cfg.id
   }
 
   const cfg = await stripe.billingPortal.configurations.create({
-    business_profile: { return_url: `${FRONTEND_URL}/dashboard` },
+    default_return_url: `${FRONTEND_URL}/dashboard`,
     features,
   })
   console.log(`  ✅ Created Customer Portal ${cfg.id}`)
