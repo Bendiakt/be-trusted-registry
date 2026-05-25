@@ -691,4 +691,64 @@ const sendOnboardingD3 = async ({ email, name, companyName, pricingUrl }) => {
   }
 }
 
-module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3 }
+// ── PAC v3 — Supervision task reminder ───────────────────────────────────────
+const sendSupervisionTaskReminder = async ({ email, name, tier, pendingTasks, completionPct, bonusStatus, portalUrl }) => {
+  if (!email) return
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'pac.supervision.reminder.queued', mode: 'log_only', email }))
+    return
+  }
+
+  const statusColor = bonusStatus === 'full' ? '#2ecc71' : bonusStatus === 'half' ? '#f39c12' : '#ff6b6b'
+  const statusLabel = bonusStatus === 'full' ? '✅ Full bonus on track' : bonusStatus === 'half' ? '⚠️ 50% bonus — needs improvement' : '❌ Bonus suspended this month'
+  const taskList = (pendingTasks || []).map(t => `<li style="margin-bottom:6px;color:#ccc">${t}</li>`).join('')
+
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: email,
+      subject: `[MyDD ${tier}] Weekly supervision reminder — ${completionPct}% tasks completed`,
+      html: `
+<!DOCTYPE html><html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#b8972a;padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD — PAC ${tier} Supervision</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.3rem;margin:0 0 8px;color:#f5f5f5">Weekly Supervision Reminder</h1>
+      <p style="color:#aaa;margin:0 0 24px">Hi${name ? ` ${name}` : ''},</p>
+
+      <div style="background:#1a1a1a;border-radius:8px;padding:16px;margin-bottom:24px">
+        <p style="margin:0 0 8px;font-size:0.9rem;color:#aaa">This month's completion</p>
+        <div style="height:8px;background:#222;border-radius:4px;overflow:hidden;margin-bottom:8px">
+          <div style="height:100%;width:${Math.min(completionPct,100)}%;background:${statusColor};border-radius:4px"></div>
+        </div>
+        <p style="margin:0;font-weight:700;color:${statusColor}">${completionPct}% — ${statusLabel}</p>
+      </div>
+
+      ${taskList ? `
+      <p style="font-weight:600;color:#f5f5f5;margin:0 0 8px">Pending tasks this week:</p>
+      <ul style="padding-left:20px;margin:0 0 24px">${taskList}</ul>
+      ` : `<p style="color:#2ecc71;margin:0 0 24px">✅ All tasks completed this week — great work!</p>`}
+
+      <a href="${portalUrl || (process.env.FRONTEND_URL || 'https://mydd.work') + '/pac'}"
+         style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
+        Go to Supervision Dashboard
+      </a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
+      Bonus paid M+1 after admin validation. Requires ≥80% task completion for full bonus.<br>
+      B&amp;E Consult FZCO &bull; Dubai, UAE
+    </td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.supervision.reminder.sent', email, tier, completionPct }))
+  } catch (err) {
+    console.error('[mailer] sendSupervisionTaskReminder failed:', err.message)
+  }
+}
+
+module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder }
