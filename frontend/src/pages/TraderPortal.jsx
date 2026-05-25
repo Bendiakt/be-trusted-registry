@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 import { getSession, clearSession } from '../lib/session'
@@ -35,6 +35,7 @@ const ExpiryBadge = ({ expiresAt }) => {
 export default function TraderPortal() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   // ── state ──────────────────────────────────────────────────────────────────
   const [tab, setTab]               = useState('registry') // 'registry' | 'watchlist'
@@ -52,8 +53,12 @@ export default function TraderPortal() {
   const [watchedIds, setWatchedIds] = useState(new Set())
   const [togglingId, setTogglingId] = useState(null)
   const [stats, setStats]           = useState(null)
-  const [exporting, setExporting]   = useState(false)
-  const countriesLoaded             = useRef(false)
+  const [exporting, setExporting]       = useState(false)
+  const [subscribed, setSubscribed]     = useState(true)   // optimistic — set false on 402
+  const [subSuccess, setSubSuccess]     = useState(false)  // shown after Stripe redirect
+  const [checkingOut, setCheckingOut]   = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState('annual') // 'monthly' | 'annual'
+  const countriesLoaded                 = useRef(false)
 
   // ── auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -63,14 +68,33 @@ export default function TraderPortal() {
     // admin and trader are both allowed — RoleRoute in App.jsx already enforces this
     setUser({ name: user.name, email: user.email, role: user.role })
     document.title = 'Supplier Registry — MyDD'
+    if (searchParams.get('subscription') === 'success') {
+      setSubscribed(true)
+      setSubSuccess(true)
+      setTimeout(() => setSubSuccess(false), 8000)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Stripe trader checkout ─────────────────────────────────────────────────
+  const startCheckout = async () => {
+    setCheckingOut(true)
+    try {
+      const planId = selectedPlan === 'annual' ? 'trader_annual' : 'trader_monthly'
+      const res = await api.post('/api/payments/trader-checkout', { planId })
+      window.location.href = res.data.url
+    } catch (e) {
+      setCheckingOut(false)
+    }
+  }
 
   // ── fetch watchlist ids (lightweight — just ids for star state) ────────────
   const fetchWatchedIds = useCallback(async () => {
     try {
       const res = await api.get('/api/trader/watchlist?limit=1000')
       setWatchedIds(new Set(res.data.data.map(c => c.id)))
-    } catch { /* non-fatal */ }
+    } catch (e) {
+      if (e.response?.status === 402) setSubscribed(false)
+    }
   }, [])
 
   // ── fetch stats ────────────────────────────────────────────────────────────
@@ -78,7 +102,9 @@ export default function TraderPortal() {
     try {
       const res = await api.get('/api/trader/stats')
       setStats(res.data)
-    } catch { /* non-fatal */ }
+    } catch (e) {
+      if (e.response?.status === 402) setSubscribed(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -260,6 +286,66 @@ export default function TraderPortal() {
       </nav>
 
       <main style={G.main}>
+        {/* ── Paywall — shown when subscription is inactive ── */}
+        {!subscribed && (
+          <div style={{ maxWidth: 560, margin: '4rem auto', background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 16, padding: '3rem 2.5rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔒</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '0.5rem' }}>
+              Accès Trader Portal
+            </div>
+            <div style={{ color: '#777', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '2rem' }}>
+              Accédez au registre complet des fournisseurs certifiés, à votre watchlist avec alertes d'expiration, et aux exports CSV.
+            </div>
+
+            {/* Plan selector */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
+              {[
+                { id: 'monthly', label: 'Mensuel', price: '$49/mois', sub: 'Sans engagement' },
+                { id: 'annual',  label: 'Annuel',  price: '$499/an',  sub: '2 mois offerts ✦' },
+              ].map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => setSelectedPlan(p.id)}
+                  style={{ flex: 1, padding: '1rem', borderRadius: 10, cursor: 'pointer', border: selectedPlan === p.id ? '1.5px solid #C9A84C' : '1px solid #2a2a2a', background: selectedPlan === p.id ? 'rgba(201,168,76,0.08)' : '#111', position: 'relative' }}
+                >
+                  {p.id === 'annual' && (
+                    <div style={{ position: 'absolute', top: -10, right: 10, background: '#C9A84C', color: '#111', fontSize: '0.6rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Meilleur prix</div>
+                  )}
+                  <div style={{ fontWeight: 700, color: selectedPlan === p.id ? '#C9A84C' : '#ccc', marginBottom: '0.2rem' }}>{p.label}</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#fff' }}>{p.price}</div>
+                  <div style={{ fontSize: '0.72rem', color: '#555', marginTop: '0.2rem' }}>{p.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={startCheckout}
+              disabled={checkingOut}
+              style={{ width: '100%', background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.9rem', borderRadius: 10, border: 'none', fontSize: '1rem', fontWeight: 800, cursor: checkingOut ? 'wait' : 'pointer', letterSpacing: '0.03em', opacity: checkingOut ? 0.7 : 1 }}
+            >
+              {checkingOut ? 'Redirection…' : `S'abonner — ${selectedPlan === 'annual' ? '$499/an' : '$49/mois'}`}
+            </button>
+
+            <div style={{ marginTop: '1rem', color: '#444', fontSize: '0.75rem' }}>
+              Paiement sécurisé via Stripe · Résiliation à tout moment
+            </div>
+          </div>
+        )}
+
+        {/* ── Main content (only when subscribed) ── */}
+        {subscribed && <>
+
+        {/* Subscription success banner */}
+        {subSuccess && (
+          <div style={{ background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 10, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '1.3rem' }}>🎉</span>
+            <div>
+              <div style={{ color: '#2ecc71', fontWeight: 700 }}>Abonnement activé avec succès !</div>
+              <div style={{ color: '#888', fontSize: '0.82rem', marginTop: '0.2rem' }}>Bienvenue sur le Trader Portal. Votre accès est maintenant actif.</div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ marginBottom:'1.5rem' }}>
           <div style={{ fontSize:'1.6rem', fontWeight:'800', marginBottom:'0.25rem' }}>{t('trader.portal_title')}</div>
@@ -383,6 +469,7 @@ export default function TraderPortal() {
             ))}
           </div>
         )}
+        </> /* end subscribed */}
       </main>
     </div>
   )

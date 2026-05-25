@@ -8,12 +8,14 @@ export default function Register() {
   const { t } = useTranslation()
   useEffect(() => { document.title = 'Create Account — MyDD' }, [])
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'company' })
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!acceptedTerms) { setError(t('register.must_accept_terms', 'Vous devez accepter les CGU pour continuer.')); return }
     setLoading(true)
     try {
       await api.post('/api/auth/register', form)
@@ -82,7 +84,28 @@ export default function Register() {
               ))}
             </div>
           </div>
-          <button type="submit" disabled={loading} style={{ width: '100%', background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.8rem', borderRadius: '8px', border: 'none', fontSize: '0.95rem', fontWeight: '700', cursor: 'pointer', letterSpacing: '0.04em' }}>
+          {/* CGU acceptance */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '1.25rem', cursor: 'pointer', padding: '0.75rem', background: acceptedTerms ? 'rgba(201,168,76,0.06)' : '#111', borderRadius: '8px', border: acceptedTerms ? '1px solid rgba(201,168,76,0.25)' : '1px solid #1e1e1e' }}>
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={e => { setAcceptedTerms(e.target.checked); if (e.target.checked) setError('') }}
+              style={{ marginTop: '2px', width: '16px', height: '16px', accentColor: '#C9A84C', flexShrink: 0, cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: '0.82rem', color: '#888', lineHeight: 1.5 }}>
+              J'ai lu et j'accepte les{' '}
+              <Link to="/terms" target="_blank" style={{ color: '#C9A84C', fontWeight: '600', textDecoration: 'none' }}>
+                Conditions Générales d'Utilisation
+              </Link>{' '}
+              et la{' '}
+              <Link to="/privacy" target="_blank" style={{ color: '#C9A84C', fontWeight: '600', textDecoration: 'none' }}>
+                Politique de Confidentialité
+              </Link>{' '}
+              de MyDD Registry.
+            </span>
+          </label>
+
+          <button type="submit" disabled={loading || !acceptedTerms} style={{ width: '100%', background: acceptedTerms ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1a1a1a', color: acceptedTerms ? '#111' : '#444', padding: '0.8rem', borderRadius: '8px', border: 'none', fontSize: '0.95rem', fontWeight: '700', cursor: acceptedTerms && !loading ? 'pointer' : 'not-allowed', letterSpacing: '0.04em', transition: 'all 0.2s' }}>
             {loading ? t('register.submitting') : t('register.submit')}
           </button>
         </form>

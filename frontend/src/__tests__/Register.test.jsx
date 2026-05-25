@@ -40,10 +40,12 @@ import api from '../lib/api'
 function fillForm({ name = 'John Doe', email = 'john@example.com', password = 'Password1' } = {}) {
   // The Register form uses inline styles without htmlFor, so we query by input type.
   const inputs = document.querySelectorAll('input')
-  // inputs[0] = text (name), inputs[1] = email, inputs[2] = password
+  // inputs[0] = text (name), inputs[1] = email, inputs[2] = password, inputs[3] = CGU checkbox
   if (name)     fireEvent.change(inputs[0], { target: { value: name } })
   if (email)    fireEvent.change(inputs[1], { target: { value: email } })
   if (password) fireEvent.change(inputs[2], { target: { value: password } })
+  // CGU checkbox must be checked or handleSubmit returns early
+  fireEvent.click(inputs[3])
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
