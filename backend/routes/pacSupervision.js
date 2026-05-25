@@ -561,4 +561,59 @@ router.post('/admin/bonus/:id/pay', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/pac/upgrade-request
+// S1 applies for S2 tier; S2 applies for S3 tier.
+// Sets kyc_status = 'pending' so it appears in the admin KYC queue.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/upgrade-request', auth, pacLimiter, async (req, res) => {
+  try {
+    const pac = await getPacProfile(req.user.id)
+    if (!pac) return res.status(403).json({ error: 'PAC profile not found' })
+
+    const nextTier = pac.pac_tier === 'S1' ? 'S2' : pac.pac_tier === 'S2' ? 'S3' : null
+    if (!nextTier) return res.status(400).json({ error: 'Already at maximum tier (S3)' })
+
+    // Require minimum completed missions: S1→S2: 5, S2→S3: 10
+    const MIN_MISSIONS = { S2: 5, S3: 10 }
+    const { rows: mRows } = await query(
+      `SELECT COUNT(*) AS cnt FROM missions WHERE assigned_to = $1 AND status = 'completed'`,
+      [req.user.id]
+    )
+    const completed = parseInt(mRows[0].cnt, 10)
+    if (completed < MIN_MISSIONS[nextTier]) {
+      return res.status(400).json({
+        error: `You need at least ${MIN_MISSIONS[nextTier]} completed missions to apply for ${nextTier}. You have ${completed}.`,
+        completed, required: MIN_MISSIONS[nextTier],
+      })
+    }
+
+    // Set pac_tier to requested and kyc_status to pending
+    const { rows } = await query(`
+      UPDATE pac_profiles
+      SET pac_tier = $1, kyc_status = 'pending', updated_at = NOW()
+      WHERE id = $2
+      RETURNING pac_tier, kyc_status
+    `, [nextTier, pac.id])
+
+    logAudit(req.user.id, 'pac_upgrade_requested', 'pac_profiles', req.ip, { from: pac.pac_tier, to: nextTier, completed })
+
+    // Notify admin via notification (if any admin users)
+    const agentName = pac.full_name || req.user.email
+    query(`
+      INSERT INTO notifications (user_id, type, title, body)
+      SELECT id, 'info', $1, $2
+      FROM users WHERE role = 'admin' LIMIT 3
+    `, [
+      `PAC Upgrade Request: ${nextTier}`,
+      `${agentName} has requested tier upgrade to ${nextTier} (${completed} missions completed)`,
+    ]).catch(() => {})
+
+    res.json({ message: `Upgrade request submitted — your application for ${nextTier} is under review.`, ...rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac_upgrade_request_error', message: err.message }))
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 module.exports = router

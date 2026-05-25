@@ -20,6 +20,9 @@ export default function PACPortal() {
   const [msg, setMsg]                   = useState({ text: '', type: '' })
   const [tab, setTab]                   = useState('missions')
   const [reportForms, setReportForms]   = useState({})   // { [missionId]: { open, text, outcome, submitting } }
+  const [kycStatus, setKycStatus]       = useState('pending')
+  const [upgradeMsg, setUpgradeMsg]     = useState(null) // { text, type }
+  const [upgrading, setUpgrading]       = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -35,7 +38,8 @@ export default function PACPortal() {
       .then(res => {
         if (res.data && Object.keys(res.data).length > 0) {
           setProfile(p => ({ ...p, ...res.data }))
-          if (res.data.pac_tier) setPacTier(res.data.pac_tier)
+          if (res.data.pac_tier)   setPacTier(res.data.pac_tier)
+          if (res.data.kyc_status) setKycStatus(res.data.kyc_status)
         }
       })
       .catch(() => {})
@@ -87,6 +91,20 @@ export default function PACPortal() {
     }
   }
 
+  const requestUpgrade = async () => {
+    setUpgrading(true)
+    setUpgradeMsg(null)
+    try {
+      const res = await api.post('/api/pac/upgrade-request')
+      setKycStatus('pending')
+      setUpgradeMsg({ text: res.data.message, type: 'success' })
+    } catch (e) {
+      setUpgradeMsg({ text: e.response?.data?.error || 'Erreur lors de la demande.', type: 'error' })
+    } finally {
+      setUpgrading(false)
+    }
+  }
+
   const logout = async () => {
     try { await api.post('/api/auth/logout') } catch { /* best-effort */ }
     clearSession()
@@ -98,6 +116,9 @@ export default function PACPortal() {
     { id: 'profile',     label: t('pac.tabs.profile') },
     ...(pacTier === 'S2' || pacTier === 'S3'
       ? [{ id: 'supervision', label: pacTier === 'S3' ? 'Mentoring S3' : 'Supervision S2' }]
+      : []),
+    ...(pacTier === 'S1' || pacTier === 'S2'
+      ? [{ id: 'progression', label: '🎯 Progression' }]
       : []),
   ]
 
@@ -315,6 +336,150 @@ export default function PACPortal() {
         {tab === 'supervision' && (
           <div style={{ padding: '0 2rem 2rem' }}>
             <PACSupervisionDashboard pacTier={pacTier} />
+          </div>
+        )}
+
+        {tab === 'progression' && (
+          <div>
+            {/* Current status card */}
+            <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.75rem 2rem', marginBottom: '1.25rem' }}>
+              <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
+                Mon Statut PAC
+              </div>
+              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  <div style={{ color: '#555', fontSize: '0.72rem', marginBottom: '0.3rem' }}>Tier actuel</div>
+                  <div style={{ fontSize: '2rem', fontWeight: '900', color: pacTier === 'S3' ? '#e056fd' : pacTier === 'S2' ? '#C9A84C' : '#4a90e2' }}>{pacTier}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#555', fontSize: '0.72rem', marginBottom: '0.3rem' }}>Statut KYC</div>
+                  <div style={{
+                    display: 'inline-block', padding: '0.3rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase',
+                    background: kycStatus === 'approved' ? 'rgba(46,204,113,0.12)' : kycStatus === 'pending' ? 'rgba(243,156,18,0.12)' : 'rgba(231,76,60,0.12)',
+                    color: kycStatus === 'approved' ? '#2ecc71' : kycStatus === 'pending' ? '#f39c12' : '#ff6b6b',
+                  }}>{kycStatus}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#555', fontSize: '0.72rem', marginBottom: '0.3rem' }}>Missions complétées</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#eee' }}>{missions.filter(m => m.status === 'completed').length}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Upgrade path */}
+            {(() => {
+              const nextTier = pacTier === 'S1' ? 'S2' : 'S3'
+              const requiredMissions = pacTier === 'S1' ? 5 : 10
+              const completedCount = missions.filter(m => m.status === 'completed').length
+              const meetsRequirement = completedCount >= requiredMissions
+              const alreadyPending = kycStatus === 'pending'
+
+              const tierBenefits = {
+                S2: ['Superviser jusqu\'à 10 agents S1', 'Commission B&E : 15% par mission', 'Bonus L1 : 5% du CA net de votre réseau', 'Accès aux missions de niveau avancé'],
+                S3: ['Mentorer jusqu\'à 5 superviseurs S2', 'Commission B&E : 20% par mission', 'Bonus L1 + L2 sur l\'ensemble du réseau', 'Accès prioritaire aux nouvelles missions', 'Participation aux sessions stratégiques B&E HQ'],
+              }
+
+              return (
+                <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.75rem 2rem' }}>
+                  <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
+                    Évolution vers {nextTier}
+                  </div>
+
+                  {/* Benefits */}
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ color: '#888', fontSize: '0.82rem', marginBottom: '0.75rem' }}>Avantages du niveau {nextTier} :</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {tierBenefits[nextTier].map((b, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', color: '#ccc' }}>
+                          <span style={{ color: '#C9A84C', fontSize: '0.9rem' }}>✦</span> {b}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Requirements */}
+                  <div style={{ background: '#111', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+                    <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                      Conditions d'éligibilité
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      {/* Missions requirement */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ color: meetsRequirement ? '#2ecc71' : '#333', fontSize: '1rem', width: '20px' }}>
+                          {meetsRequirement ? '✓' : '○'}
+                        </span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.85rem', color: meetsRequirement ? '#ccc' : '#666' }}>
+                            {requiredMissions} missions complétées
+                            <span style={{ color: meetsRequirement ? '#2ecc71' : '#888', marginLeft: '0.5rem', fontWeight: '600' }}>
+                              ({completedCount}/{requiredMissions})
+                            </span>
+                          </div>
+                          {!meetsRequirement && (
+                            <div style={{ height: '4px', background: '#1a1a1a', borderRadius: '2px', marginTop: '0.4rem', maxWidth: '200px' }}>
+                              <div style={{ height: '100%', width: `${Math.min(completedCount / requiredMissions * 100, 100)}%`, background: '#C9A84C', borderRadius: '2px' }} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* Profile complete */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ color: profile.name ? '#2ecc71' : '#333', fontSize: '1rem', width: '20px' }}>
+                          {profile.name ? '✓' : '○'}
+                        </span>
+                        <div style={{ fontSize: '0.85rem', color: profile.name ? '#ccc' : '#666' }}>
+                          Profil complété (nom, localisation, bio)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action */}
+                  {upgradeMsg && (
+                    <div style={{
+                      padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem',
+                      background: upgradeMsg.type === 'success' ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)',
+                      border: upgradeMsg.type === 'success' ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(231,76,60,0.3)',
+                      color: upgradeMsg.type === 'success' ? '#2ecc71' : '#ff6b6b',
+                    }}>
+                      {upgradeMsg.text}
+                    </div>
+                  )}
+
+                  {alreadyPending ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: 'rgba(243,156,18,0.08)', borderRadius: '8px', border: '1px solid rgba(243,156,18,0.2)' }}>
+                      <span style={{ fontSize: '1.2rem' }}>⏳</span>
+                      <div>
+                        <div style={{ color: '#f39c12', fontWeight: '600', fontSize: '0.9rem' }}>Demande en cours d'examen</div>
+                        <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                          Votre dossier est en cours de vérification par l'équipe B&E. Vous serez notifié dès la décision.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={requestUpgrade}
+                      disabled={upgrading || !meetsRequirement || !profile.name}
+                      style={{
+                        background: meetsRequirement && profile.name ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1a1a1a',
+                        color: meetsRequirement && profile.name ? '#111' : '#444',
+                        padding: '0.85rem 2rem', borderRadius: '8px', border: 'none',
+                        fontWeight: '700', cursor: meetsRequirement && profile.name && !upgrading ? 'pointer' : 'not-allowed',
+                        fontSize: '0.9rem', letterSpacing: '0.04em',
+                        opacity: upgrading ? 0.7 : 1,
+                      }}
+                    >
+                      {upgrading ? '…' : `🚀 Postuler pour le niveau ${nextTier}`}
+                    </button>
+                  )}
+                  {!meetsRequirement && (
+                    <div style={{ marginTop: '0.75rem', color: '#555', fontSize: '0.78rem' }}>
+                      Il vous manque encore {requiredMissions - completedCount} mission(s) pour postuler.
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )}
       </div>
