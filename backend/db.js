@@ -287,6 +287,22 @@ const initDb = async () => {
     `)
 
     await query(`
+      CREATE TABLE IF NOT EXISTS certifications (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        level INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'pending',
+        payment_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+        granted_at TIMESTAMPTZ,
+        expires_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+    await query('ALTER TABLE certifications ADD COLUMN IF NOT EXISTS granted_at TIMESTAMPTZ')
+    await query('ALTER TABLE certifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ')
+
+    await query(`
       CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -305,22 +321,6 @@ const initDb = async () => {
     `)
     await query("ALTER TABLE payments ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'")
     await query('CREATE INDEX IF NOT EXISTS idx_payments_stripe_intent ON payments(stripe_payment_intent_id)')
-
-    await query(`
-      CREATE TABLE IF NOT EXISTS certifications (
-        id SERIAL PRIMARY KEY,
-        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-        level INTEGER NOT NULL DEFAULT 1,
-        status TEXT NOT NULL DEFAULT 'pending',
-        payment_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
-        granted_at TIMESTAMPTZ,
-        expires_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `)
-    await query('ALTER TABLE certifications ADD COLUMN IF NOT EXISTS granted_at TIMESTAMPTZ')
-    await query('ALTER TABLE certifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ')
 
     await query(`
       CREATE OR REPLACE VIEW revenue_stats AS
