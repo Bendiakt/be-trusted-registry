@@ -4,7 +4,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const fs = require('fs')
 const path = require('path')
-const { getPool } = require('../db')
+const { getPool, initDb } = require('../db')
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations')
 
@@ -38,6 +38,9 @@ const applyMigration = async (client, fileName, sql) => {
 
 const run = async () => {
   const pool = getPool()
+  // Ensure core tables (users, companies, certifications, etc.) exist
+  // before running migrations that reference them via foreign keys.
+  await initDb()
   const client = await pool.connect()
   try {
     await ensureMigrationsTable(client)
