@@ -256,6 +256,10 @@ export default function PublicRegistry() {
 
       <footer style={{ borderTop: '1px solid #111', padding: '1.5rem 2rem', textAlign: 'center', color: '#2a2a2a', fontSize: '0.75rem' }}>
         © {new Date().getFullYear()} B&amp;E Consult FZCO · Dubai Silicon Oasis, UAE
+        {' · '}
+        <Link to="/terms" style={{ color: '#333', textDecoration: 'none' }}>CGU</Link>
+        {' · '}
+        <Link to="/privacy" style={{ color: '#333', textDecoration: 'none' }}>Privacy Policy</Link>
       </footer>
     </div>
   )
