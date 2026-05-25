@@ -114,7 +114,55 @@ resource "sentry_issue_alert" "new_issue" {
   ]
 }
 
-# ── Alert 3 — p95 latency > 2000 ms ──────────────────────────────────────────
+# ── Alert 3 — Issue réapparu (résolu puis re-déclenché) ──────────────────────
+resource "sentry_issue_alert" "regression" {
+  organization = var.org_slug
+  project      = var.project_slug
+  name         = "Regression — resolved issue reappeared"
+
+  action_match = "all"
+  filter_match = "all"
+  frequency    = 60
+
+  conditions_v2 = [
+    {
+      regression_event = {}
+      event_frequency              = null
+      event_frequency_percent      = null
+      event_unique_user_frequency  = null
+      existing_high_priority_issue = null
+      first_seen_event             = null
+      new_high_priority_issue      = null
+      reappeared_event             = null
+    }
+  ]
+
+  filters_v2 = []
+
+  actions_v2 = [
+    {
+      notify_email = {
+        target_type      = "IssueOwners"
+        fallthrough_type = "AllMembers"
+      }
+      azure_devops_create_ticket      = null
+      discord_notify_service          = null
+      github_create_ticket            = null
+      github_enterprise_create_ticket = null
+      jira_create_ticket              = null
+      jira_server_create_ticket       = null
+      msteams_notify_service          = null
+      notify_event                    = null
+      notify_event_sentry_app         = null
+      notify_event_service            = null
+      opsgenie_notify_team            = null
+      pagerduty_notify_service        = null
+      slack_notify_service            = null
+    }
+  ]
+}
+
+# ── Alert 4 — p95 latency > 2000 ms ──────────────────────────────────────────
 # REQUIRES Sentry Business plan (Performance Monitoring feature).
 # Uncomment and run `terraform apply` once upgraded.
 #
