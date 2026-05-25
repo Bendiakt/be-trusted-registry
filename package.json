@@ -36,6 +36,7 @@
     "load:test:hard": "node scripts/load-test.js --concurrency 50 --duration 60 --rps-target 100",
     "stripe:portal:configure": "node scripts/configure-stripe-portal.js",
     "stripe:pac:configure": "node scripts/configure-pac-memberships.js",
+    "stripe:test:setup": "node scripts/setup-stripe-test.js",
     "staging:sync": "git fetch origin && git checkout staging && git merge origin/main --no-edit && git push origin staging && git checkout main",
     "verify:dns": "node scripts/verify-dns.js",
     "verify:health": "node scripts/verify-health.js",
