@@ -38,11 +38,119 @@ function BonusBar ({ pct }) {
   )
 }
 
+// Monthly report task types that need a rich form
+const MONTHLY_REPORT_TASKS = ['monthly_supervision_report', 'monthly_executive_report']
+
+function MonthlyReportModal ({ taskType, pacTier, onClose, onSubmit }) {
+  const now   = new Date()
+  const label = taskType === 'monthly_executive_report' ? 'Rapport Exécutif Mensuel' : 'Rapport de Supervision Mensuel'
+
+  const [form, setForm] = useState({
+    active_supervisees: '',
+    missions_completed: '',
+    accomplishments: '',
+    challenges: '',
+    training_done: '',
+    next_objectives: '',
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const inp = { padding: '8px 12px', background: '#1a1a1a', border: '1px solid #2e2e2e', borderRadius: 6, color: '#eee', fontSize: '0.85rem', outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const area = { ...inp, resize: 'vertical', fontFamily: 'inherit' }
+  const lbl  = { fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, display: 'block' }
+
+  const handleSubmit = async () => {
+    if (!form.accomplishments.trim()) { setError('Les réalisations sont requises.'); return }
+    setSubmitting(true)
+    setError('')
+    try {
+      const notes = [
+        `PÉRIODE: ${now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).toUpperCase()}`,
+        form.active_supervisees ? `SUPERVISÉS ACTIFS: ${form.active_supervisees}` : '',
+        form.missions_completed ? `MISSIONS COMPLÉTÉES: ${form.missions_completed}` : '',
+        `\nRÉALISATIONS:\n${form.accomplishments}`,
+        form.challenges       ? `\nDÉFIS / ESCALADES:\n${form.challenges}` : '',
+        form.training_done    ? `\nFORMATION RÉALISÉE:\n${form.training_done}` : '',
+        form.next_objectives  ? `\nOBJECTIFS MOIS PROCHAIN:\n${form.next_objectives}` : '',
+      ].filter(Boolean).join('\n')
+
+      await api.post(`/api/pac/supervision/tasks/${taskType}`, { notes })
+      onSubmit()
+    } catch (e) {
+      setError('Erreur lors de la soumission. Réessayez.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+      <div style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: 12, padding: '2rem', maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#C9A84C', marginBottom: 4 }}>{label}</div>
+        <div style={{ color: '#555', fontSize: '0.8rem', marginBottom: '1.5rem' }}>
+          {now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })} · {pacTier}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label style={lbl}>Supervisés actifs ce mois</label>
+              <input type="number" min="0" value={form.active_supervisees} onChange={e => set('active_supervisees', e.target.value)} style={inp} placeholder="Ex: 8" />
+            </div>
+            <div>
+              <label style={lbl}>Missions complétées (réseau)</label>
+              <input type="number" min="0" value={form.missions_completed} onChange={e => set('missions_completed', e.target.value)} style={inp} placeholder="Ex: 12" />
+            </div>
+          </div>
+
+          <div>
+            <label style={lbl}>Réalisations principales *</label>
+            <textarea rows={4} value={form.accomplishments} onChange={e => set('accomplishments', e.target.value)} style={area} placeholder="Décrivez les réalisations clés du mois : check-ins effectués, feedbacks donnés, problèmes résolus…" />
+          </div>
+
+          <div>
+            <label style={lbl}>Défis & escalades</label>
+            <textarea rows={3} value={form.challenges} onChange={e => set('challenges', e.target.value)} style={area} placeholder="Difficultés rencontrées, agents en difficulté, incidents à remonter à B&E HQ…" />
+          </div>
+
+          <div>
+            <label style={lbl}>Formation réalisée</label>
+            <textarea rows={2} value={form.training_done} onChange={e => set('training_done', e.target.value)} style={area} placeholder="Sessions de formation, sujets abordés, participants…" />
+          </div>
+
+          <div>
+            <label style={lbl}>Objectifs mois prochain</label>
+            <textarea rows={2} value={form.next_objectives} onChange={e => set('next_objectives', e.target.value)} style={area} placeholder="Actions prioritaires pour le prochain mois…" />
+          </div>
+
+          {error && <div style={{ color: '#ff6b6b', fontSize: '0.8rem' }}>{error}</div>}
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+          <button onClick={onClose} style={{ ...G.btn, background: 'transparent', color: '#555', border: '1px solid #2e2e2e' }}>Annuler</button>
+          <button onClick={handleSubmit} disabled={submitting} style={{ ...G.btn, background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111' }}>
+            {submitting ? '…' : '📤 Soumettre le rapport'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TaskChecklist ({ tasks, templates, summary, pacTier, onTaskComplete }) {
   const [submitting, setSubmitting] = useState(null)
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes]           = useState('')
+  const [reportModal, setReportModal] = useState(null) // taskType for monthly report modal
 
   const handleComplete = async (taskType, weekNum) => {
+    // Monthly report tasks → open rich form modal
+    if (MONTHLY_REPORT_TASKS.includes(taskType)) {
+      setReportModal(taskType)
+      return
+    }
     setSubmitting(taskType)
     try {
       await api.post(`/api/pac/supervision/tasks/${taskType}`, {
@@ -72,36 +180,55 @@ function TaskChecklist ({ tasks, templates, summary, pacTier, onTaskComplete }) 
   }
 
   return (
-    <div style={G.card}>
-      <h3 style={G.h2}>Tâches de supervision — ce mois</h3>
-      <BonusBar pct={summary?.completion_pct || 0} />
-      <div style={{ marginTop: 16 }}>
-        {templates.map(tpl => {
-          const done = tasks.find(t => t.task_type === tpl && t.completed)
-          return (
-            <div key={tpl} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #1a1a1a' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '1rem', color: done ? '#2ecc71' : '#333' }}>{done ? '✓' : '○'}</span>
-                <span style={{ color: done ? '#666' : '#ccc', textDecoration: done ? 'line-through' : 'none', fontSize: '0.88rem' }}>
-                  {taskLabels[tpl] || tpl}
-                </span>
-                {tpl.startsWith('weekly_') && <span style={G.tag}>Hebdo</span>}
-                {tpl.startsWith('monthly_') && <span style={G.tag}>Mensuel</span>}
+    <>
+      <div style={G.card}>
+        <h3 style={G.h2}>Tâches de supervision — ce mois</h3>
+        <BonusBar pct={summary?.completion_pct || 0} />
+        <div style={{ marginTop: 16 }}>
+          {templates.map(tpl => {
+            const done = tasks.find(t => t.task_type === tpl && t.completed)
+            return (
+              <div key={tpl} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #1a1a1a' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1rem', color: done ? '#2ecc71' : '#333' }}>{done ? '✓' : '○'}</span>
+                  <span style={{ color: done ? '#666' : '#ccc', textDecoration: done ? 'line-through' : 'none', fontSize: '0.88rem' }}>
+                    {taskLabels[tpl] || tpl}
+                  </span>
+                  {tpl.startsWith('weekly_') && <span style={G.tag}>Hebdo</span>}
+                  {tpl.startsWith('monthly_') && <span style={G.tag}>Mensuel</span>}
+                  {done && done.notes && MONTHLY_REPORT_TASKS.includes(tpl) && (
+                    <span style={{ fontSize: '0.7rem', color: '#2ecc71' }}>✓ Rapport soumis</span>
+                  )}
+                </div>
+                {!done && (
+                  <button
+                    style={{ ...G.btn,
+                      background: MONTHLY_REPORT_TASKS.includes(tpl) ? '#4a90e222' : '#C9A84C22',
+                      color: MONTHLY_REPORT_TASKS.includes(tpl) ? '#4a90e2' : '#C9A84C',
+                      border: `1px solid ${MONTHLY_REPORT_TASKS.includes(tpl) ? '#4a90e244' : '#C9A84C44'}`,
+                    }}
+                    onClick={() => handleComplete(tpl)}
+                    disabled={submitting === tpl}
+                  >
+                    {submitting === tpl ? '…' : MONTHLY_REPORT_TASKS.includes(tpl) ? '📝 Rédiger le rapport' : 'Marquer fait'}
+                  </button>
+                )}
               </div>
-              {!done && (
-                <button
-                  style={{ ...G.btn, background: '#C9A84C22', color: '#C9A84C', border: '1px solid #C9A84C44' }}
-                  onClick={() => handleComplete(tpl)}
-                  disabled={submitting === tpl}
-                >
-                  {submitting === tpl ? '…' : 'Marquer fait'}
-                </button>
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
-    </div>
+
+      {/* Monthly Report Modal */}
+      {reportModal && (
+        <MonthlyReportModal
+          taskType={reportModal}
+          pacTier={pacTier}
+          onClose={() => setReportModal(null)}
+          onSubmit={() => { setReportModal(null); onTaskComplete() }}
+        />
+      )}
+    </>
   )
 }
 
