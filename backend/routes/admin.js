@@ -590,4 +590,178 @@ router.get('/export/companies', auth, requireAdmin, adminReadLimiter, async (req
   }
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAC v3 — Mission scoring + payment confirmation
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PATCH /api/admin/missions/:id/score
+// Admin scores a completed mission (1–5) and optionally confirms client payment.
+// Setting payment_confirmed=true stamps payment_confirmed_at and calculates commission.
+router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    const { admin_score, payment_confirmed, stripe_invoice_id } = req.body
+
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+    if (admin_score !== undefined && (admin_score < 1 || admin_score > 5)) {
+      return res.status(400).json({ error: 'admin_score must be 1–5' })
+    }
+
+    // Fetch current mission + PAC profile for commission calculation
+    const mRes = await query(`
+      SELECT m.*, pp.pac_tier, pp.commission_rate, pp.id AS pac_id
+      FROM missions m
+      LEFT JOIN users u   ON u.id  = m.assigned_to
+      LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
+      WHERE m.id = $1
+    `, [missionId])
+
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found' })
+    const mission = mRes.rows[0]
+
+    // Calculate commission if we're confirming payment
+    let commissionCents = mission.commission_amount_cents
+    if (payment_confirmed && !mission.payment_confirmed_at) {
+      const rate = parseFloat(mission.commission_rate || 0.10)
+      commissionCents = Math.round((mission.fee_usd || 0) * 100 * rate)
+    }
+
+    const result = await query(`
+      UPDATE missions SET
+        admin_score            = COALESCE($1, admin_score),
+        admin_scored_at        = CASE WHEN $1 IS NOT NULL THEN NOW() ELSE admin_scored_at END,
+        payment_confirmed_at   = CASE WHEN $2 THEN COALESCE(payment_confirmed_at, NOW()) ELSE payment_confirmed_at END,
+        stripe_invoice_id      = COALESCE($3, stripe_invoice_id),
+        commission_amount_cents = COALESCE($4, commission_amount_cents),
+        updated_at             = NOW()
+      WHERE id = $5
+      RETURNING *
+    `, [
+      admin_score || null,
+      payment_confirmed || false,
+      stripe_invoice_id || null,
+      commissionCents,
+      missionId
+    ])
+
+    logAudit(req.user.id, 'admin_mission_scored', 'missions', req.ip, {
+      missionId, admin_score, payment_confirmed, commissionCents
+    })
+
+    res.json({ mission: result.rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_score_error', message: err.message }))
+    res.status(500).json({ error: 'Update failed' })
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAC v3 — KYC / tier management
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/pac/agents — list all PAC agents with tier + KYC status
+router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res) => {
+  try {
+    const { tier, kyc_status, page = 1, limit = 50 } = req.query
+    const offset = (Math.max(parseInt(page,10),1) - 1) * Math.min(parseInt(limit,10),200)
+
+    const { rows } = await query(`
+      SELECT
+        pp.*,
+        u.email, u.name AS user_name, u.created_at AS user_created_at,
+        -- Active supervisees count
+        (SELECT COUNT(*) FROM pac_supervision ps WHERE ps.supervisor_id = pp.id AND ps.status = 'active') AS active_supervisees,
+        -- Completed missions
+        (SELECT COUNT(*) FROM missions m WHERE m.assigned_to = pp.user_id AND m.status = 'completed') AS missions_completed,
+        -- Pending bonus (draft statements)
+        (SELECT COALESCE(SUM(final_bonus_cents),0) FROM pac_bonus_payouts pb WHERE pb.supervisor_id = pp.id AND pb.status = 'draft') AS pending_bonus_cents
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE ($1::text IS NULL OR pp.pac_tier = $1)
+        AND ($2::text IS NULL OR pp.kyc_status = $2)
+      ORDER BY pp.pac_tier DESC, pp.created_at DESC
+      LIMIT $3 OFFSET $4
+    `, [tier || null, kyc_status || null, Math.min(parseInt(limit,10),200), offset])
+
+    res.json({ agents: rows })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_pac_agents_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to load PAC agents' })
+  }
+})
+
+// PATCH /api/admin/pac/agents/:id/kyc — approve or reject KYC + optionally set tier
+router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const pacId = parseInt(req.params.id, 10)
+    const { kyc_status, pac_tier, notes } = req.body
+
+    const VALID_KYC  = ['approved','rejected','suspended']
+    const VALID_TIER = ['S1','S2','S3']
+
+    if (!VALID_KYC.includes(kyc_status)) return res.status(400).json({ error: 'Invalid kyc_status' })
+    if (pac_tier && !VALID_TIER.includes(pac_tier)) return res.status(400).json({ error: 'Invalid pac_tier' })
+
+    // Set commission_rate and max_supervised based on tier
+    const tierConfig = { S1: { commission_rate: 0.10, max_supervised: 0 }, S2: { commission_rate: 0.15, max_supervised: 10 }, S3: { commission_rate: 0.20, max_supervised: 5 } }
+    const cfg = pac_tier ? tierConfig[pac_tier] : null
+
+    const { rows } = await query(`
+      UPDATE pac_profiles SET
+        kyc_status      = $1,
+        pac_tier        = COALESCE($2, pac_tier),
+        commission_rate = COALESCE($3, commission_rate),
+        max_supervised  = COALESCE($4, max_supervised),
+        updated_at      = NOW()
+      WHERE id = $5
+      RETURNING *
+    `, [kyc_status, pac_tier || null, cfg?.commission_rate || null, cfg?.max_supervised || null, pacId])
+
+    if (!rows.length) return res.status(404).json({ error: 'PAC agent not found' })
+
+    logAudit(req.user.id, 'admin_pac_kyc_update', 'pac_profiles', req.ip, { pacId, kyc_status, pac_tier, notes })
+
+    // Send in-app notification to the PAC agent
+    const pac = rows[0]
+    const notifTitle = kyc_status === 'approved'
+      ? `KYC approved — you are now ${pac.pac_tier}`
+      : `KYC status update: ${kyc_status}`
+    const notifBody  = kyc_status === 'approved'
+      ? `Your MyDD PAC profile has been verified. You can now accept missions as a ${pac.pac_tier} agent.`
+      : `Your KYC application has been ${kyc_status}. ${notes || ''}`
+
+    await query(`
+      INSERT INTO notifications (user_id, type, title, body)
+      VALUES ($1, $2, $3, $4)
+    `, [pac.user_id, kyc_status === 'approved' ? 'success' : 'warning', notifTitle, notifBody]).catch(() => {})
+
+    res.json({ agent: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_pac_kyc_error', message: err.message }))
+    res.status(500).json({ error: 'Update failed' })
+  }
+})
+
+// GET /api/admin/pac/supervision/pending — all pending supervision requests
+router.get('/pac/supervision/pending', auth, requireAdmin, adminReadLimiter, async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        ps.*,
+        sup_pp.pac_tier AS supervisor_tier, sup_pp.full_name AS supervisor_name, sup_u.email AS supervisor_email,
+        sub_pp.pac_tier AS supervised_tier, sub_pp.full_name AS supervised_name, sub_u.email AS supervised_email
+      FROM pac_supervision ps
+      JOIN pac_profiles sup_pp ON sup_pp.id = ps.supervisor_id
+      JOIN users sup_u          ON sup_u.id  = sup_pp.user_id
+      JOIN pac_profiles sub_pp ON sub_pp.id = ps.supervised_id
+      JOIN users sub_u          ON sub_u.id  = sub_pp.user_id
+      WHERE ps.status = 'pending'
+      ORDER BY ps.requested_at ASC
+    `)
+    res.json({ requests: rows })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load pending requests' })
+  }
+})
+
 module.exports = router

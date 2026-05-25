@@ -16,7 +16,7 @@
  */
 
 const { query }                              = require('../db')
-const { sendRenewalReminder, sendCertExpired } = require('./mailer')
+const { sendRenewalReminder, sendCertExpired, sendSupervisionTaskReminder } = require('./mailer')
 
 // ── Token cleanup ─────────────────────────────────────────────────────────────
 const runTokenCleanup = async () => {
@@ -181,6 +181,109 @@ const runPiiRetention = async () => {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
+// ── PAC supervision weekly reminders ─────────────────────────────────────────
+const runPacSupervisionReminders = async () => {
+  const now   = new Date()
+  const year  = now.getFullYear()
+  const month = now.getMonth() + 1
+
+  const TASK_LABELS = {
+    weekly_checkin:            'Check-in individuel avec chaque S1',
+    weekly_report_review:      'Revue des rapports S1 + feedback',
+    weekly_mentoring:          'Mentoring individuel S2',
+    weekly_spot_check:         'Audit spot-check 2 rapports S1 aléatoires',
+    monthly_supervision_report:'Rapport de supervision mensuel',
+    monthly_training:          'Session de formation collective',
+    monthly_executive_report:  'Rapport exécutif mensuel',
+    monthly_strategic_session: 'Session stratégique avec B&E HQ',
+  }
+
+  try {
+    // Get all active S2/S3 supervisors with their email + task completion
+    const { rows: supervisors } = await query(`
+      SELECT pp.id AS pac_id, pp.pac_tier, pp.user_id, u.email, u.name,
+             pp.membership_active
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE pp.pac_tier IN ('S2','S3')
+        AND pp.kyc_status = 'approved'
+        AND pp.membership_active = TRUE
+    `)
+
+    for (const sup of supervisors) {
+      // Count active supervisees — skip if below minimum
+      const { rows: activeRows } = await query(
+        `SELECT COUNT(*) AS cnt FROM pac_supervision WHERE supervisor_id = $1 AND status = 'active'`,
+        [sup.pac_id]
+      )
+      if (parseInt(activeRows[0].cnt, 10) === 0) continue
+
+      // Get task completion for this month
+      const { rows: taskRows } = await query(`
+        SELECT task_type, completed FROM pac_supervision_tasks
+        WHERE supervisor_id = $1 AND period_year = $2 AND period_month = $3
+      `, [sup.pac_id, year, month])
+
+      const weeklyTemplates = sup.pac_tier === 'S2'
+        ? ['weekly_checkin', 'weekly_report_review']
+        : ['weekly_mentoring', 'weekly_spot_check']
+
+      const completedTypes = new Set(taskRows.filter(t => t.completed).map(t => t.task_type))
+      const pendingTasks = weeklyTemplates
+        .filter(t => !completedTypes.has(t))
+        .map(t => TASK_LABELS[t] || t)
+
+      const total = taskRows.length
+      const done  = taskRows.filter(t => t.completed).length
+      const pct   = total > 0 ? Math.round(done / total * 100) : 0
+      const bonusStatus = pct >= 80 ? 'full' : pct >= 70 ? 'half' : 'suspended'
+
+      await sendSupervisionTaskReminder({
+        email:         sup.email,
+        name:          sup.name,
+        tier:          sup.pac_tier,
+        pendingTasks,
+        completionPct: pct,
+        bonusStatus,
+      })
+
+      // Also create in-app notification
+      if (pendingTasks.length > 0) {
+        await query(`
+          INSERT INTO notifications (user_id, type, title, body)
+          VALUES ($1, 'warning', $2, $3)
+        `, [
+          sup.user_id,
+          `[${sup.pac_tier}] ${pendingTasks.length} tâche(s) de supervision en attente`,
+          `Cette semaine : ${pendingTasks.join(' · ')}`
+        ]).catch(() => {})
+      }
+    }
+
+    console.log(JSON.stringify({ event: 'pac_supervision_reminders_sent', count: supervisors.length, year, month }))
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac_supervision_reminders_error', message: err.message }))
+  }
+}
+
+// Schedule every Monday at 09:00 UTC
+function schedulePacSupervisionReminders () {
+  const now     = new Date()
+  const nextMon = new Date(now)
+  // Days until next Monday (1 = Monday in getDay())
+  const daysUntilMon = (8 - now.getUTCDay()) % 7 || 7
+  nextMon.setUTCDate(now.getUTCDate() + daysUntilMon)
+  nextMon.setUTCHours(9, 0, 0, 0)
+
+  const delay = nextMon.getTime() - Date.now()
+  console.log(JSON.stringify({ event: 'pac_reminder_cron_scheduled', next_run: nextMon.toISOString() }))
+
+  setTimeout(async () => {
+    await runPacSupervisionReminders()
+    setInterval(runPacSupervisionReminders, 7 * 24 * 60 * 60 * 1000)  // then every 7 days
+  }, delay)
+}
+
 const startCronJobs = () => {
   // Token cleanup — runs immediately, then every hour
   runTokenCleanup()
@@ -205,6 +308,9 @@ const startCronJobs = () => {
   // PAC bonus M+1 — scheduled for 1st of next month at 02:00 UTC
   const { schedulePacBonusCron } = require('./pacBonusCron')
   schedulePacBonusCron()
+
+  // PAC supervision task reminders — every Monday at 09:00 UTC
+  schedulePacSupervisionReminders()
 }
 
 module.exports = { startCronJobs, runPiiRetention }
