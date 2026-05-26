@@ -35,6 +35,10 @@ tags:
     description: Public supplier registry
   - name: Payments
     description: Stripe checkout and billing portal
+  - name: API Keys
+    description: Manage programmatic access keys for the MyDD REST API
+  - name: Webhooks
+    description: Register HTTPS endpoints to receive real-time certification events
   - name: Health
     description: Liveness and readiness probes
 
@@ -113,6 +117,23 @@ components:
         fee:         { type: number }
         status:      { type: string, enum: [available, assigned, completed, cancelled] }
         outcome:     { type: string, enum: [pass, fail, inconclusive], nullable: true }
+
+  responses:
+    Unauthorized:
+      description: Authentication required — no valid session cookie
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Insufficient permissions for this resource
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: Invalid request body — see error message
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
 
 paths:
 
@@ -546,6 +567,252 @@ paths:
                 reason:  { type: string }
       responses:
         '200': { description: Status updated }
+
+  # ── Payments ─────────────────────────────────────────────────────────────────
+
+  /api/payments/history:
+    get:
+      tags: [Payments]
+      summary: Get payment history for the authenticated company
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:          { type: integer }
+                        amount_usd:  { type: string, example: '499.00' }
+                        currency:    { type: string, example: usd }
+                        status:      { type: string, enum: [pending, completed, failed, refunded] }
+                        plan_id:     { type: string, example: level1 }
+                        plan_label:  { type: string }
+                        created_at:  { type: string, format: date-time }
+                  total: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ── API Keys ──────────────────────────────────────────────────────────────────
+
+  /api/keys:
+    get:
+      tags: [API Keys]
+      summary: List all API keys for the authenticated user
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: List of API keys (raw key is never returned here)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:           { type: integer }
+                        prefix:       { type: string, example: mydd_lk_a1b2c3 }
+                        name:         { type: string, example: Production backend }
+                        scopes:       { type: array, items: { type: string } }
+                        rate_limit:   { type: integer }
+                        last_used_at: { type: string, format: date-time, nullable: true }
+                        created_at:   { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+    post:
+      tags: [API Keys]
+      summary: Create a new API key (raw key shown once)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:      { type: string, maxLength: 80, example: Production backend }
+                scopes:    { type: array, items: { type: string } }
+                rateLimit: { type: integer, minimum: 1, maximum: 600 }
+                expiresAt: { type: string, format: date-time, nullable: true }
+      responses:
+        '201':
+          description: Key created — store the `key` value immediately, it will not be shown again
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:        { type: integer }
+                  prefix:    { type: string, example: mydd_lk_a1b2c3 }
+                  name:      { type: string }
+                  scopes:    { type: array, items: { type: string } }
+                  key:       { type: string, description: Raw key — shown only once }
+                  createdAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { description: Rate limit exceeded (10 keys/hour) }
+
+  /api/keys/{id}:
+    delete:
+      tags: [API Keys]
+      summary: Revoke an API key
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: Key not found }
+
+  # ── Webhooks ──────────────────────────────────────────────────────────────────
+
+  /api/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List all registered webhook endpoints
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: List of webhook endpoints with delivery stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:                { type: integer }
+                        url:               { type: string, format: uri }
+                        events:            { type: array, items: { type: string } }
+                        active:            { type: boolean }
+                        description:       { type: string, nullable: true }
+                        deliveries_total:  { type: integer }
+                        deliveries_success:{ type: integer }
+                        created_at:        { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+    post:
+      tags: [Webhooks]
+      summary: Register a new webhook endpoint (signing secret shown once)
+      description: |
+        All webhook requests are signed with HMAC-SHA256. Verify on your end:
+        ```
+        X-MyDD-Signature: sha256=<HMAC-SHA256(body, secret)>
+        ```
+        Events: `cert.status_changed`, `cert.issued`, `cert.expired`, `cert.revoked`
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: Must be HTTPS
+                  example: https://your-server.com/webhook
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [cert.status_changed, cert.issued, cert.expired, cert.revoked]
+                  default: [cert.status_changed]
+                description:
+                  type: string
+                  maxLength: 200
+                  nullable: true
+      responses:
+        '201':
+          description: Endpoint registered — store the `secret` immediately, it will not be shown again
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:          { type: integer }
+                  url:         { type: string }
+                  events:      { type: array, items: { type: string } }
+                  active:      { type: boolean }
+                  secret:      { type: string, description: Signing secret — shown only once }
+                  created_at:  { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { description: Rate limit exceeded (20 endpoints/hour) }
+
+  /api/webhooks/{id}:
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook endpoint
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Endpoint deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: Endpoint not found }
+
+  /api/webhooks/{id}/ping:
+    post:
+      tags: [Webhooks]
+      summary: Send a test ping to a webhook endpoint
+      description: Delivers a real HTTP request to the endpoint URL with event type `ping`. Response includes actual delivery status code.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Ping result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:        { type: string }
+                  success:    { type: boolean }
+                  statusCode: { type: integer, nullable: true }
+                  error:      { type: string, nullable: true }
+                  event:      { type: string, example: ping }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: Endpoint not found or inactive }
 
   # ── Health ────────────────────────────────────────────────────────────────────
 
