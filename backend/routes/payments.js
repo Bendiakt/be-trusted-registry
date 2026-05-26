@@ -5,7 +5,7 @@ const { query } = require('../db')
 const { auth } = require('../lib/authUtils')
 const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
-const { sendPaymentConfirmation } = require('../lib/mailer')
+const { sendPaymentConfirmation, sendPacMembershipConfirmation, sendPacKycDecision } = require('../lib/mailer')
 const { isBlockedCompany } = require('../lib/blocklist')
 
 const levelFromPlanId = (planId) => {
@@ -175,40 +175,59 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       // ── PAC membership upgrade ────────────────────────────────────────────────
       if (sesSubType === 'pac_membership' && pacProfileId && nextTier) {
         const pacId = parseInt(pacProfileId, 10)
+
+        // Retrieve subscription to stamp membership_expires + sub ID
+        let membershipExpires = null
+        const stripeSubId     = session.subscription || null
+        if (stripeSubId) {
+          try {
+            const sub = await getStripe().subscriptions.retrieve(stripeSubId)
+            membershipExpires = sub.current_period_end
+              ? new Date(sub.current_period_end * 1000).toISOString()
+              : null
+          } catch (_) { /* non-blocking */ }
+        }
+
         await query(
           `UPDATE pac_profiles
-             SET pac_tier    = $1,
-                 kyc_status  = 'pending',
-                 updated_at  = NOW()
-           WHERE id = $2`,
-          [nextTier, pacId]
+             SET pac_tier                 = $1,
+                 kyc_status               = 'pending',
+                 membership_stripe_sub_id = COALESCE($2, membership_stripe_sub_id),
+                 membership_active        = TRUE,
+                 membership_expires       = COALESCE($3, membership_expires),
+                 updated_at               = NOW()
+           WHERE id = $4`,
+          [nextTier, stripeSubId, membershipExpires, pacId]
         )
 
-        // Notify admins
+        // Fetch agent info for notifications + email
         const agentResult = await query(
-          `SELECT pp.full_name, u.email
+          `SELECT pp.full_name, u.email, u.id AS user_id
              FROM pac_profiles pp JOIN users u ON u.id = pp.user_id
             WHERE pp.id = $1 LIMIT 1`,
           [pacId]
         )
-        const agentName = agentResult.rows[0]?.full_name || agentResult.rows[0]?.email || `PAC #${pacId}`
+        const agent     = agentResult.rows[0] || {}
+        const agentName = agent.full_name || agent.email || `PAC #${pacId}`
 
+        // In-app notification to admins
         query(`
           INSERT INTO notifications (user_id, type, title, body)
           SELECT id, 'info', $1, $2
             FROM users WHERE role = 'admin' LIMIT 3
         `, [
           `PAC Upgrade Payment: ${nextTier}`,
-          `${agentName} paid for ${nextTier} membership upgrade (from ${fromTier || '?'}). KYC review required.`,
+          `${agentName} paid for ${nextTier} membership (from ${fromTier || '?'}). KYC review required.`,
         ]).catch(() => {})
 
+        // Confirmation email to agent
+        sendPacMembershipConfirmation({
+          email: agent.email, agentName: agent.full_name, tier: nextTier, membershipExpires,
+        }).catch(() => {})
+
         console.log(JSON.stringify({
-          event:     'pac.upgrade.paid',
-          pacId,
-          fromTier,
-          nextTier,
-          sessionId: session.id,
-          stripeEventId: event.id,
+          event: 'pac.upgrade.paid', pacId, fromTier, nextTier,
+          stripeSubId, membershipExpires, sessionId: session.id, stripeEventId: event.id,
         }))
 
         return res.json({ received: true })
@@ -407,6 +426,37 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       const isTrader        = subscriptionType === 'trader_portal'
                            || planId === 'trader_monthly'
                            || planId === 'trader_annual'
+      const isPacMembership = subscriptionType === 'pac_membership'
+                           || planId === 'pac_s2_annual'
+                           || planId === 'pac_s3_annual'
+
+      // ── PAC membership renewal ────────────────────────────────────────────────
+      if (isPacMembership) {
+        const sub = await getStripe().subscriptions.retrieve(invoice.subscription)
+        const periodEnd = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null
+        const pacResult = await query(
+          `SELECT id, pac_tier, full_name FROM pac_profiles
+            WHERE membership_stripe_sub_id = $1 LIMIT 1`,
+          [invoice.subscription]
+        )
+        const pac = pacResult.rows[0]
+        if (!pac) {
+          console.warn(JSON.stringify({ event: 'stripe.invoice.paid.pac_not_found', subId: invoice.subscription, invoiceId: invoice.id }))
+          return res.json({ received: true })
+        }
+        await query(
+          `UPDATE pac_profiles
+             SET membership_active  = TRUE,
+                 membership_expires = $1,
+                 updated_at         = NOW()
+           WHERE id = $2`,
+          [periodEnd, pac.id]
+        )
+        console.log(JSON.stringify({ event: 'pac.membership.renewed', pacId: pac.id, pac_tier: pac.pac_tier, periodEnd, invoiceId: invoice.id }))
+        return res.json({ received: true })
+      }
 
       // ── TRADER subscription ──────────────────────────────────────────────────
       if (isTrader) {
@@ -593,6 +643,26 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
       if (!customerId) {
         console.warn(JSON.stringify({ event: 'stripe.subscription.deleted.no_customer', subscriptionId: subscription.id }))
+        return res.json({ received: true })
+      }
+
+      // Check if this is a PAC membership subscription (match by sub ID directly)
+      const pacSubResult = await query(
+        `SELECT id, pac_tier, full_name FROM pac_profiles
+          WHERE membership_stripe_sub_id = $1 LIMIT 1`,
+        [subscription.id]
+      )
+      if (pacSubResult.rows[0]) {
+        const pac = pacSubResult.rows[0]
+        await query(
+          `UPDATE pac_profiles
+             SET membership_active = FALSE,
+                 kyc_status        = 'suspended',
+                 updated_at        = NOW()
+           WHERE id = $1`,
+          [pac.id]
+        )
+        console.log(JSON.stringify({ event: 'pac.membership.cancelled', pacId: pac.id, pac_tier: pac.pac_tier, subscriptionId: subscription.id }))
         return res.json({ received: true })
       }
 

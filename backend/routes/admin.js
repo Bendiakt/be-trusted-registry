@@ -10,7 +10,8 @@ const { logAudit }               = require('../lib/audit')
 const { notifyUser }             = require('../lib/wsNotify')
 const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
-        sendCertRevoked }        = require('../lib/mailer')
+        sendCertRevoked,
+        sendPacKycDecision }     = require('../lib/mailer')
 const { isBlockedCompany }       = require('../lib/blocklist')
 const { validate, schemas }      = require('../lib/validators')
 
@@ -734,6 +735,19 @@ router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async
       INSERT INTO notifications (user_id, type, title, body)
       VALUES ($1, $2, $3, $4)
     `, [pac.user_id, kyc_status === 'approved' ? 'success' : 'warning', notifTitle, notifBody]).catch(() => {})
+
+    // Email the agent with the KYC decision
+    const agentEmailResult = await query(
+      'SELECT email FROM users WHERE id = $1 LIMIT 1',
+      [pac.user_id]
+    ).catch(() => ({ rows: [] }))
+    sendPacKycDecision({
+      email:      agentEmailResult.rows[0]?.email,
+      agentName:  pac.full_name,
+      kyc_status,
+      pac_tier:   pac.pac_tier,
+      notes,
+    }).catch(() => {})
 
     res.json({ agent: rows[0] })
   } catch (err) {

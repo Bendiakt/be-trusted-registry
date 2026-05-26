@@ -20,9 +20,11 @@ export default function PACPortal() {
   const [msg, setMsg]                   = useState({ text: '', type: '' })
   const [tab, setTab]                   = useState('missions')
   const [reportForms, setReportForms]   = useState({})   // { [missionId]: { open, text, outcome, submitting } }
-  const [kycStatus, setKycStatus]       = useState('pending')
-  const [upgradeMsg, setUpgradeMsg]     = useState(null) // { text, type }
-  const [upgrading, setUpgrading]       = useState(false)
+  const [kycStatus, setKycStatus]         = useState('pending')
+  const [membershipActive, setMembershipActive]   = useState(false)
+  const [membershipExpires, setMembershipExpires] = useState(null)
+  const [upgradeMsg, setUpgradeMsg]       = useState(null) // { text, type }
+  const [upgrading, setUpgrading]         = useState(false)
   const [upgradeBanner, setUpgradeBanner] = useState(null) // retour Stripe
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -56,8 +58,10 @@ export default function PACPortal() {
       .then(res => {
         if (res.data && Object.keys(res.data).length > 0) {
           setProfile(p => ({ ...p, ...res.data }))
-          if (res.data.pac_tier)   setPacTier(res.data.pac_tier)
-          if (res.data.kyc_status) setKycStatus(res.data.kyc_status)
+          if (res.data.pac_tier)           setPacTier(res.data.pac_tier)
+          if (res.data.kyc_status)         setKycStatus(res.data.kyc_status)
+          if (res.data.membership_active)  setMembershipActive(res.data.membership_active)
+          if (res.data.membership_expires) setMembershipExpires(res.data.membership_expires)
         }
       })
       .catch(() => {})
@@ -392,6 +396,23 @@ export default function PACPortal() {
                   <div style={{ color: '#555', fontSize: '0.72rem', marginBottom: '0.3rem' }}>Missions complétées</div>
                   <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#eee' }}>{missions.filter(m => m.status === 'completed').length}</div>
                 </div>
+                {pacTier !== 'S1' && (
+                  <div>
+                    <div style={{ color: '#555', fontSize: '0.72rem', marginBottom: '0.3rem' }}>Abonnement</div>
+                    <div style={{
+                      display: 'inline-block', padding: '0.3rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '700',
+                      background: membershipActive ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.12)',
+                      color: membershipActive ? '#2ecc71' : '#ff6b6b',
+                    }}>
+                      {membershipActive ? '✓ Actif' : '✗ Inactif'}
+                    </div>
+                    {membershipExpires && (
+                      <div style={{ color: '#555', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+                        jusqu'au {new Date(membershipExpires).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
