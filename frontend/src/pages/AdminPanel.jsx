@@ -318,6 +318,9 @@ export default function AdminPanel() {
 
   return (
     <div style={G.page}>
+      <div className="admin-mobile-notice" style={{ background: '#1a1a1a', borderBottom: '2px solid #C9A84C', padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.85rem', color: '#C9A84C', fontWeight: '600' }}>
+        ⚠️ L'interface d'administration est optimisée pour desktop. Certaines fonctionnalités peuvent être limitées sur mobile.
+      </div>
       <nav style={G.nav}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={G.logo}>{t('admin.title')}</div>

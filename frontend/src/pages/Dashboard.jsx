@@ -7,6 +7,7 @@ import MetricsDashboard from '../components/MetricsDashboard'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Skeleton from '../components/Skeleton'
 import { useToast, ToastContainer } from '../components/Toast'
+import { useMobile } from '../lib/useMobile'
 
 const LEVEL_CONFIG = {
   0: { color: '#666',    bg: 'rgba(102,102,102,0.1)' },
@@ -462,16 +463,18 @@ export default function Dashboard() {
     navigate('/login')
   }
 
+  const isMobile = useMobile()
+
   const G = {
     page: { minHeight: '100vh', background: '#111', fontFamily: 'sans-serif', color: '#eee' },
-    nav: { background: '#1a1a1a', borderBottom: '1px solid #333', padding: '0 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' },
+    nav: { background: '#1a1a1a', borderBottom: '1px solid #333', padding: isMobile ? '0 1rem' : '0 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' },
     logo: { color: '#C9A84C', fontWeight: '900', fontSize: '1.2rem', letterSpacing: '0.1em' },
-    main: { maxWidth: '1100px', margin: '0 auto', padding: '2rem 1.5rem' },
-    card: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' },
-    tabs: { display: 'flex', gap: '0.5rem', marginBottom: '2rem', flexWrap: 'wrap' },
+    main: { maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '1.25rem 0.75rem' : '2rem 1.5rem' },
+    card: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: isMobile ? '1rem' : '1.5rem', marginBottom: '1.5rem' },
+    tabs: { display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '4px' },
     planCard: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '1.5rem', flex: '1', minWidth: '240px', display: 'flex', flexDirection: 'column' },
-    btn: { background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.875rem' },
-    outlineBtn: { background: 'transparent', color: '#C9A84C', padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #C9A84C', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem' },
+    btn: { background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.875rem', whiteSpace: 'nowrap' },
+    outlineBtn: { background: 'transparent', color: '#C9A84C', padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #C9A84C', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem', whiteSpace: 'nowrap' },
   }
 
   const lvl = company?.certificationLevel || 0
@@ -511,9 +514,9 @@ export default function Dashboard() {
             <div style={{ color: '#444', fontSize: '0.6rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t('brand.tagline_short')}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '1rem' }}>
           <LanguageSwitcher />
-          <span style={{ color: '#666', fontSize: '0.8rem' }}>{user?.name || user?.email}</span>
+          {!isMobile && <span style={{ color: '#666', fontSize: '0.8rem' }}>{user?.name || user?.email}</span>}
           {lvl > 0 && (
             <button onClick={handleBillingPortal} disabled={billingLoading} style={{ background: 'transparent', color: '#555', border: '1px solid #2a2a2a', padding: '0.4rem 0.9rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', opacity: billingLoading ? 0.5 : 1 }}>
               {billingLoading ? '…' : t('dashboard.billing')}
@@ -529,7 +532,7 @@ export default function Dashboard() {
           <EmailVerifyBanner t={t} />
         )}
 
-        <div style={G.tabs}>
+        <div style={G.tabs} className="scroll-x">
           <TabBtn id="overview"   label={t('dashboard.tabs.overview')} />
           <TabBtn id="register"   label={t('dashboard.tabs.register')} />
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
@@ -736,6 +739,7 @@ function BillingTab({ G, t, onManageBilling, billingLoading }) {
   const [payments, setPayments]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
+  const isMobile = useMobile()
 
   useEffect(() => {
     api.get('/api/payments/history')
@@ -807,8 +811,23 @@ function BillingTab({ G, t, onManageBilling, billingLoading }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {payments.map(p => {
               const s = STATUS_STYLE[p.status] || STATUS_STYLE.pending
-              return (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222', flexWrap: 'wrap' }}>
+              return isMobile ? (
+                <div key={p.id} style={{ padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                    <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem' }}>{p.plan_label}</div>
+                    <div style={{ color: '#C9A84C', fontWeight: '700', fontSize: '0.95rem' }}>${p.amount_usd}</div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#555', fontSize: '0.75rem' }}>
+                      {new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                    <div style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', background: s.bg, color: s.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {s.label}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222' }}>
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem' }}>{p.plan_label}</div>
                     <div style={{ color: '#555', fontSize: '0.75rem', marginTop: '0.15rem' }}>
