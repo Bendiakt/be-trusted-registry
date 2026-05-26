@@ -170,6 +170,49 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
       const resolvedCompanyId = companyId ? parseInt(companyId, 10) : null
       const resolvedUserId = userId ? parseInt(userId, 10) : null
+      const { subscriptionType: sesSubType, pacProfileId, nextTier, fromTier } = session.metadata || {}
+
+      // ── PAC membership upgrade ────────────────────────────────────────────────
+      if (sesSubType === 'pac_membership' && pacProfileId && nextTier) {
+        const pacId = parseInt(pacProfileId, 10)
+        await query(
+          `UPDATE pac_profiles
+             SET pac_tier    = $1,
+                 kyc_status  = 'pending',
+                 updated_at  = NOW()
+           WHERE id = $2`,
+          [nextTier, pacId]
+        )
+
+        // Notify admins
+        const agentResult = await query(
+          `SELECT pp.full_name, u.email
+             FROM pac_profiles pp JOIN users u ON u.id = pp.user_id
+            WHERE pp.id = $1 LIMIT 1`,
+          [pacId]
+        )
+        const agentName = agentResult.rows[0]?.full_name || agentResult.rows[0]?.email || `PAC #${pacId}`
+
+        query(`
+          INSERT INTO notifications (user_id, type, title, body)
+          SELECT id, 'info', $1, $2
+            FROM users WHERE role = 'admin' LIMIT 3
+        `, [
+          `PAC Upgrade Payment: ${nextTier}`,
+          `${agentName} paid for ${nextTier} membership upgrade (from ${fromTier || '?'}). KYC review required.`,
+        ]).catch(() => {})
+
+        console.log(JSON.stringify({
+          event:     'pac.upgrade.paid',
+          pacId,
+          fromTier,
+          nextTier,
+          sessionId: session.id,
+          stripeEventId: event.id,
+        }))
+
+        return res.json({ received: true })
+      }
 
       await query(
         `UPDATE payments
@@ -859,6 +902,95 @@ router.get('/trader-subscription', auth, async (req, res) => {
   } catch (err) {
     console.error(JSON.stringify({ event: 'payments.trader_subscription.error', userId: req.user?.id, err: err.message }))
     res.status(500).json({ error: 'Failed to load subscription status' })
+  }
+})
+
+// ── POST /api/payments/pac-upgrade-checkout ──────────────────────────────────
+// Creates a Stripe Checkout Session for a PAC tier upgrade (S1→S2 or S2→S3).
+// The agent is redirected to Stripe; on payment the webhook sets
+// kyc_status='pending' and notifies admins.
+// ─────────────────────────────────────────────────────────────────────────────
+const PAC_PRICE_IDS = {
+  S2: process.env.STRIPE_PAC_S2_PRICE_ID,
+  S3: process.env.STRIPE_PAC_S3_PRICE_ID,
+}
+const PAC_UPGRADE_NAMES = {
+  S2: 'MyDD PAC Certified S2 — Annual Membership ($399/yr)',
+  S3: 'MyDD PAC Senior S3 — Annual Membership ($799/yr)',
+}
+const MIN_MISSIONS_UPGRADE = { S2: 5, S3: 10 }
+
+router.post('/pac-upgrade-checkout', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') {
+      return res.status(403).json({ error: 'Only PAC agents can upgrade' })
+    }
+
+    // Fetch current PAC profile
+    const { rows: pacRows } = await query(
+      `SELECT pp.id, pp.pac_tier, pp.kyc_status, u.email
+         FROM pac_profiles pp JOIN users u ON u.id = pp.user_id
+        WHERE pp.user_id = $1 LIMIT 1`,
+      [req.user.id]
+    )
+    const pac = pacRows[0]
+    if (!pac) return res.status(403).json({ error: 'PAC profile not found' })
+
+    const nextTier = pac.pac_tier === 'S1' ? 'S2' : pac.pac_tier === 'S2' ? 'S3' : null
+    if (!nextTier) return res.status(400).json({ error: 'Already at maximum tier (S3)' })
+
+    // Minimum missions check
+    const { rows: mRows } = await query(
+      `SELECT COUNT(*) AS cnt FROM missions WHERE assigned_to = $1 AND status = 'completed'`,
+      [req.user.id]
+    )
+    const completed = parseInt(mRows[0].cnt, 10)
+    const required  = MIN_MISSIONS_UPGRADE[nextTier]
+    if (completed < required) {
+      return res.status(400).json({
+        error: `You need at least ${required} completed missions to upgrade to ${nextTier}. You have ${completed}.`,
+        completed, required,
+      })
+    }
+
+    const priceId = PAC_PRICE_IDS[nextTier]
+    if (!priceId) {
+      console.error(JSON.stringify({ event: 'pac.upgrade_checkout.missing_price', nextTier }))
+      return res.status(500).json({ error: 'Membership price not configured. Please contact support.' })
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const session = await getStripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${frontendUrl}/pac?upgrade=success&tier=${nextTier}`,
+      cancel_url:  `${frontendUrl}/pac?upgrade=cancelled`,
+      customer_email: pac.email || undefined,
+      metadata: {
+        userId:           String(req.user.id),
+        pacProfileId:     String(pac.id),
+        fromTier:         pac.pac_tier,
+        nextTier,
+        subscriptionType: 'pac_membership',
+      },
+    })
+
+    console.log(JSON.stringify({
+      event:     'pac.upgrade_checkout.created',
+      userId:    req.user.id,
+      fromTier:  pac.pac_tier,
+      nextTier,
+      sessionId: session.id,
+    }))
+
+    res.json({ url: session.url })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.upgrade_checkout.error', userId: req.user?.id, err: err.message }))
+    if (err.message === 'Missing STRIPE_SECRET_KEY') {
+      return res.status(500).json({ error: 'Server payment configuration is incomplete' })
+    }
+    res.status(500).json({ error: 'Failed to create upgrade session. Please try again.' })
   }
 })
 

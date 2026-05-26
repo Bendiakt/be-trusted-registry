@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 import { getSession, clearSession } from '../lib/session'
@@ -23,7 +23,9 @@ export default function PACPortal() {
   const [kycStatus, setKycStatus]       = useState('pending')
   const [upgradeMsg, setUpgradeMsg]     = useState(null) // { text, type }
   const [upgrading, setUpgrading]       = useState(false)
+  const [upgradeBanner, setUpgradeBanner] = useState(null) // retour Stripe
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     const user = getSession()
@@ -31,6 +33,22 @@ export default function PACPortal() {
     const role = user.role
     if (role !== 'pac') { navigate(role === 'admin' ? '/admin' : '/dashboard'); return }
 
+    // Handle Stripe return URL params
+    const upgradeParam = searchParams.get('upgrade')
+    const tierParam    = searchParams.get('tier')
+    if (upgradeParam === 'success') {
+      setUpgradeBanner({ type: 'success', tier: tierParam, text: `🎉 Paiement confirmé pour le niveau ${tierParam || 'suivant'} ! Votre dossier est en cours d'examen par l'équipe B&E.` })
+      setTab('progression')
+      // Clean URL without reload
+      searchParams.delete('upgrade')
+      searchParams.delete('tier')
+      setSearchParams(searchParams, { replace: true })
+    } else if (upgradeParam === 'cancelled') {
+      setUpgradeMsg({ text: 'Paiement annulé. Votre abonnement n\'a pas été modifié.', type: 'error' })
+      setTab('progression')
+      searchParams.delete('upgrade')
+      setSearchParams(searchParams, { replace: true })
+    }
 
     api.get('/api/pac/missions')
       .then(res => setMissions(res.data)).catch(() => {})
@@ -95,14 +113,14 @@ export default function PACPortal() {
     setUpgrading(true)
     setUpgradeMsg(null)
     try {
-      const res = await api.post('/api/pac/upgrade-request')
-      setKycStatus('pending')
-      setUpgradeMsg({ text: res.data.message, type: 'success' })
+      const res = await api.post('/api/payments/pac-upgrade-checkout')
+      // Redirect to Stripe Checkout
+      window.location.href = res.data.url
     } catch (e) {
       setUpgradeMsg({ text: e.response?.data?.error || 'Erreur lors de la demande.', type: 'error' })
-    } finally {
       setUpgrading(false)
     }
+    // Note: setUpgrading(false) not called on success — page will redirect to Stripe
   }
 
   const logout = async () => {
@@ -142,6 +160,17 @@ export default function PACPortal() {
       </nav>
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1rem' }}>
+        {/* Stripe return banner — upgrade payment success */}
+        {upgradeBanner && (
+          <div style={{
+            padding: '1rem 1.25rem', borderRadius: '10px', marginBottom: '1.5rem', fontSize: '0.9rem',
+            background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.35)', color: '#2ecc71',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
+          }}>
+            <span>{upgradeBanner.text}</span>
+            <button onClick={() => setUpgradeBanner(null)} style={{ background: 'transparent', border: 'none', color: '#2ecc71', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
+          </div>
+        )}
         {msg.text && (
           <div style={{
             padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.875rem',
@@ -469,8 +498,13 @@ export default function PACPortal() {
                         opacity: upgrading ? 0.7 : 1,
                       }}
                     >
-                      {upgrading ? '…' : `🚀 Postuler pour le niveau ${nextTier}`}
+                      {upgrading ? '⏳ Redirection vers le paiement…' : `💳 Payer & postuler pour le niveau ${nextTier}`}
                     </button>
+                  )}
+                  {meetsRequirement && profile.name && !alreadyPending && (
+                    <div style={{ marginTop: '0.6rem', color: '#666', fontSize: '0.78rem' }}>
+                      Abonnement annuel — {nextTier === 'S2' ? '$399/an' : '$799/an'} · Paiement sécurisé par Stripe
+                    </div>
                   )}
                   {!meetsRequirement && (
                     <div style={{ marginTop: '0.75rem', color: '#555', fontSize: '0.78rem' }}>
