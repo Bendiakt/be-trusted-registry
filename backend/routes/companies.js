@@ -322,11 +322,15 @@ router.get('/missions', auth, companyReadLimiter, async (req, res) => {
 
     const [result, countResult] = await Promise.all([
       query(
-        `SELECT m.id, m.status, m.outcome, m.report_text,
+        `SELECT m.id, m.title, m.status, m.outcome, m.report_text,
                 m.location, m.type, m.description,
+                m.fee_usd, m.pac_tier_required, m.due_date,
+                m.admin_score, m.admin_scored_at,
+                m.client_score, m.client_scored_at,
                 m.created_at, m.completed_at,
                 pp.full_name AS pac_name,
-                pp.location  AS pac_location
+                pp.location  AS pac_location,
+                pp.pac_tier  AS pac_tier
            FROM missions m
            LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
           WHERE m.company_id = $1
@@ -343,17 +347,26 @@ router.get('/missions', auth, companyReadLimiter, async (req, res) => {
     const total = countResult.rows[0]?.total || 0
     res.json({
       missions: result.rows.map(r => ({
-        id:          r.id,
-        status:      r.status,
-        outcome:     r.outcome      || null,
-        reportText:  r.report_text  || null,
-        location:    r.location     || '',
-        type:        r.type         || '',
-        description: r.description  || '',
-        createdAt:   r.created_at,
-        completedAt: r.completed_at || null,
-        pacName:     r.pac_name     || null,
-        pacLocation: r.pac_location || null,
+        id:              r.id,
+        title:           r.title           || null,
+        status:          r.status,
+        outcome:         r.outcome         || null,
+        reportText:      r.report_text     || null,
+        location:        r.location        || '',
+        type:            r.type            || '',
+        description:     r.description     || '',
+        feeUsd:          r.fee_usd         || null,
+        tierRequired:    r.pac_tier_required || 'S1',
+        dueDate:         r.due_date        || null,
+        adminScore:      r.admin_score     || null,
+        adminScoredAt:   r.admin_scored_at || null,
+        clientScore:     r.client_score    || null,
+        clientScoredAt:  r.client_scored_at || null,
+        createdAt:       r.created_at,
+        completedAt:     r.completed_at    || null,
+        pacName:         r.pac_name        || null,
+        pacLocation:     r.pac_location    || null,
+        pacTier:         r.pac_tier        || null,
       })),
       pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
     })

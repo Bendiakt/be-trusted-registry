@@ -372,6 +372,8 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false)
   const [toasts,         showToast]         = useToast()
   const [billingLoading, setBillingLoading] = useState(false)
+  const [companyMissions, setCompanyMissions] = useState([])
+  const [missionsLoaded,  setMissionsLoaded]  = useState(false)
   const navigate = useNavigate()
 
   const PLANS = [
@@ -431,6 +433,15 @@ export default function Dashboard() {
     }
   }
 
+  const fetchCompanyMissions = async () => {
+    if (missionsLoaded) return
+    try {
+      const res = await api.get('/api/companies/missions?limit=50')
+      setCompanyMissions(res.data.missions || [])
+      setMissionsLoaded(true)
+    } catch { /* silent */ }
+  }
+
   const handleCheckout = async (planId) => {
     setPaymentError('')
     setCheckoutPlanId(planId)
@@ -480,8 +491,8 @@ export default function Dashboard() {
   const lvl = company?.certificationLevel || 0
   const lconf = LEVEL_CONFIG[lvl] || LEVEL_CONFIG[0]
 
-  const TabBtn = ({ id, label }) => (
-    <button onClick={() => setTab(id)} style={tab === id ? { ...G.btn } : { ...G.outlineBtn }}>
+  const TabBtn = ({ id, label, onClick }) => (
+    <button onClick={() => { setTab(id); onClick && onClick() }} style={tab === id ? { ...G.btn } : { ...G.outlineBtn }}>
       {label}
     </button>
   )
@@ -538,6 +549,7 @@ export default function Dashboard() {
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
           <TabBtn id="documents"  label={t('dashboard.tabs.documents')} />
           <TabBtn id="billing"    label={t('dashboard.tabs.billing', 'Billing')} />
+          <TabBtn id="missions"   label="🔍 Audits" onClick={fetchCompanyMissions} />
           <TabBtn id="developer"  label={t('dashboard.tabs.developer', 'Developer')} />
           <TabBtn id="metrics"    label={t('dashboard.tabs.metrics')} />
         </div>
@@ -725,6 +737,44 @@ export default function Dashboard() {
         {tab === 'metrics' && (
           <div style={G.card}>
             <MetricsDashboard />
+          </div>
+        )}
+
+        {/* ── Audits (company missions) ─────────────────────────────────── */}
+        {tab === 'missions' && (
+          <div>
+            <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
+              Mes audits B&E
+            </div>
+
+            {companyMissions.length === 0 && (
+              <div style={{ ...G.card, textAlign: 'center', padding: '3rem 1.5rem' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔍</div>
+                <div style={{ color: '#C9A84C', fontWeight: '700', marginBottom: '0.5rem' }}>Aucun audit en cours</div>
+                <div style={{ color: '#555', fontSize: '0.875rem' }}>
+                  Vos missions d'audit PAC apparaîtront ici une fois assignées par l'équipe B&E.
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {companyMissions.map(m => {
+                const STATUS_STYLE = {
+                  available:  { bg: 'rgba(74,144,226,0.12)',  text: '#4a90e2' },
+                  assigned:   { bg: 'rgba(243,156,18,0.12)',  text: '#f39c12' },
+                  completed:  { bg: 'rgba(46,204,113,0.12)',  text: '#2ecc71' },
+                  cancelled:  { bg: 'rgba(150,150,150,0.12)', text: '#666' },
+                }
+                const OUTCOME_STYLE = {
+                  pass:        { bg: 'rgba(46,204,113,0.12)',  text: '#2ecc71' },
+                  fail:        { bg: 'rgba(231,76,60,0.12)',   text: '#ff6b6b' },
+                  conditional: { bg: 'rgba(243,156,18,0.12)',  text: '#f39c12' },
+                }
+                const sc = STATUS_STYLE[m.status] || STATUS_STYLE.available
+                const oc = m.outcome ? (OUTCOME_STYLE[m.outcome] || OUTCOME_STYLE.pass) : null
+                return <MissionCard key={m.id} m={m} sc={sc} oc={oc} G={G} />
+              })}
+            </div>
           </div>
         )}
       </main>
@@ -1255,6 +1305,104 @@ function RegisterCompanyForm({ company, onSaved, onError }) {
 
         <button style={G.btn} type="submit" disabled={saving}>{saving ? t('dashboard.company_form.saving') : t('dashboard.company_form.save')}</button>
       </form>
+    </div>
+  )
+}
+
+// ── MissionCard — company audit view ─────────────────────────────────────────
+function MissionCard({ m, sc, oc, G }) {
+  const [open, setOpen] = useState(false)
+
+  const TIER_COLOR = { S1: '#4a90e2', S2: '#C9A84C', S3: '#e056fd' }
+  const tc = TIER_COLOR[m.tierRequired] || '#555'
+
+  return (
+    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Main row */}
+      <div style={{ padding: '1.25rem 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1, minWidth: '180px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+            <span style={{ color: '#888', fontSize: '0.7rem' }}>#{m.id}</span>
+            <span style={{ fontWeight: '700', color: '#eee', fontSize: '0.95rem' }}>{m.title || m.description?.slice(0, 50) || 'Audit'}</span>
+          </div>
+          <div style={{ color: '#666', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+            {m.location || '—'}{m.type ? ` · ${m.type}` : ''}
+          </div>
+          {m.pacName && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ color: '#555', fontSize: '0.72rem' }}>Agent :</span>
+              <span style={{ color: '#bbb', fontSize: '0.78rem', fontWeight: '600' }}>{m.pacName}</span>
+              {m.pacTier && (
+                <span style={{ fontSize: '0.62rem', background: `${tc}22`, color: tc, padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: '700' }}>{m.pacTier.toUpperCase()}</span>
+              )}
+            </div>
+          )}
+          {m.dueDate && (
+            <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.3rem' }}>
+              📅 Échéance : {new Date(m.dueDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+          {/* Status */}
+          <span style={{ background: sc.bg, color: sc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {m.status}
+          </span>
+          {/* Outcome */}
+          {oc && (
+            <span style={{ background: oc.bg, color: oc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {m.outcome}
+            </span>
+          )}
+          {/* Scores row */}
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {m.adminScore && (
+              <span title="Note B&E" style={{ background: 'rgba(224,86,253,0.1)', color: '#e056fd', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                ⭐ {m.adminScore}/5
+              </span>
+            )}
+            {m.clientScore && (
+              <span title="Votre note" style={{ background: 'rgba(201,168,76,0.1)', color: '#C9A84C', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                👤 {m.clientScore}/5
+              </span>
+            )}
+            {m.feeUsd && (
+              <span style={{ color: '#C9A84C', fontSize: '0.75rem', fontWeight: '700' }}>${m.feeUsd}</span>
+            )}
+          </div>
+          {/* Dates */}
+          {m.completedAt && (
+            <div style={{ color: '#444', fontSize: '0.68rem' }}>
+              Terminé le {new Date(m.completedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Description preview */}
+      {m.description && (
+        <div style={{ padding: '0 1.5rem 0.75rem', color: '#555', fontSize: '0.78rem', lineHeight: '1.5' }}>
+          {m.description.length > 120 ? m.description.slice(0, 120) + '…' : m.description}
+        </div>
+      )}
+
+      {/* Report expand */}
+      {m.reportText && (
+        <>
+          <div style={{ borderTop: '1px solid #252525' }}>
+            <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '0.6rem 1.5rem', cursor: 'pointer', color: '#555', fontSize: '0.75rem', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              {open ? '▲' : '▼'} Rapport d'audit
+            </button>
+          </div>
+          {open && (
+            <div style={{ borderTop: '1px solid #222', padding: '1rem 1.5rem', background: 'rgba(46,204,113,0.02)' }}>
+              <div style={{ color: '#444', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Rapport</div>
+              <div style={{ color: '#888', fontSize: '0.82rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{m.reportText}</div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
