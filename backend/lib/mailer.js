@@ -913,4 +913,253 @@ const sendFounderWelcome = async ({ email, full_name, region, exemption_expires 
   }
 }
 
-module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome }
+// ── PAC Achievement Emails ────────────────────────────────────────────────────
+// Tier label helpers
+const TIER_NAMES = { s1: 'S1 Associate', s2: 'S2 Certified', s3: 'S3 Senior' }
+
+// sendS2Eligible — fired by nightly cron when S1 meets all S2 criteria
+const sendS2Eligible = async ({ email, full_name, admin_avg, missions }) => {
+  if (!email) return
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: "You've earned S2 Certified — Review in progress",
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:24px 32px">
+      <p style="margin:0;font-size:1.1rem;font-weight:900;color:#111">🏅 S2 Certified — Achievement Unlocked</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Congratulations — you have met all the criteria for promotion to <strong style="color:#C9A84C">S2 Certified</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:0.85rem">
+        <tr><td style="padding:6px 0;color:#888;border-bottom:1px solid #1a1a1a">Missions completed</td><td style="padding:6px 0;color:#2ecc71;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">${missions} ✓</td></tr>
+        <tr><td style="padding:6px 0;color:#888">Admin score average</td><td style="padding:6px 0;color:#2ecc71;font-weight:700;text-align:right">${admin_avg}/5.0 ✓</td></tr>
+      </table>
+      <p style="color:#888;font-size:0.85rem;margin:0 0 24px">The B&amp;E team will review your profile within 48 hours. If approved, your S2 license will be activated immediately — with <strong style="color:#fff">12 months free</strong> before the first annual fee of $399.</p>
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">View your profile →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.s2.eligible.email.sent', email }))
+  } catch (err) {
+    console.error('[mailer] sendS2Eligible failed:', err.message)
+  }
+}
+
+// sendS2Promoted — fired by admin approve-upgrade endpoint
+const sendS2Promoted = async ({ email, full_name, anniversary_date }) => {
+  if (!email) return
+  try {
+    const anniversary = anniversary_date
+      ? new Date(anniversary_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '12 months from today'
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: 'Congratulations — S2 Certified ✅',
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:900;color:#111">✅ S2 Certified — Activated</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Your S2 Certified license is now <strong style="color:#2ecc71">active</strong>. Welcome to the professional tier of the MyDD PAC Network.</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:0.85rem">
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ L1 + L2 missions</td><td style="padding:7px 0;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Unlocked</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ Commission</td><td style="padding:7px 0;color:#C9A84C;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">15% per mission</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ Supervision bonus</td><td style="padding:7px 0;color:#C9A84C;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">+5% on S1 org</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ Annual membership</td><td style="padding:7px 0;color:#2ecc71;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Free for 12 months</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc">📅 First renewal</td><td style="padding:7px 0;color:#aaa;font-weight:600;text-align:right">${anniversary}</td></tr>
+      </table>
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">Open PAC Portal →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.s2.promoted.email.sent', email }))
+  } catch (err) {
+    console.error('[mailer] sendS2Promoted failed:', err.message)
+  }
+}
+
+// sendS3Eligible — fired by nightly cron when S2 meets all S3 criteria
+const sendS3Eligible = async ({ email, full_name, admin_avg }) => {
+  if (!email) return
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: 'S3 Senior candidacy opened — Board review',
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:24px 32px">
+      <p style="margin:0;font-size:1.1rem;font-weight:900;color:#111">🏆 S3 Senior — Candidacy Opened</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">You have met all the performance criteria for promotion to <strong style="color:#C9A84C">S3 Senior</strong> — the highest tier of the MyDD PAC Network.</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Your file is now before the <strong style="color:#fff">S3 Senior Board</strong> (2 S3 members + 1 B&amp;E HQ representative). You will be contacted within <strong style="color:#fff">7 business days</strong> to schedule a 30-minute interview.</p>
+      <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;margin-bottom:24px">
+        <p style="margin:0;font-size:0.85rem;color:#888">Your admin score: <strong style="color:#C9A84C">${admin_avg}/5.0</strong><br>The board will review your full track record and conduct a video interview before making their decision.</p>
+      </div>
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">View your progress →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.s3.eligible.email.sent', email }))
+  } catch (err) {
+    console.error('[mailer] sendS3Eligible failed:', err.message)
+  }
+}
+
+// sendS3Promoted — fired by admin approve-upgrade endpoint
+const sendS3Promoted = async ({ email, full_name, anniversary_date }) => {
+  if (!email) return
+  try {
+    const anniversary = anniversary_date
+      ? new Date(anniversary_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '12 months from today'
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: 'Welcome to the Elite — S3 Senior ✅',
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:28px 32px">
+      <p style="margin:0;font-size:0.75rem;font-weight:700;color:#111;letter-spacing:0.1em;text-transform:uppercase">MyDD PAC Network</p>
+      <p style="margin:8px 0 0;font-size:1.5rem;font-weight:900;color:#111">✅ S3 Senior Certified</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">The Senior Board has approved your promotion to <strong style="color:#C9A84C">S3 Senior</strong>. You are now part of the elite tier of the MyDD PAC Network — Senior Certified Auditor.</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:0.85rem">
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ L1 + L2 + L3 missions</td><td style="padding:7px 0;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Unlocked</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ Commission</td><td style="padding:7px 0;color:#C9A84C;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">20% per mission</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ S2 mentoring bonus</td><td style="padding:7px 0;color:#C9A84C;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">+5% on S2 org</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ S1 org oversight bonus</td><td style="padding:7px 0;color:#C9A84C;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">+2% on S1 org</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ Featured profile</td><td style="padding:7px 0;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Active</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ S3 Advisory Council</td><td style="padding:7px 0;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Seat reserved</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;border-bottom:1px solid #1a1a1a">✅ Annual membership</td><td style="padding:7px 0;color:#2ecc71;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Free for 12 months</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc">📅 First renewal</td><td style="padding:7px 0;color:#aaa;font-weight:600;text-align:right">${anniversary}</td></tr>
+      </table>
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.8rem 2rem;border-radius:8px;text-decoration:none;font-weight:800;font-size:0.95rem">Open PAC Portal →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.s3.promoted.email.sent', email }))
+  } catch (err) {
+    console.error('[mailer] sendS3Promoted failed:', err.message)
+  }
+}
+
+// sendLicenseRenewalReminder — J-30, J-7, J-1 before tier_anniversary
+const sendLicenseRenewalReminder = async ({ email, full_name, tier, anniversary_date, days_remaining, amount_usd }) => {
+  if (!email) return
+  try {
+    const tierName   = TIER_NAMES[tier?.toLowerCase()] || tier
+    const anniversary = anniversary_date
+      ? new Date(anniversary_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '—'
+    const urgency = days_remaining <= 1 ? 'Tomorrow' : days_remaining <= 7 ? 'In 7 days' : 'In 30 days'
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: `Your ${tierName} license renews ${urgency} — $${amount_usd}`,
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#1a1a1a;border-bottom:1px solid #C9A84C;padding:20px 32px">
+      <p style="margin:0;font-size:1rem;font-weight:700;color:#C9A84C">📅 License Renewal Reminder</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Your <strong style="color:#C9A84C">${tierName}</strong> annual license will be renewed on <strong style="color:#fff">${anniversary}</strong>. Your saved payment method will be charged <strong style="color:#C9A84C">$${amount_usd}</strong>.</p>
+      <p style="color:#888;font-size:0.85rem;margin:0">No action required if your payment details are up to date. If you wish to downgrade, contact B&amp;E support before the renewal date.</p>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.license.renewal.reminder.sent', email, tier, days_remaining }))
+  } catch (err) {
+    console.error('[mailer] sendLicenseRenewalReminder failed:', err.message)
+  }
+}
+
+// sendLicenseSuspended — fired after J+14 payment failure (Stripe webhook)
+const sendLicenseSuspended = async ({ email, full_name, tier }) => {
+  if (!email) return
+  try {
+    const tierName = TIER_NAMES[tier?.toLowerCase()] || tier
+    const downTier = tier?.toLowerCase() === 's3' ? 'S2' : 'S1'
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: `Your ${tierName} license has been suspended`,
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#1a1a1a;border-bottom:2px solid #e74c3c;padding:20px 32px">
+      <p style="margin:0;font-size:1rem;font-weight:700;color:#e74c3c">⚠️ License Suspended</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">We were unable to process your <strong style="color:#C9A84C">${tierName}</strong> annual membership payment after multiple attempts. Your license has been <strong style="color:#e74c3c">suspended</strong> and your account has been downgraded to <strong style="color:#fff">${downTier}</strong>.</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Your track record and completed missions are preserved. To reinstate your ${tierName} license, please update your payment method and pay the outstanding balance through the PAC Portal.</p>
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">Reinstate license →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.license.suspended.email.sent', email, tier }))
+  } catch (err) {
+    console.error('[mailer] sendLicenseSuspended failed:', err.message)
+  }
+}
+
+// sendLicenseReinstated — fired when a suspended PAC pays their outstanding invoice
+const sendLicenseReinstated = async ({ email, full_name, tier }) => {
+  if (!email) return
+  try {
+    const tierName = TIER_NAMES[tier?.toLowerCase()] || tier
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: `Your ${tierName} license has been reinstated`,
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:20px 32px">
+      <p style="margin:0;font-size:1rem;font-weight:900;color:#111">✅ License Reinstated</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 16px">Hello <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Your payment has been received and your <strong style="color:#C9A84C">${tierName}</strong> license is now <strong style="color:#2ecc71">reinstated</strong>. All your mission access and bonuses have been restored.</p>
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">Open PAC Portal →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.license.reinstated.email.sent', email, tier }))
+  } catch (err) {
+    console.error('[mailer] sendLicenseReinstated failed:', err.message)
+  }
+}
+
+module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome, sendS2Eligible, sendS2Promoted, sendS3Eligible, sendS3Promoted, sendLicenseRenewalReminder, sendLicenseSuspended, sendLicenseReinstated }

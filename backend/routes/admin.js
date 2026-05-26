@@ -13,7 +13,9 @@ const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
         sendCertRevoked,
         sendPacKycDecision,
-        sendFounderWelcome }     = require('../lib/mailer')
+        sendFounderWelcome,
+        sendS2Promoted,
+        sendS3Promoted }         = require('../lib/mailer')
 const { dispatchWebhook }        = require('../lib/webhookDispatch')
 const { isBlockedCompany }       = require('../lib/blocklist')
 const { validate, schemas }      = require('../lib/validators')
@@ -765,6 +767,150 @@ router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async
   }
 })
 
+// PATCH /api/admin/pac/:id/approve-upgrade — approve an S1→S2 or S2→S3 promotion
+// Requires: agent must have eligible_for_s2 or eligible_for_s3 = TRUE (set by nightly cron).
+// Creates a Stripe subscription with 365-day free trial.
+// Body: { tier: 'S2'|'S3' }
+router.patch('/pac/:id/approve-upgrade', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  const { tier } = req.body
+  const userId   = parseInt(req.params.id, 10)
+  const VALID_UPGRADE_TIERS = ['S2', 'S3']
+
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' })
+  if (!VALID_UPGRADE_TIERS.includes(tier)) {
+    return res.status(400).json({ error: 'tier must be S2 or S3' })
+  }
+
+  const client = await require('../db').getPool().connect()
+  try {
+    await client.query('BEGIN')
+
+    // Fetch agent profile
+    const { rows: pacRows } = await client.query(
+      `SELECT pp.*, u.email, u.name, u.stripe_customer_id
+       FROM pac_profiles pp
+       JOIN users u ON u.id = pp.user_id
+       WHERE pp.user_id = $1 LIMIT 1`,
+      [userId]
+    )
+    if (!pacRows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'PAC profile not found' })
+    }
+    const pac = pacRows[0]
+
+    // Verify eligibility flag
+    const eligibleField = tier === 'S2' ? 'eligible_for_s2' : 'eligible_for_s3'
+    if (!pac[eligibleField]) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: `Agent is not flagged eligible_for_${tier.toLowerCase()}` })
+    }
+
+    // Tier config
+    const tierConfig = {
+      S2: { commission_rate: 0.15, max_supervised: 10, priceEnvKey: 'STRIPE_PAC_S2_PRICE_ID', amountUsd: 399 },
+      S3: { commission_rate: 0.20, max_supervised: 5,  priceEnvKey: 'STRIPE_PAC_S3_PRICE_ID', amountUsd: 799 },
+    }
+    const cfg = tierConfig[tier]
+
+    // Create Stripe subscription with 365-day free trial
+    let stripeSubId = null
+    const priceId = process.env[cfg.priceEnvKey]
+    if (priceId) {
+      try {
+        const Stripe = require('stripe')
+        const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+
+        // Ensure Stripe customer exists
+        let customerId = pac.stripe_customer_id
+        if (!customerId && pac.email) {
+          const customer = await stripe.customers.create({
+            email: pac.email,
+            metadata: { userId: String(userId) },
+          })
+          customerId = customer.id
+          await client.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, userId])
+        }
+
+        const promotionDate = new Date()
+        const trialEnd = Math.floor((promotionDate.getTime() + 365 * 24 * 60 * 60 * 1000) / 1000)
+        const sub = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [{ price: priceId }],
+          trial_end: trialEnd,
+          metadata: {
+            pac_user_id:      String(userId),
+            pac_tier:         tier.toLowerCase(),
+            promotion_date:   promotionDate.toISOString(),
+            subscriptionType: 'pac_membership',
+          },
+        })
+        stripeSubId = sub.id
+      } catch (stripeErr) {
+        console.error(JSON.stringify({ event: 'admin.pac.approve_upgrade.stripe_error', err: stripeErr.message }))
+        // Non-fatal: proceed without Stripe — admin can fix later
+      }
+    }
+
+    const now = new Date()
+    const anniversary = new Date(now)
+    anniversary.setFullYear(anniversary.getFullYear() + 1)
+
+    // Promote the agent
+    await client.query(
+      `UPDATE pac_profiles SET
+         pac_tier                  = $1,
+         kyc_status                = 'approved',
+         commission_rate           = $2,
+         max_supervised            = $3,
+         membership_active         = TRUE,
+         membership_expires        = $4,
+         membership_stripe_sub_id  = COALESCE($5, membership_stripe_sub_id),
+         promotion_date_s2         = CASE WHEN $1 IN ('S2','s2') THEN NOW() ELSE promotion_date_s2 END,
+         promotion_date_s3         = CASE WHEN $1 IN ('S3','s3') THEN NOW() ELSE promotion_date_s3 END,
+         tier_anniversary          = $6,
+         eligible_for_s2           = CASE WHEN $1 IN ('S2','s2') THEN FALSE ELSE eligible_for_s2 END,
+         eligible_for_s3           = CASE WHEN $1 IN ('S3','s3') THEN FALSE ELSE eligible_for_s3 END,
+         updated_at                = NOW()
+       WHERE user_id = $7`,
+      [tier, cfg.commission_rate, cfg.max_supervised, anniversary.toISOString(),
+       stripeSubId, anniversary.toDateString(), userId]
+    )
+
+    await client.query(
+      `UPDATE users SET pac_tier = $1, pac_status = 'approved' WHERE id = $2`,
+      [tier.toLowerCase(), userId]
+    )
+
+    await client.query('COMMIT')
+
+    await logAudit(req.user.id, AUDIT.PAC_UPGRADE_APPROVED, 'pac_profiles', req.ip, {
+      targetUserId: userId, tier, stripeSubId,
+    })
+
+    // Fire promotion email (non-blocking)
+    const emailFn = tier === 'S2' ? sendS2Promoted : sendS3Promoted
+    emailFn({
+      email:            pac.email,
+      full_name:        pac.full_name,
+      anniversary_date: anniversary,
+    }).catch(() => {})
+
+    res.json({
+      message:          `Agent promoted to ${tier}`,
+      tier,
+      anniversary_date: anniversary,
+      stripe_sub_id:    stripeSubId,
+    })
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    console.error(JSON.stringify({ event: 'admin_pac_approve_upgrade_error', message: err.message }))
+    res.status(500).json({ error: 'Server error' })
+  } finally {
+    client.release()
+  }
+})
+
 // PATCH /api/admin/pac/:id/founder — grant S3 Founder status (B&E mgmt only)
 // Body: { region: 'west_africa'|'central_east_africa'|'mena'|'europe'|'asia' }
 // - Caps active founders at 5
@@ -808,8 +954,9 @@ router.patch('/pac/:id/founder', auth, requireAdmin, adminWriteLimiter, async (r
     }
     const pac = pacRows[0]
 
+    // S3 Fondateurs get 24 months free (Y0 + Y1 per PAC Network v4.0 spec)
     const exemptionExpires = new Date()
-    exemptionExpires.setFullYear(exemptionExpires.getFullYear() + 1)
+    exemptionExpires.setFullYear(exemptionExpires.getFullYear() + 2)
 
     // Upgrade pac_profiles
     await client.query(

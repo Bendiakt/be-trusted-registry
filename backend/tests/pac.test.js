@@ -151,6 +151,84 @@ describe('PAC upgrade minimum mission requirements', () => {
   })
 })
 
+// ── Achievement eligibility logic ─────────────────────────────────────────────
+describe('Achievement eligibility — S1→S2 criteria', () => {
+  // Mirror the eligibility function from cronJobs (pure logic, no DB)
+  const isEligibleS2 = (agent) =>
+    agent.missions_completed >= 10 &&
+    agent.admin_avg >= 4.0 &&
+    agent.on_time_rate >= 0.85 &&
+    agent.double_rejections === 0 &&
+    agent.months_active >= 6
+
+  test('all criteria met → eligible', () => {
+    assert.ok(isEligibleS2({ missions_completed: 10, admin_avg: 4.0, on_time_rate: 0.85, double_rejections: 0, months_active: 6 }))
+  })
+  test('missing one mission → not eligible', () => {
+    assert.ok(!isEligibleS2({ missions_completed: 9, admin_avg: 4.5, on_time_rate: 0.90, double_rejections: 0, months_active: 8 }))
+  })
+  test('admin_avg below threshold → not eligible', () => {
+    assert.ok(!isEligibleS2({ missions_completed: 15, admin_avg: 3.9, on_time_rate: 0.90, double_rejections: 0, months_active: 8 }))
+  })
+  test('on_time_rate below threshold → not eligible', () => {
+    assert.ok(!isEligibleS2({ missions_completed: 15, admin_avg: 4.2, on_time_rate: 0.84, double_rejections: 0, months_active: 8 }))
+  })
+  test('has double rejection → not eligible', () => {
+    assert.ok(!isEligibleS2({ missions_completed: 15, admin_avg: 4.2, on_time_rate: 0.90, double_rejections: 1, months_active: 8 }))
+  })
+  test('seniority below 6 months → not eligible', () => {
+    assert.ok(!isEligibleS2({ missions_completed: 15, admin_avg: 4.2, on_time_rate: 0.90, double_rejections: 0, months_active: 5 }))
+  })
+  test('exact boundary values → eligible', () => {
+    assert.ok(isEligibleS2({ missions_completed: 10, admin_avg: 4.0, on_time_rate: 0.85, double_rejections: 0, months_active: 6 }))
+  })
+})
+
+describe('Achievement eligibility — S2→S3 criteria', () => {
+  const isEligibleS3 = (agent) =>
+    agent.missions_completed >= 25 &&
+    agent.l2_missions_completed >= 10 &&
+    agent.admin_avg >= 4.5 &&
+    agent.client_avg >= 4.3 &&
+    agent.on_time_rate >= 0.90 &&
+    agent.supervised_s1_completed >= 3 &&
+    agent.months_as_s2 >= 12
+
+  test('all criteria met → eligible', () => {
+    assert.ok(isEligibleS3({ missions_completed: 25, l2_missions_completed: 10, admin_avg: 4.5, client_avg: 4.3, on_time_rate: 0.90, supervised_s1_completed: 3, months_as_s2: 12 }))
+  })
+  test('insufficient L2 missions → not eligible', () => {
+    assert.ok(!isEligibleS3({ missions_completed: 30, l2_missions_completed: 9, admin_avg: 4.8, client_avg: 4.5, on_time_rate: 0.95, supervised_s1_completed: 5, months_as_s2: 14 }))
+  })
+  test('admin_avg below 4.5 → not eligible', () => {
+    assert.ok(!isEligibleS3({ missions_completed: 30, l2_missions_completed: 12, admin_avg: 4.4, client_avg: 4.5, on_time_rate: 0.95, supervised_s1_completed: 5, months_as_s2: 14 }))
+  })
+  test('client_avg below 4.3 → not eligible', () => {
+    assert.ok(!isEligibleS3({ missions_completed: 30, l2_missions_completed: 12, admin_avg: 4.6, client_avg: 4.2, on_time_rate: 0.95, supervised_s1_completed: 5, months_as_s2: 14 }))
+  })
+  test('insufficient S1 supervised → not eligible', () => {
+    assert.ok(!isEligibleS3({ missions_completed: 30, l2_missions_completed: 12, admin_avg: 4.6, client_avg: 4.4, on_time_rate: 0.95, supervised_s1_completed: 2, months_as_s2: 14 }))
+  })
+  test('insufficient months as S2 → not eligible', () => {
+    assert.ok(!isEligibleS3({ missions_completed: 30, l2_missions_completed: 12, admin_avg: 4.6, client_avg: 4.4, on_time_rate: 0.95, supervised_s1_completed: 5, months_as_s2: 11 }))
+  })
+})
+
+describe('PAC progress endpoint — criteria structure', () => {
+  const progressSrc = require('fs').readFileSync(require('path').join(__dirname, '../routes/pac.js'), 'utf8')
+  test('progress endpoint exists in pac.js', () => {
+    assert.ok(progressSrc.includes("'/progress'"), 'GET /progress route not found')
+  })
+  test('progress endpoint returns criteria array', () => {
+    assert.ok(progressSrc.includes('criteria'), 'criteria not returned in progress response')
+  })
+  test('S1→S2 uses 5 criteria', () => {
+    // Count S1 criteria keys in source
+    const s2Criteria = progressSrc.match(/key:.*'missions'.*key:.*'admin_score'.*key:.*'on_time_rate'.*key:.*'double_rejections'.*key:.*'seniority'/s)
+    assert.ok(s2Criteria, 'S1→S2 criteria set incomplete')
+  })
+})
+
 // ── Supervision tier rules ────────────────────────────────────────────────────
 describe('Supervision tier hierarchy rules', () => {
   const supSrc = fs.readFileSync(path.join(__dirname, '../routes/pacSupervision.js'), 'utf8')
