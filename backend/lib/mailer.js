@@ -843,4 +843,74 @@ const sendPacKycDecision = async ({ email, agentName, kyc_status, pac_tier, note
   }
 }
 
-module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision }
+// ── sendFounderWelcome ─────────────────────────────────────────────────────
+// Sent when an admin grants S3 Founder status via PATCH /api/admin/pac/:id/founder.
+// Communicates the full founder package: exemption, region, obligations, KYC status.
+const FOUNDER_REGION_LABELS = {
+  west_africa:          'West Africa',
+  central_east_africa:  'Central & East Africa',
+  mena:                 'Middle East & North Africa',
+  europe:               'Europe & Diaspora',
+  asia:                 'Asia & Oceania',
+}
+
+const sendFounderWelcome = async ({ email, full_name, region, exemption_expires }) => {
+  if (!email) return
+  try {
+    const regionLabel = FOUNDER_REGION_LABELS[region] || region
+    const expiry = new Date(exemption_expires).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    })
+    const subject = 'Welcome to MyDD PAC Network — Founding S3 Senior'
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject,
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:580px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:28px 32px">
+      <p style="margin:0;font-size:0.75rem;font-weight:700;color:#111;letter-spacing:0.1em;text-transform:uppercase">MyDD PAC Network</p>
+      <p style="margin:8px 0 0;font-size:1.5rem;font-weight:900;color:#111">Founding S3 Senior</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="color:#ccc;line-height:1.7;margin:0 0 20px">Dear <strong style="color:#fff">${full_name || 'Partner'}</strong>,</p>
+      <p style="color:#ccc;line-height:1.7;margin:0 0 24px">On behalf of <strong style="color:#C9A84C">B&amp;E Consult FZCO</strong>, we are pleased to inform you that you have been personally selected as a <strong style="color:#fff">Founding PAC Senior S3</strong> of the MyDD Global Audit Network.</p>
+
+      <h3 style="color:#C9A84C;font-size:0.85rem;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 12px;border-bottom:1px solid #2a2a2a;padding-bottom:8px">Your Founder Package</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem;border-bottom:1px solid #1a1a1a">✅ Full S3 Senior access</td><td style="padding:7px 0;color:#fff;font-size:0.88rem;font-weight:600;text-align:right;border-bottom:1px solid #1a1a1a">Effective immediately</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem;border-bottom:1px solid #1a1a1a">✅ Membership fee ($799/yr) waived</td><td style="padding:7px 0;color:#2ecc71;font-size:0.88rem;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">Until ${expiry}</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem;border-bottom:1px solid #1a1a1a">✅ Priority mission assignment</td><td style="padding:7px 0;color:#fff;font-size:0.88rem;font-weight:600;text-align:right;border-bottom:1px solid #1a1a1a">${regionLabel}</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem;border-bottom:1px solid #1a1a1a">✅ Seat on S3 Advisory Council</td><td style="padding:7px 0;color:#fff;font-size:0.88rem;font-weight:600;text-align:right;border-bottom:1px solid #1a1a1a">Quarterly calls</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem;border-bottom:1px solid #1a1a1a">✅ L1/L2/L3 mission commission</td><td style="padding:7px 0;color:#C9A84C;font-size:0.88rem;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">20%</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem;border-bottom:1px solid #1a1a1a">✅ S2 supervision bonus</td><td style="padding:7px 0;color:#C9A84C;font-size:0.88rem;font-weight:700;text-align:right;border-bottom:1px solid #1a1a1a">5%</td></tr>
+        <tr><td style="padding:7px 0;color:#ccc;font-size:0.88rem">✅ S1 oversight bonus</td><td style="padding:7px 0;color:#C9A84C;font-size:0.88rem;font-weight:700;text-align:right">2%</td></tr>
+      </table>
+
+      <h3 style="color:#C9A84C;font-size:0.85rem;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 12px;border-bottom:1px solid #2a2a2a;padding-bottom:8px">Founder Obligations</h3>
+      <ul style="color:#ccc;font-size:0.88rem;line-height:1.8;margin:0 0 24px;padding-left:20px">
+        <li>Recruit and onboard minimum <strong style="color:#fff">3 S2 agents</strong> within 90 days</li>
+        <li>Recruit and onboard minimum <strong style="color:#fff">15 S1 agents</strong> within 180 days</li>
+        <li>Submit monthly supervision report by the 3rd of each month</li>
+        <li>Participate in quarterly S3 Advisory Council calls (60 min)</li>
+        <li>Maintain supervision score ≥ 4.0/5.0</li>
+      </ul>
+
+      <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 20px;margin-bottom:28px">
+        <p style="margin:0;font-size:0.85rem;color:#888">🔍 <strong style="color:#ccc">KYC Status:</strong> Your identity verification is now under review by our compliance team. Expected completion: <strong style="color:#fff">3–5 business days</strong>.</p>
+      </div>
+
+      <a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.8rem 2rem;border-radius:8px;text-decoration:none;font-weight:800;font-size:0.95rem;letter-spacing:0.03em">Complete your profile →</a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.founder.welcome.sent', email, region }))
+  } catch (err) {
+    console.error('[mailer] sendFounderWelcome failed:', err.message)
+  }
+}
+
+module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome }

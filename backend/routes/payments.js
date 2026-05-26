@@ -1012,9 +1012,10 @@ router.post('/pac-upgrade-checkout', auth, async (req, res) => {
       return res.status(403).json({ error: 'Only PAC agents can upgrade' })
     }
 
-    // Fetch current PAC profile
+    // Fetch current PAC profile (include founder fields for bypass check)
     const { rows: pacRows } = await query(
-      `SELECT pp.id, pp.pac_tier, pp.kyc_status, u.email
+      `SELECT pp.id, pp.pac_tier, pp.kyc_status, pp.is_founder,
+              pp.founder_exemption_expires, u.email
          FROM pac_profiles pp JOIN users u ON u.id = pp.user_id
         WHERE pp.user_id = $1 LIMIT 1`,
       [req.user.id]
@@ -1024,6 +1025,29 @@ router.post('/pac-upgrade-checkout', auth, async (req, res) => {
 
     const nextTier = pac.pac_tier === 'S1' ? 'S2' : pac.pac_tier === 'S2' ? 'S3' : null
     if (!nextTier) return res.status(400).json({ error: 'Already at maximum tier (S3)' })
+
+    // ── Founder bypass — skip Stripe for S3 if active Y1 exemption ───────────
+    if (nextTier === 'S3' && pac.is_founder && pac.founder_exemption_expires > new Date()) {
+      await query(
+        `UPDATE pac_profiles SET
+           pac_tier          = 's3',
+           membership_active = TRUE,
+           membership_expires = founder_exemption_expires,
+           kyc_status        = 'pending',
+           updated_at        = NOW()
+         WHERE user_id = $1`,
+        [req.user.id]
+      )
+      await query(
+        `UPDATE users SET pac_tier = 's3', pac_status = 'pending' WHERE id = $1`,
+        [req.user.id]
+      )
+      return res.json({
+        activated: true,
+        founder:   true,
+        message:   'S3 Founder membership activated — KYC review in progress',
+      })
+    }
 
     // Minimum missions check
     const { rows: mRows } = await query(

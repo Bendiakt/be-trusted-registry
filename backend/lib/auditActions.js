@@ -40,6 +40,7 @@ const AUDIT = Object.freeze({
   PAC_PROFILE_UPDATE:     'pac_profile_update',
   MISSION_ACCEPTED:       'mission_accepted',
   MISSION_COMPLETED:      'mission_completed',
+  PAC_FOUNDER_GRANTED:    'pac_founder_granted',
 
   // ── Admin ─────────────────────────────────────────────────────────────────
   ADMIN_CHANGE_USER_ROLE:       'admin_change_user_role',
