@@ -6,6 +6,7 @@ const { auth } = require('../lib/authUtils')
 const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
 const { sendPaymentConfirmation, sendPacMembershipConfirmation, sendPacKycDecision } = require('../lib/mailer')
+const { dispatchWebhook } = require('../lib/webhookDispatch')
 const { isBlockedCompany } = require('../lib/blocklist')
 
 const levelFromPlanId = (planId) => {
@@ -338,6 +339,21 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         amountCents: session.amount_total || 0,
         level: planLevel,
         companyName: companyRow.name || null,
+      })
+
+      // Fire webhook events (fire-and-forget — never block the Stripe response)
+      dispatchWebhook('cert.issued', {
+        companyId:  resolvedCompanyId,
+        level:      planLevel,
+        status:     'active',
+        certId:     effectiveCertificationId,
+      })
+      dispatchWebhook('cert.status_changed', {
+        companyId:  resolvedCompanyId,
+        level:      planLevel,
+        oldStatus:  'pending',
+        newStatus:  'active',
+        certId:     effectiveCertificationId,
       })
 
       // Stripe Radar + dispute risk signals (if payment_intent is available)

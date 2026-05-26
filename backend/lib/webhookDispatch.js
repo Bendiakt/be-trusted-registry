@@ -151,4 +151,39 @@ const dispatchWebhook = (eventType, payload) => {
   })
 }
 
-module.exports = { dispatchWebhook, signPayload }
+/**
+ * Send a single test ping to an endpoint and return the result.
+ * Unlike dispatchWebhook, this is synchronous and returns immediately.
+ *
+ * @param {{ id, url, secret }} endpoint
+ * @returns {{ success: boolean, statusCode: number|null, error: string|null }}
+ */
+const pingEndpoint = async (endpoint) => {
+  const body      = JSON.stringify({ event: 'ping', message: 'MyDD webhook test', delivered_at: new Date().toISOString() })
+  const signature = signPayload(body, endpoint.secret)
+  const headers   = {
+    'Content-Type':     'application/json',
+    'Content-Length':   Buffer.byteLength(body),
+    'X-MyDD-Signature': signature,
+    'X-MyDD-Event':     'ping',
+    'X-MyDD-Attempt':   '1',
+    'User-Agent':       'MyDD-Webhook/1.0',
+  }
+
+  try {
+    const result = await postWithTimeout(endpoint.url, body, headers)
+    const success = result.statusCode >= 200 && result.statusCode < 300
+    // Log delivery attempt
+    await query(
+      `INSERT INTO webhook_deliveries
+         (endpoint_id, event_type, payload, attempt, status_code, response_body, success)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [endpoint.id, 'ping', JSON.parse(body), 1, result.statusCode, result.body?.slice(0, 500) || null, success]
+    ).catch(() => { /* non-fatal */ })
+    return { success, statusCode: result.statusCode, error: null }
+  } catch (err) {
+    return { success: false, statusCode: null, error: err.message }
+  }
+}
+
+module.exports = { dispatchWebhook, signPayload, pingEndpoint }

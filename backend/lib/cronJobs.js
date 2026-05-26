@@ -17,6 +17,7 @@
 
 const { query }                              = require('../db')
 const { sendRenewalReminder, sendCertExpired, sendSupervisionTaskReminder } = require('./mailer')
+const { dispatchWebhook } = require('./webhookDispatch')
 
 // ── Token cleanup ─────────────────────────────────────────────────────────────
 const runTokenCleanup = async () => {
@@ -129,6 +130,9 @@ const runCertExpiryCleanup = async () => {
           level: cert.level, renewUrl: `${frontendUrl}/dashboard`,
         }).catch(() => {})
       }
+      // Webhook fan-out (fire-and-forget)
+      dispatchWebhook('cert.expired', { companyId: cert.company_id, level: cert.level, status: 'expired', certId: cert.id })
+      dispatchWebhook('cert.status_changed', { companyId: cert.company_id, level: cert.level, oldStatus: 'active', newStatus: 'expired', certId: cert.id })
     }
     console.log(JSON.stringify({ event: 'certs_expired', count: expired.rows.length }))
   } catch (e) {
