@@ -116,7 +116,8 @@
       "register": "Enregistrer l'entreprise",
       "pricing": "Tarifs & Mise à niveau",
       "metrics": "Métriques",
-      "documents": "Documents","billing": "Facturation"
+      "documents": "Documents","billing": "Facturation",
+      "developer": "Développeur"
     },
     "billing_title": "Historique des paiements",
     "billing_subtitle": "Vos certifications et transactions Stripe",
@@ -227,6 +228,30 @@
       "empty": "Aucun document téléversé.",
       "register_first": "Enregistrez votre profil avant de téléverser des documents."
     }
+  },
+  "dev": {
+    "keys_title": "Clés API",
+    "keys_desc": "Utilisez des clés API pour accéder à l'API REST MyDD depuis vos systèmes. La clé brute n'est affichée qu'une seule fois — conservez-la en sécurité.",
+    "keys_load_error": "Impossible de charger les clés API.",
+    "keys_empty": "Aucune clé API pour l'instant. Créez-en une ci-dessus.",
+    "key_name_placeholder": "Nom de la clé (ex : \"Backend production\")",
+    "create_key": "Créer une clé",
+    "key_create_error": "Échec de la création de la clé.",
+    "key_once_warning": "Copiez cette clé maintenant — elle ne sera plus affichée.",
+    "api_key": "Clé API",
+    "last_used": "Dernière utilisation",
+    "revoke": "Révoquer",
+    "hooks_title": "Webhooks",
+    "hooks_desc": "Enregistrez des endpoints HTTPS pour recevoir des événements en temps réel lors des changements de statut de certification. Le secret de signature n'est affiché qu'une seule fois.",
+    "hooks_load_error": "Impossible de charger les webhooks.",
+    "hooks_empty": "Aucun webhook configuré. Enregistrez-en un ci-dessus.",
+    "hook_desc_placeholder": "Description (optionnel)",
+    "register_hook": "Enregistrer l'endpoint",
+    "hook_create_error": "Échec de l'enregistrement du webhook.",
+    "hook_once_warning": "Copiez le secret de signature maintenant — il ne sera plus affiché. Utilisez-le pour vérifier l'en-tête X-MyDD-Signature.",
+    "signing_secret": "Secret de signature",
+    "delete": "Supprimer",
+    "sig_hint": "Calculez le HMAC-SHA256 du corps brut de la requête avec votre secret et comparez-le à l'en-tête X-MyDD-Signature."
   },
   "pac": {
     "portal": "Portail Agent PAC",

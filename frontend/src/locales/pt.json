@@ -116,7 +116,8 @@
       "register": "Registrar empresa",
       "pricing": "Planos e atualização",
       "metrics": "Métricas",
-      "documents": "Documents","billing": "Faturamento"
+      "documents": "Documents","billing": "Faturamento",
+      "developer": "Desenvolvedor"
     },
     "billing_title": "Histórico de pagamentos",
     "billing_subtitle": "Suas certificações e transações do Stripe",
@@ -227,6 +228,30 @@
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
     }
+  },
+  "dev": {
+    "keys_title": "Chaves de API",
+    "keys_desc": "Use chaves de API para acessar a API REST do MyDD a partir dos seus sistemas. A chave bruta é exibida apenas uma vez — guarde-a com segurança.",
+    "keys_load_error": "Falha ao carregar as chaves de API.",
+    "keys_empty": "Nenhuma chave de API ainda. Crie uma acima.",
+    "key_name_placeholder": "Nome da chave (ex: \"Backend produção\")",
+    "create_key": "Criar chave",
+    "key_create_error": "Falha ao criar a chave.",
+    "key_once_warning": "Copie esta chave agora — ela não será exibida novamente.",
+    "api_key": "Chave de API",
+    "last_used": "Último uso",
+    "revoke": "Revogar",
+    "hooks_title": "Webhooks",
+    "hooks_desc": "Registre endpoints HTTPS para receber eventos em tempo real quando o status da sua certificação mudar. O segredo de assinatura é exibido apenas uma vez.",
+    "hooks_load_error": "Falha ao carregar os webhooks.",
+    "hooks_empty": "Nenhum endpoint webhook ainda. Registre um acima.",
+    "hook_desc_placeholder": "Descrição (opcional)",
+    "register_hook": "Registrar endpoint",
+    "hook_create_error": "Falha ao registrar o webhook.",
+    "hook_once_warning": "Copie o segredo de assinatura agora — ele não será exibido novamente. Use-o para verificar o header X-MyDD-Signature.",
+    "signing_secret": "Segredo de Assinatura",
+    "delete": "Excluir",
+    "sig_hint": "Calcule o HMAC-SHA256 do corpo bruto da solicitação usando seu segredo e compare com o header X-MyDD-Signature."
   },
   "pac": {
     "portal": "Portal do Agente PAC",
