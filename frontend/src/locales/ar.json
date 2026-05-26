@@ -116,7 +116,8 @@
       "register": "تسجيل الشركة",
       "pricing": "الأسعار والترقية",
       "metrics": "المقاييس",
-      "documents": "Documents","billing": "الفواتير"
+      "documents": "Documents","billing": "الفواتير",
+      "developer": "المطور"
     },
     "billing_title": "سجل المدفوعات",
     "billing_subtitle": "شهاداتك ومعاملات Stripe",
@@ -227,6 +228,30 @@
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
     }
+  },
+  "dev": {
+    "keys_title": "مفاتيح API",
+    "keys_desc": "استخدم مفاتيح API للوصول إلى واجهة MyDD REST API من أنظمتك. يُعرض المفتاح الأولي مرة واحدة فقط — احفظه في مكان آمن.",
+    "keys_load_error": "فشل تحميل مفاتيح API.",
+    "keys_empty": "لا توجد مفاتيح API بعد. أنشئ مفتاحاً أعلاه.",
+    "key_name_placeholder": "اسم المفتاح (مثال: \"خادم الإنتاج\")",
+    "create_key": "إنشاء مفتاح",
+    "key_create_error": "فشل إنشاء المفتاح.",
+    "key_once_warning": "انسخ هذا المفتاح الآن — لن يُعرض مرة أخرى.",
+    "api_key": "مفتاح API",
+    "last_used": "آخر استخدام",
+    "revoke": "إلغاء",
+    "hooks_title": "Webhooks",
+    "hooks_desc": "سجّل نقاط نهاية HTTPS لتلقي الأحداث في الوقت الفعلي عند تغيير حالة الشهادة. يُعرض سر التوقيع مرة واحدة فقط.",
+    "hooks_load_error": "فشل تحميل الـ webhooks.",
+    "hooks_empty": "لا توجد نقاط نهاية webhook بعد. سجّل واحدة أعلاه.",
+    "hook_desc_placeholder": "وصف (اختياري)",
+    "register_hook": "تسجيل نقطة النهاية",
+    "hook_create_error": "فشل تسجيل الـ webhook.",
+    "hook_once_warning": "انسخ سر التوقيع الآن — لن يُعرض مرة أخرى. استخدمه للتحقق من رأس X-MyDD-Signature.",
+    "signing_secret": "سر التوقيع",
+    "delete": "حذف",
+    "sig_hint": "احسب HMAC-SHA256 لجسم الطلب الخام باستخدام سرك وقارنه بقيمة رأس X-MyDD-Signature."
   },
   "pac": {
     "portal": "بوابة وكيل PAC",

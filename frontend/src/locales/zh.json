@@ -116,7 +116,8 @@
       "register": "注册公司",
       "pricing": "价格与升级",
       "metrics": "数据指标",
-      "documents": "Documents","billing": "账单"
+      "documents": "Documents","billing": "账单",
+      "developer": "开发者"
     },
     "billing_title": "付款历史",
     "billing_subtitle": "您的认证和 Stripe 交易记录",
@@ -227,6 +228,30 @@
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
     }
+  },
+  "dev": {
+    "keys_title": "API 密钥",
+    "keys_desc": "使用 API 密钥从您的系统访问 MyDD REST API。原始密钥仅显示一次 — 请安全保存。",
+    "keys_load_error": "无法加载 API 密钥。",
+    "keys_empty": "暂无 API 密钥。请在上方创建一个。",
+    "key_name_placeholder": "密钥名称（例如：\"生产后端\"）",
+    "create_key": "创建密钥",
+    "key_create_error": "创建密钥失败。",
+    "key_once_warning": "请立即复制此密钥 — 它不会再次显示。",
+    "api_key": "API 密钥",
+    "last_used": "最近使用",
+    "revoke": "撤销",
+    "hooks_title": "Webhooks",
+    "hooks_desc": "注册 HTTPS 端点以在认证状态变更时实时接收事件。签名密钥仅显示一次。",
+    "hooks_load_error": "无法加载 Webhooks。",
+    "hooks_empty": "暂无 Webhook 端点。请在上方注册一个。",
+    "hook_desc_placeholder": "描述（可选）",
+    "register_hook": "注册端点",
+    "hook_create_error": "注册 Webhook 失败。",
+    "hook_once_warning": "请立即复制签名密钥 — 它不会再次显示。用它来验证 X-MyDD-Signature 请求头。",
+    "signing_secret": "签名密钥",
+    "delete": "删除",
+    "sig_hint": "使用您的签名密钥对请求正文计算 HMAC-SHA256，并与 X-MyDD-Signature 请求头比较。"
   },
   "pac": {
     "portal": "PAC 专员门户",

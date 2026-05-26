@@ -117,7 +117,8 @@
       "pricing": "Pricing & Upgrade",
       "metrics": "Metrics",
       "documents": "Documents",
-      "billing": "Billing"
+      "billing": "Billing",
+      "developer": "Developer"
     },
     "billing_title": "Payment History",
     "billing_subtitle": "Your certification payments and Stripe transactions",
@@ -228,6 +229,30 @@
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
     }
+  },
+  "dev": {
+    "keys_title": "API Keys",
+    "keys_desc": "Use API keys to access the MyDD REST API from your systems. The raw key is shown only once — store it securely.",
+    "keys_load_error": "Failed to load API keys.",
+    "keys_empty": "No API keys yet. Create one above.",
+    "key_name_placeholder": "Key name (e.g. \"Production backend\")",
+    "create_key": "Create key",
+    "key_create_error": "Failed to create key.",
+    "key_once_warning": "Copy this key now — it will never be shown again.",
+    "api_key": "API Key",
+    "last_used": "Last used",
+    "revoke": "Revoke",
+    "hooks_title": "Webhooks",
+    "hooks_desc": "Register HTTPS endpoints to receive real-time events when your certification status changes. The signing secret is shown only once.",
+    "hooks_load_error": "Failed to load webhooks.",
+    "hooks_empty": "No webhook endpoints yet. Register one above.",
+    "hook_desc_placeholder": "Description (optional)",
+    "register_hook": "Register endpoint",
+    "hook_create_error": "Failed to register webhook.",
+    "hook_once_warning": "Copy the signing secret now — it will never be shown again. Use it to verify X-MyDD-Signature on incoming requests.",
+    "signing_secret": "Signing Secret",
+    "delete": "Delete",
+    "sig_hint": "Compute HMAC-SHA256 of the raw request body using your signing secret and compare with the X-MyDD-Signature header."
   },
   "pac": {
     "portal": "PAC Agent Portal",
