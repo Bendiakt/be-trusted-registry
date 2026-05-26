@@ -8,7 +8,7 @@
  *  - Redirects to /login when no session
  *  - Redirects pac/admin/trader to their portal
  *  - Renders nav MyDD logo for company role
- *  - Renders all 5 tab buttons (overview, register, pricing, documents, metrics)
+ *  - Renders all 6 tab buttons (overview, register, pricing, documents, billing, developer, metrics)
  *  - Calls GET /api/companies/me on mount
  *  - Shows user name in nav after profile loads
  *  - Shows email-verification banner when emailVerified=false
@@ -132,7 +132,7 @@ describe('Dashboard — UI', () => {
     await waitFor(() => expect(screen.getByText('MyDD')).toBeInTheDocument())
   })
 
-  it('renders all 5 tab buttons', async () => {
+  it('renders all 6 tab buttons', async () => {
     mockCompanySession()
     render(<Dashboard />)
     await waitFor(() => {
@@ -140,6 +140,8 @@ describe('Dashboard — UI', () => {
       expect(screen.getByText('dashboard.tabs.register')).toBeInTheDocument()
       expect(screen.getByText('dashboard.tabs.pricing')).toBeInTheDocument()
       expect(screen.getByText('dashboard.tabs.documents')).toBeInTheDocument()
+      expect(screen.getByText('dashboard.tabs.billing', { exact: false })).toBeInTheDocument()
+      expect(screen.getByText('dashboard.tabs.developer', { exact: false })).toBeInTheDocument()
       expect(screen.getByText('dashboard.tabs.metrics')).toBeInTheDocument()
     })
   })

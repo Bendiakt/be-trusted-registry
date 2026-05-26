@@ -535,6 +535,7 @@ export default function Dashboard() {
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
           <TabBtn id="documents"  label={t('dashboard.tabs.documents')} />
           <TabBtn id="billing"    label={t('dashboard.tabs.billing', 'Billing')} />
+          <TabBtn id="developer"  label={t('dashboard.tabs.developer', 'Developer')} />
           <TabBtn id="metrics"    label={t('dashboard.tabs.metrics')} />
         </div>
 
@@ -712,6 +713,11 @@ export default function Dashboard() {
           <BillingTab G={G} t={t} onManageBilling={handleBillingPortal} billingLoading={billingLoading} />
         )}
 
+        {/* ── Developer ────────────────────────────────────────────────────── */}
+        {tab === 'developer' && (
+          <DeveloperTab G={G} t={t} />
+        )}
+
         {/* ── Metrics ──────────────────────────────────────────────────────── */}
         {tab === 'metrics' && (
           <div style={G.card}>
@@ -821,6 +827,345 @@ function BillingTab({ G, t, onManageBilling, billingLoading }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── DeveloperTab ──────────────────────────────────────────────────────────────
+const ALLOWED_EVENTS = ['cert.status_changed', 'cert.issued', 'cert.expired', 'cert.revoked']
+
+function DeveloperTab({ G, t }) {
+  // ── API Keys state ────────────────────────────────────────────────────────
+  const [keys, setKeys]           = useState([])
+  const [keysLoading, setKeysLoading] = useState(true)
+  const [keyName, setKeyName]     = useState('')
+  const [creatingKey, setCreatingKey] = useState(false)
+  const [newKey, setNewKey]       = useState(null)   // { id, prefix, key }
+  const [keyErr, setKeyErr]       = useState(null)
+  const [revokingId, setRevokingId] = useState(null)
+
+  // ── Webhooks state ────────────────────────────────────────────────────────
+  const [hooks, setHooks]         = useState([])
+  const [hooksLoading, setHooksLoading] = useState(true)
+  const [hookUrl, setHookUrl]     = useState('')
+  const [hookEvents, setHookEvents] = useState(['cert.status_changed'])
+  const [hookDesc, setHookDesc]   = useState('')
+  const [creatingHook, setCreatingHook] = useState(false)
+  const [newHook, setNewHook]     = useState(null)   // { id, url, secret }
+  const [hookErr, setHookErr]     = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [pingingId, setPingingId]  = useState(null)
+  const [pingResult, setPingResult] = useState({})
+
+  const fetchKeys = useCallback(() => {
+    setKeysLoading(true)
+    api.get('/api/keys')
+      .then(r => setKeys(r.data.data || []))
+      .catch(() => setKeyErr(t('dev.keys_load_error', 'Failed to load API keys.')))
+      .finally(() => setKeysLoading(false))
+  }, [t])
+
+  const fetchHooks = useCallback(() => {
+    setHooksLoading(true)
+    api.get('/api/webhooks')
+      .then(r => setHooks(r.data.data || []))
+      .catch(() => setHookErr(t('dev.hooks_load_error', 'Failed to load webhooks.')))
+      .finally(() => setHooksLoading(false))
+  }, [t])
+
+  useEffect(() => { fetchKeys(); fetchHooks() }, [fetchKeys, fetchHooks])
+
+  const createKey = async () => {
+    if (!keyName.trim()) return
+    setCreatingKey(true); setKeyErr(null); setNewKey(null)
+    try {
+      const r = await api.post('/api/keys', { name: keyName.trim() })
+      setNewKey(r.data)
+      setKeyName('')
+      fetchKeys()
+    } catch (e) {
+      setKeyErr(e.response?.data?.error || t('dev.key_create_error', 'Failed to create key.'))
+    } finally { setCreatingKey(false) }
+  }
+
+  const revokeKey = async (id) => {
+    setRevokingId(id)
+    try {
+      await api.delete(`/api/keys/${id}`)
+      setKeys(prev => prev.filter(k => k.id !== id))
+    } catch { /* ignore */ }
+    finally { setRevokingId(null) }
+  }
+
+  const createHook = async () => {
+    if (!hookUrl.trim()) return
+    setCreatingHook(true); setHookErr(null); setNewHook(null)
+    try {
+      const r = await api.post('/api/webhooks', {
+        url: hookUrl.trim(),
+        events: hookEvents,
+        description: hookDesc.trim() || undefined,
+      })
+      setNewHook(r.data)
+      setHookUrl(''); setHookDesc(''); setHookEvents(['cert.status_changed'])
+      fetchHooks()
+    } catch (e) {
+      setHookErr(e.response?.data?.error || t('dev.hook_create_error', 'Failed to register webhook.'))
+    } finally { setCreatingHook(false) }
+  }
+
+  const deleteHook = async (id) => {
+    setDeletingId(id)
+    try {
+      await api.delete(`/api/webhooks/${id}`)
+      setHooks(prev => prev.filter(h => h.id !== id))
+    } catch { /* ignore */ }
+    finally { setDeletingId(null) }
+  }
+
+  const pingHook = async (id) => {
+    setPingingId(id); setPingResult(prev => ({ ...prev, [id]: null }))
+    try {
+      const r = await api.post(`/api/webhooks/${id}/ping`)
+      setPingResult(prev => ({ ...prev, [id]: { ok: true, payload: r.data.payload } }))
+    } catch (e) {
+      setPingResult(prev => ({ ...prev, [id]: { ok: false, msg: e.response?.data?.error || 'Ping failed' } }))
+    } finally { setPingingId(null) }
+  }
+
+  const toggleEvent = (ev) => {
+    setHookEvents(prev =>
+      prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev]
+    )
+  }
+
+  const D = {
+    section: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' },
+    h2:      { fontSize: '1rem', fontWeight: '700', color: '#eee', marginBottom: '0.25rem' },
+    sub:     { color: '#555', fontSize: '0.8rem', marginBottom: '1.25rem' },
+    row:     { display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: '#111', borderRadius: '8px', border: '1px solid #222', marginBottom: '0.5rem', flexWrap: 'wrap' },
+    inp:     { flex: 1, minWidth: '180px', padding: '0.55rem 0.9rem', background: '#2a2a2a', border: '1px solid #444', borderRadius: '6px', color: '#fff', fontSize: '0.875rem' },
+    secret:  { fontFamily: 'monospace', fontSize: '0.8rem', color: '#2ecc71', background: 'rgba(46,204,113,0.08)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(46,204,113,0.2)', wordBreak: 'break-all', marginTop: '0.75rem', position: 'relative' },
+    warn:    { background: 'rgba(243,156,18,0.08)', border: '1px solid rgba(243,156,18,0.2)', borderRadius: '8px', padding: '0.75rem 1rem', color: '#f39c12', fontSize: '0.82rem', marginBottom: '0.75rem' },
+    badge:   { display: 'inline-block', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700', background: 'rgba(201,168,76,0.12)', color: '#C9A84C', marginRight: '0.3rem' },
+    err:     { color: '#ff6b6b', fontSize: '0.82rem', marginBottom: '0.75rem', background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.2)', borderRadius: '6px', padding: '0.6rem 0.9rem' },
+  }
+
+  const CopyBox = ({ value, label }) => {
+    const [copied, setCopied] = useState(false)
+    const copy = () => {
+      navigator.clipboard.writeText(value).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+    }
+    return (
+      <div style={D.secret}>
+        <div style={{ color: '#888', fontSize: '0.7rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+        <div style={{ wordBreak: 'break-all' }}>{value}</div>
+        <button onClick={copy} style={{ marginTop: '0.5rem', background: copied ? 'rgba(46,204,113,0.15)' : '#2a2a2a', border: '1px solid #333', color: copied ? '#2ecc71' : '#aaa', padding: '0.3rem 0.8rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* ── API Keys ──────────────────────────────────────────────────────── */}
+      <div style={D.section}>
+        <div style={D.h2}>🔑 {t('dev.keys_title', 'API Keys')}</div>
+        <div style={D.sub}>{t('dev.keys_desc', 'Use API keys to access the MyDD REST API from your systems. The raw key is shown only once — store it securely.')}</div>
+
+        {/* Create form */}
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <input
+            style={D.inp}
+            placeholder={t('dev.key_name_placeholder', 'Key name (e.g. "Production backend")')}
+            value={keyName}
+            onChange={e => setKeyName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createKey()}
+            maxLength={80}
+          />
+          <button
+            onClick={createKey}
+            disabled={creatingKey || !keyName.trim()}
+            style={{ ...G.btn, opacity: creatingKey || !keyName.trim() ? 0.5 : 1 }}
+          >
+            {creatingKey ? '…' : t('dev.create_key', 'Create key')}
+          </button>
+        </div>
+
+        {keyErr && <div style={D.err}>{keyErr}</div>}
+
+        {/* One-time reveal */}
+        {newKey && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={D.warn}>⚠️ {t('dev.key_once_warning', 'Copy this key now — it will never be shown again.')}</div>
+            <CopyBox value={newKey.key} label={t('dev.api_key', 'API Key')} />
+          </div>
+        )}
+
+        {/* List */}
+        {keysLoading ? (
+          <div style={{ color: '#555', fontSize: '0.85rem' }}>Loading…</div>
+        ) : keys.length === 0 ? (
+          <div style={{ color: '#444', fontSize: '0.85rem', padding: '1.5rem', textAlign: 'center', background: '#111', borderRadius: '8px', border: '1px solid #1f1f1f' }}>
+            {t('dev.keys_empty', 'No API keys yet. Create one above.')}
+          </div>
+        ) : (
+          <div>
+            {keys.map(k => (
+              <div key={k.id} style={D.row}>
+                <div style={{ flex: 1, minWidth: '160px' }}>
+                  <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem' }}>{k.name}</div>
+                  <div style={{ color: '#555', fontSize: '0.72rem', marginTop: '0.15rem', fontFamily: 'monospace' }}>
+                    {k.prefix}…
+                    {k.last_used_at && (
+                      <span style={{ marginLeft: '0.75rem', color: '#444' }}>
+                        {t('dev.last_used', 'Last used')}: {new Date(k.last_used_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {(k.scopes || []).length > 0 && (
+                  <div>
+                    {k.scopes.map(s => <span key={s} style={D.badge}>{s}</span>)}
+                  </div>
+                )}
+                <div style={{ color: '#444', fontSize: '0.75rem' }}>
+                  {new Date(k.created_at).toLocaleDateString()}
+                </div>
+                <button
+                  onClick={() => revokeKey(k.id)}
+                  disabled={revokingId === k.id}
+                  style={{ background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.25)', color: '#ff6b6b', padding: '0.3rem 0.8rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
+                >
+                  {revokingId === k.id ? '…' : t('dev.revoke', 'Revoke')}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Webhooks ──────────────────────────────────────────────────────── */}
+      <div style={D.section}>
+        <div style={D.h2}>🔗 {t('dev.hooks_title', 'Webhooks')}</div>
+        <div style={D.sub}>{t('dev.hooks_desc', 'Register HTTPS endpoints to receive real-time events when your certification status changes. The signing secret is shown only once.')}</div>
+
+        {/* Register form */}
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+            <input
+              style={{ ...D.inp, flexBasis: '280px' }}
+              placeholder="https://your-server.com/webhook"
+              value={hookUrl}
+              onChange={e => setHookUrl(e.target.value)}
+              maxLength={500}
+            />
+            <input
+              style={{ ...D.inp, flexBasis: '180px' }}
+              placeholder={t('dev.hook_desc_placeholder', 'Description (optional)')}
+              value={hookDesc}
+              onChange={e => setHookDesc(e.target.value)}
+              maxLength={200}
+            />
+          </div>
+
+          {/* Events checkboxes */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            {ALLOWED_EVENTS.map(ev => (
+              <label key={ev} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.3rem 0.7rem', borderRadius: '6px', border: `1px solid ${hookEvents.includes(ev) ? '#C9A84C' : '#2a2a2a'}`, background: hookEvents.includes(ev) ? 'rgba(201,168,76,0.08)' : '#111', fontSize: '0.78rem', color: hookEvents.includes(ev) ? '#C9A84C' : '#555' }}>
+                <input
+                  type="checkbox"
+                  checked={hookEvents.includes(ev)}
+                  onChange={() => toggleEvent(ev)}
+                  style={{ accentColor: '#C9A84C', margin: 0 }}
+                />
+                {ev}
+              </label>
+            ))}
+          </div>
+
+          <button
+            onClick={createHook}
+            disabled={creatingHook || !hookUrl.trim() || hookEvents.length === 0}
+            style={{ ...G.btn, opacity: creatingHook || !hookUrl.trim() || hookEvents.length === 0 ? 0.5 : 1 }}
+          >
+            {creatingHook ? '…' : t('dev.register_hook', 'Register endpoint')}
+          </button>
+        </div>
+
+        {hookErr && <div style={D.err}>{hookErr}</div>}
+
+        {/* One-time reveal */}
+        {newHook && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={D.warn}>⚠️ {t('dev.hook_once_warning', 'Copy the signing secret now — it will never be shown again. Use it to verify X-MyDD-Signature on incoming requests.')}</div>
+            <CopyBox value={newHook.secret} label={t('dev.signing_secret', 'Signing Secret')} />
+          </div>
+        )}
+
+        {/* List */}
+        {hooksLoading ? (
+          <div style={{ color: '#555', fontSize: '0.85rem' }}>Loading…</div>
+        ) : hooks.length === 0 ? (
+          <div style={{ color: '#444', fontSize: '0.85rem', padding: '1.5rem', textAlign: 'center', background: '#111', borderRadius: '8px', border: '1px solid #1f1f1f' }}>
+            {t('dev.hooks_empty', 'No webhook endpoints yet. Register one above.')}
+          </div>
+        ) : (
+          <div>
+            {hooks.map(h => (
+              <div key={h.id} style={{ ...D.row, flexDirection: 'column', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {/* Status dot */}
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: h.active ? '#2ecc71' : '#555', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: '160px' }}>
+                    <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem', fontFamily: 'monospace' }}>{h.url}</div>
+                    {h.description && (
+                      <div style={{ color: '#555', fontSize: '0.75rem', marginTop: '0.1rem' }}>{h.description}</div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                    {(h.events || []).map(ev => <span key={ev} style={D.badge}>{ev}</span>)}
+                  </div>
+                  <div style={{ color: '#444', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                    {parseInt(h.deliveries_success, 10)}/{parseInt(h.deliveries_total, 10)} ok
+                  </div>
+                  <button
+                    onClick={() => pingHook(h.id)}
+                    disabled={pingingId === h.id || !h.active}
+                    style={{ background: '#1f1f1f', border: '1px solid #333', color: '#aaa', padding: '0.3rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', cursor: h.active ? 'pointer' : 'not-allowed', opacity: h.active ? 1 : 0.4 }}
+                  >
+                    {pingingId === h.id ? '…' : '▶ Ping'}
+                  </button>
+                  <button
+                    onClick={() => deleteHook(h.id)}
+                    disabled={deletingId === h.id}
+                    style={{ background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.25)', color: '#ff6b6b', padding: '0.3rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
+                  >
+                    {deletingId === h.id ? '…' : t('dev.delete', 'Delete')}
+                  </button>
+                </div>
+                {pingResult[h.id] && (
+                  <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.78rem', background: pingResult[h.id].ok ? 'rgba(46,204,113,0.08)' : 'rgba(231,76,60,0.08)', border: `1px solid ${pingResult[h.id].ok ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)'}`, color: pingResult[h.id].ok ? '#2ecc71' : '#ff6b6b' }}>
+                    {pingResult[h.id].ok
+                      ? `✓ Ping sent — event: ${pingResult[h.id].payload?.event}`
+                      : `✗ ${pingResult[h.id].msg}`}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Docs hint */}
+        <div style={{ marginTop: '1.25rem', padding: '0.75rem 1rem', background: '#111', borderRadius: '8px', border: '1px solid #1f1f1f', fontSize: '0.78rem', color: '#555' }}>
+          <strong style={{ color: '#888' }}>Verify signatures:</strong>{' '}
+          {t('dev.sig_hint', 'Compute HMAC-SHA256 of the raw request body using your signing secret and compare with the X-MyDD-Signature header.')}
+        </div>
+      </div>
     </div>
   )
 }
