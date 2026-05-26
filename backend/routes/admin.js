@@ -7,11 +7,13 @@ const router    = express.Router()
 const { query }                  = require('../db')
 const { auth, requireAdmin }     = require('../lib/authUtils')
 const { logAudit }               = require('../lib/audit')
+const { AUDIT }                  = require('../lib/auditActions')
 const { notifyUser }             = require('../lib/wsNotify')
 const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
         sendCertRevoked,
-        sendPacKycDecision }     = require('../lib/mailer')
+        sendPacKycDecision,
+        sendFounderWelcome }     = require('../lib/mailer')
 const { dispatchWebhook }        = require('../lib/webhookDispatch')
 const { isBlockedCompany }       = require('../lib/blocklist')
 const { validate, schemas }      = require('../lib/validators')
@@ -760,6 +762,105 @@ router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async
   } catch (err) {
     console.error(JSON.stringify({ event: 'admin_pac_kyc_error', message: err.message }))
     res.status(500).json({ error: 'Update failed' })
+  }
+})
+
+// PATCH /api/admin/pac/:id/founder — grant S3 Founder status (B&E mgmt only)
+// Body: { region: 'west_africa'|'central_east_africa'|'mena'|'europe'|'asia' }
+// - Caps active founders at 5
+// - Sets pac_tier='s3', membership_active=true, membership_expires=+1yr, kyc_status='pending'
+// - Bypasses Stripe entirely — no charge for Y1
+router.patch('/pac/:id/founder', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  const VALID_REGIONS = ['west_africa', 'central_east_africa', 'mena', 'europe', 'asia']
+  const { region } = req.body
+  const userId = parseInt(req.params.id, 10)
+
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' })
+  if (!region || !VALID_REGIONS.includes(region)) {
+    return res.status(400).json({ error: `region must be one of: ${VALID_REGIONS.join(', ')}` })
+  }
+
+  const client = await require('../db').getPool().connect()
+  try {
+    await client.query('BEGIN')
+
+    // Enforce max 5 active founders
+    const { rows: countRows } = await client.query(
+      `SELECT COUNT(*) FROM pac_profiles
+       WHERE is_founder = TRUE AND founder_exemption_expires > NOW()`
+    )
+    if (parseInt(countRows[0].count, 10) >= 5) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Maximum 5 active founders already reached' })
+    }
+
+    // Verify target user exists and has a PAC profile
+    const { rows: pacRows } = await client.query(
+      `SELECT pp.id, pp.full_name, u.email
+       FROM pac_profiles pp
+       JOIN users u ON u.id = pp.user_id
+       WHERE pp.user_id = $1`,
+      [userId]
+    )
+    if (!pacRows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'PAC profile not found for this user' })
+    }
+    const pac = pacRows[0]
+
+    const exemptionExpires = new Date()
+    exemptionExpires.setFullYear(exemptionExpires.getFullYear() + 1)
+
+    // Upgrade pac_profiles
+    await client.query(
+      `UPDATE pac_profiles SET
+         is_founder               = TRUE,
+         founder_exemption_expires = $1,
+         founder_region           = $2,
+         pac_tier                 = 's3',
+         membership_active        = TRUE,
+         membership_expires       = $1,
+         kyc_status               = 'pending',
+         updated_at               = NOW()
+       WHERE user_id = $3`,
+      [exemptionExpires, region, userId]
+    )
+
+    // Sync users table tier
+    await client.query(
+      `UPDATE users SET pac_tier = 's3', pac_status = 'pending' WHERE id = $1`,
+      [userId]
+    )
+
+    await client.query('COMMIT')
+
+    await logAudit(req.user.id, AUDIT.PAC_FOUNDER_GRANTED, 'pac_profiles', req.ip, {
+      targetUserId: userId,
+      region,
+      exemptionExpires,
+    })
+
+    // Fire welcome email (non-blocking)
+    sendFounderWelcome({
+      email:             pac.email,
+      full_name:         pac.full_name,
+      region,
+      exemption_expires: exemptionExpires,
+    }).catch(() => {})
+
+    res.json({
+      message:          'Founder status granted',
+      tier:             's3',
+      region,
+      exemption_expires: exemptionExpires,
+      kyc_status:       'pending',
+    })
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    console.error(JSON.stringify({ event: 'admin_pac_founder_error', message: err.message }))
+    res.status(500).json({ error: 'Server error' })
+  } finally {
+    client.release()
   }
 })
 

@@ -568,6 +568,60 @@ paths:
       responses:
         '200': { description: Status updated }
 
+  /api/admin/pac/{id}/founder:
+    patch:
+      tags: [Admin]
+      summary: Grant S3 Founder status to a PAC agent (B&E management only)
+      description: |
+        Activates S3 Founder status for the given PAC user. Caps at 5 concurrent
+        active founders. Sets pac_tier='s3', membership_active=true, and waives
+        the $799/yr fee for 12 months (founder_exemption_expires = now + 1yr).
+        A welcome email is sent to the agent. The agent's KYC is set to 'pending'
+        for admin review.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+          description: User ID of the PAC agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [region]
+              properties:
+                region:
+                  type: string
+                  enum: [west_africa, central_east_africa, mena, europe, asia]
+                  description: Geographic region for mission routing and Advisory Council
+      responses:
+        '200':
+          description: Founder status granted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:           { type: string }
+                  tier:              { type: string, example: s3 }
+                  region:            { type: string }
+                  exemption_expires: { type: string, format: date-time }
+                  kyc_status:        { type: string, example: pending }
+        '400':
+          description: Invalid input or max founders reached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        '404': { description: PAC profile not found }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   # ── Payments ─────────────────────────────────────────────────────────────────
 
   /api/payments/history:
