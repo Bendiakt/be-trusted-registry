@@ -1064,4 +1064,63 @@ router.post('/pac-upgrade-checkout', auth, async (req, res) => {
   }
 })
 
+// ── GET /api/payments/history ────────────────────────────────────────────────
+// Returns the authenticated company's own payment history.
+// Companies only see their own payments; no admin required.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/history', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'company' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only company accounts can access payment history' })
+    }
+
+    // Resolve company_id for this user
+    const companyResult = await query(
+      `SELECT id FROM companies WHERE user_id = $1 LIMIT 1`,
+      [req.user.id]
+    )
+    const company = companyResult.rows[0]
+    if (!company) return res.json({ payments: [], total: 0 })
+
+    const { rows } = await query(
+      `SELECT
+           p.id,
+           p.amount_cents,
+           p.currency,
+           p.status,
+           p.plan_id,
+           p.stripe_session_id,
+           p.stripe_payment_intent_id,
+           p.created_at,
+           c.level  AS certification_level
+         FROM payments p
+         LEFT JOIN certifications c ON c.id = p.certification_id
+        WHERE p.company_id = $1
+        ORDER BY p.created_at DESC
+        LIMIT 50`,
+      [company.id]
+    )
+
+    const PLAN_LABELS = { level1: 'Level 1 — Document Verification', level2: 'Level 2 — KYC Full Validation', level3: 'Level 3 — Physical Site Inspection' }
+
+    res.json({
+      payments: rows.map(r => ({
+        id:                 r.id,
+        amount_usd:         (Number(r.amount_cents) / 100).toFixed(2),
+        currency:           r.currency || 'usd',
+        status:             r.status,
+        plan_id:            r.plan_id,
+        plan_label:         PLAN_LABELS[r.plan_id] || r.plan_id || 'Certification',
+        certification_level: r.certification_level,
+        stripe_session_id:  r.stripe_session_id,
+        created_at:         r.created_at,
+      })),
+      total: rows.length,
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'payments.history.error', userId: req.user?.id, err: err.message }))
+    res.status(500).json({ error: 'Failed to load payment history' })
+  }
+})
+
 module.exports = { router, TRADER_PLANS }

@@ -116,8 +116,12 @@
       "register": "注册公司",
       "pricing": "价格与升级",
       "metrics": "数据指标",
-      "documents": "Documents"
+      "documents": "Documents","billing": "账单"
     },
+    "billing_title": "付款历史",
+    "billing_subtitle": "您的认证和 Stripe 交易记录",
+    "billing_empty": "暂无付款记录",
+    "billing_empty_sub": "认证后您的交易将显示在此处.",
     "overview": {
       "cert_level": "认证等级",
       "registry_status": "注册状态",

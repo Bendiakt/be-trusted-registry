@@ -116,8 +116,12 @@
       "register": "Enregistrer l'entreprise",
       "pricing": "Tarifs & Mise à niveau",
       "metrics": "Métriques",
-      "documents": "Documents"
+      "documents": "Documents","billing": "Facturation"
     },
+    "billing_title": "Historique des paiements",
+    "billing_subtitle": "Vos certifications et transactions Stripe",
+    "billing_empty": "Aucun paiement enregistré",
+    "billing_empty_sub": "Vos transactions apparaîtront ici après la certification.",
     "overview": {
       "cert_level": "Niveau de certification",
       "registry_status": "Statut du registre",
