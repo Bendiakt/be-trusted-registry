@@ -20,7 +20,7 @@ const { query }  = require('../db')
 const { logAudit } = require('../lib/audit')
 const { AUDIT }    = require('../lib/auditActions')
 const { makeRateLimiter } = require('../lib/rateLimiter')
-const { dispatchWebhook, signPayload } = require('../lib/webhookDispatch')
+const { dispatchWebhook, signPayload, pingEndpoint } = require('../lib/webhookDispatch')
 
 const router = Router()
 
@@ -109,14 +109,16 @@ router.post('/:id/ping', auth, async (req, res) => {
   )
   if (!ep.rows.length) return res.status(404).json({ error: 'Endpoint not found or inactive' })
 
-  const payload = JSON.stringify({ event: 'ping', message: 'MyDD webhook test', sent_at: new Date().toISOString() })
-  const signature = signPayload(payload, ep.rows[0].secret)
+  const endpoint = ep.rows[0]
+  const result = await pingEndpoint(endpoint)
 
   res.json({
-    url:       ep.rows[0].url,
-    signature,
-    payload:   JSON.parse(payload),
-    note:      'Verify X-MyDD-Signature on your end using the stored secret.',
+    url:        endpoint.url,
+    success:    result.success,
+    statusCode: result.statusCode,
+    error:      result.error,
+    event:      'ping',
+    note:       'Verify X-MyDD-Signature on your end using the stored secret.',
   })
 })
 
