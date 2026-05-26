@@ -660,6 +660,19 @@ router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async
       missionId, admin_score, payment_confirmed, commissionCents
     })
 
+    // ── Update admin_score counters on pac_profiles (fire-and-forget) ────────
+    if (admin_score !== undefined && admin_score !== null && mission.assigned_to) {
+      query(`
+        UPDATE pac_profiles SET
+          admin_score_total = admin_score_total + $1,
+          admin_score_count = admin_score_count + 1,
+          updated_at        = NOW()
+        WHERE user_id = $2
+      `, [admin_score, mission.assigned_to]).catch(e =>
+        console.error(JSON.stringify({ event: 'admin_score_counter_error', message: e.message }))
+      )
+    }
+
     res.json({ mission: result.rows[0] })
   } catch (err) {
     console.error(JSON.stringify({ event: 'admin_mission_score_error', message: err.message }))
@@ -674,8 +687,9 @@ router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async
 // GET /api/admin/pac/agents — list all PAC agents with tier + KYC status
 router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
-    const { tier, kyc_status, page = 1, limit = 50 } = req.query
+    const { tier, kyc_status, eligible, page = 1, limit = 50 } = req.query
     const offset = (Math.max(parseInt(page,10),1) - 1) * Math.min(parseInt(limit,10),200)
+    const eligibleOnly = eligible === '1'
 
     const { rows } = await query(`
       SELECT
@@ -683,17 +697,18 @@ router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res)
         u.email, u.name AS user_name, u.created_at AS user_created_at,
         -- Active supervisees count
         (SELECT COUNT(*) FROM pac_supervision ps WHERE ps.supervisor_id = pp.id AND ps.status = 'active') AS active_supervisees,
-        -- Completed missions
-        (SELECT COUNT(*) FROM missions m WHERE m.assigned_to = pp.user_id AND m.status = 'completed') AS missions_completed,
+        -- Completed missions (from counter column — faster than subquery)
+        pp.missions_completed,
         -- Pending bonus (draft statements)
         (SELECT COALESCE(SUM(final_bonus_cents),0) FROM pac_bonus_payouts pb WHERE pb.supervisor_id = pp.id AND pb.status = 'draft') AS pending_bonus_cents
       FROM pac_profiles pp
       JOIN users u ON u.id = pp.user_id
       WHERE ($1::text IS NULL OR pp.pac_tier = $1)
         AND ($2::text IS NULL OR pp.kyc_status = $2)
-      ORDER BY pp.pac_tier DESC, pp.created_at DESC
-      LIMIT $3 OFFSET $4
-    `, [tier || null, kyc_status || null, Math.min(parseInt(limit,10),200), offset])
+        AND ($3::boolean IS FALSE OR (pp.eligible_for_s2 = TRUE OR pp.eligible_for_s3 = TRUE))
+      ORDER BY (pp.eligible_for_s2 OR pp.eligible_for_s3) DESC, pp.pac_tier DESC, pp.created_at DESC
+      LIMIT $4 OFFSET $5
+    `, [tier || null, kyc_status || null, eligibleOnly, Math.min(parseInt(limit,10),200), offset])
 
     res.json({ agents: rows })
   } catch (err) {
