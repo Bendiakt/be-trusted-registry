@@ -30,6 +30,14 @@ const pacWriteLimiter = rateLimit({
   validate: { keyGeneratorIpFallback: false },
   message: { error: 'Too many write requests. Please slow down.' },
 })
+// Public directory: unauthenticated callers — more lenient but still protected
+const pacPublicLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 60,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => `pac:public:${req.ip}`,
+  validate: { keyGeneratorIpFallback: false },
+  message: { error: 'Too many requests.' },
+})
 
 // ── GET /api/pac/missions ─────────────────────────────────────────────────────
 router.get('/missions', auth, pacReadLimiter, async (req, res) => {
@@ -467,6 +475,91 @@ router.get('/progress', auth, pacReadLimiter, async (req, res) => {
   } catch (err) {
     console.error(JSON.stringify({ event: 'pac.progress.error', message: err.message }))
     res.status(500).json({ error: 'Failed to load progress' })
+  }
+})
+
+// ── GET /api/pac/directory — public agent directory ──────────────────────────
+// No auth required. Returns approved, active PAC agents only.
+// Sorted S3 → S2 → S1, then missions_completed DESC within each tier.
+// Filters: tier, q (name/location/bio search).
+router.get('/directory', pacPublicLimiter, async (req, res) => {
+  try {
+    const page   = Math.max(1, parseInt(req.query.page  || '1',  10) || 1)
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit || '20', 10) || 20))
+    const offset = (page - 1) * limit
+    const tier   = req.query.tier ? String(req.query.tier).trim() : null
+    const q      = req.query.q    ? String(req.query.q).trim()    : null
+
+    const params = []
+    const where  = [`pp.kyc_status = 'approved'`, `pp.membership_active = TRUE`]
+
+    if (tier && ['S1','S2','S3'].includes(tier)) {
+      params.push(tier)
+      where.push(`pp.pac_tier = $${params.length}`)
+    }
+    if (q) {
+      params.push(`%${q}%`)
+      where.push(`(pp.full_name ILIKE $${params.length} OR pp.location ILIKE $${params.length} OR pp.bio ILIKE $${params.length} OR pp.expertise ILIKE $${params.length})`)
+    }
+
+    const whereClause  = `WHERE ${where.join(' AND ')}`
+    const dataParams   = [...params, limit, offset]
+
+    const TIER_ORDER = `CASE pp.pac_tier WHEN 'S3' THEN 1 WHEN 'S2' THEN 2 ELSE 3 END`
+
+    const [rows, countRow] = await Promise.all([
+      query(`
+        SELECT
+          pp.id,
+          COALESCE(pp.full_name, u.name)               AS name,
+          pp.pac_tier,
+          pp.location,
+          pp.bio,
+          pp.expertise,
+          pp.languages,
+          pp.certifications,
+          pp.missions_completed,
+          pp.missions_on_time,
+          CASE WHEN pp.admin_score_count > 0
+               THEN ROUND(pp.admin_score_total::numeric / pp.admin_score_count, 2)
+               ELSE NULL END                            AS avg_admin_score,
+          CASE WHEN pp.client_score_count > 0
+               THEN ROUND(pp.client_score_total::numeric / pp.client_score_count, 2)
+               ELSE NULL END                            AS avg_client_score,
+          pp.promotion_date_s2,
+          pp.promotion_date_s3
+        FROM pac_profiles pp
+        JOIN users u ON u.id = pp.user_id
+        ${whereClause}
+        ORDER BY ${TIER_ORDER}, pp.missions_completed DESC
+        LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+      `, dataParams),
+      query(`SELECT COUNT(*)::int AS total FROM pac_profiles pp ${whereClause}`, params),
+    ])
+
+    const total = countRow.rows[0]?.total || 0
+    res.json({
+      agents: rows.rows.map(r => ({
+        id:               r.id,
+        name:             r.name             || null,
+        tier:             r.pac_tier,
+        location:         r.location         || null,
+        bio:              r.bio              || null,
+        expertise:        r.expertise        || null,
+        languages:        r.languages        || null,
+        certifications:   r.certifications   || null,
+        missionsCompleted: r.missions_completed,
+        missionsOnTime:    r.missions_on_time,
+        avgAdminScore:    r.avg_admin_score  ? Number(r.avg_admin_score)  : null,
+        avgClientScore:   r.avg_client_score ? Number(r.avg_client_score) : null,
+        promotedS2:       r.promotion_date_s2 || null,
+        promotedS3:       r.promotion_date_s3 || null,
+      })),
+      pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.directory.error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to load directory' })
   }
 })
 
