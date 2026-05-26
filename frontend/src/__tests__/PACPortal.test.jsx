@@ -19,8 +19,10 @@ import { vi } from 'vitest'
 
 const mockNavigate = vi.fn()
 
+const mockSetSearchParams = vi.fn()
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate,
+  useNavigate:      () => mockNavigate,
+  useSearchParams:  () => [new URLSearchParams(), mockSetSearchParams],
   Link: ({ children, to }) => <a href={to}>{children}</a>,
 }))
 
