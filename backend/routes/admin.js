@@ -41,7 +41,7 @@ const adminWriteLimiter = rateLimit({
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
-    const [users, companies, revenue, alerts, docs, missions] = await Promise.all([
+    const [users, companies, revenue, alerts, docs, pacStats, missionStats] = await Promise.all([
       query(`SELECT COUNT(*)::int AS total,
                     COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30d')::int AS last_30d,
                     COUNT(*) FILTER (WHERE email_verified = FALSE)::int AS unverified
@@ -55,7 +55,19 @@ router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
              FROM payments`),
       query(`SELECT COUNT(*) FILTER (WHERE resolved = FALSE)::int AS open_alerts FROM fraud_alerts`),
       query(`SELECT COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_docs FROM documents`),
-      query(`SELECT COUNT(*) FILTER (WHERE status = 'available')::int AS open_missions FROM missions`),
+      query(`SELECT
+               COUNT(*) FILTER (WHERE pac_tier = 'S1')::int              AS s1,
+               COUNT(*) FILTER (WHERE pac_tier = 'S2')::int              AS s2,
+               COUNT(*) FILTER (WHERE pac_tier = 'S3')::int              AS s3,
+               COUNT(*) FILTER (WHERE eligible_for_s2 OR eligible_for_s3)::int AS eligible_for_upgrade,
+               COUNT(*) FILTER (WHERE license_suspended_at IS NOT NULL)::int   AS suspended
+             FROM pac_profiles`),
+      query(`SELECT
+               COUNT(*) FILTER (WHERE status = 'available')::int  AS available,
+               COUNT(*) FILTER (WHERE status = 'assigned')::int   AS assigned,
+               COUNT(*) FILTER (WHERE status = 'completed')::int  AS completed,
+               COUNT(*) FILTER (WHERE status = 'cancelled')::int  AS cancelled
+             FROM missions`),
     ])
     res.json({
       users:     users.rows[0],
@@ -64,9 +76,10 @@ router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
         total_usd:      (Number(revenue.rows[0].total_cents) / 100).toFixed(2),
         total_payments: revenue.rows[0].total_payments,
       },
-      fraud:     { open_alerts:   alerts.rows[0].open_alerts },
-      documents: { pending_docs:  docs.rows[0].pending_docs },
-      missions:  { open_missions: missions.rows[0].open_missions },
+      fraud:     { open_alerts:  alerts.rows[0].open_alerts },
+      documents: { pending_docs: docs.rows[0].pending_docs },
+      pac:       pacStats.rows[0],
+      missions:  missionStats.rows[0],
     })
   } catch (err) {
     console.error(JSON.stringify({ event: 'admin_stats_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
@@ -436,9 +449,19 @@ router.patch('/missions/:id/assign', auth, requireAdmin, adminWriteLimiter, asyn
 
     logAudit(req.user.id, 'admin_mission_assigned', 'missions', req.ip, { missionId, agentId, agentName: agent.name })
 
+    // Look up company contact email for notification
+    let companyEmail = null
+    if (rows[0].company_id) {
+      const emailQ = await query(
+        `SELECT u.email FROM companies c JOIN users u ON u.id = c.user_id WHERE c.id = $1 LIMIT 1`,
+        [rows[0].company_id]
+      )
+      if (emailQ.rows.length) companyEmail = emailQ.rows[0].email
+    }
+
     // Notify agent
     const { sendMissionAssigned } = require('../lib/mailer')
-    sendMissionAssigned({ email: null, name: agent.name, missionId, companyName: rows[0].company_name }).catch(() => {})
+    sendMissionAssigned({ email: companyEmail, name: agent.name, missionId, companyName: rows[0].company_name }).catch(() => {})
 
     res.json({ mission: rows[0], agent: { id: agent.id, name: agent.name, tier: agent.pac_tier } })
   } catch (err) {
@@ -550,16 +573,54 @@ router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, vali
 // ── GET /api/admin/missions ───────────────────────────────────────────────────
 router.get('/missions', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
-    const page   = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit  = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
+    const page       = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
+    const limit      = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
+    const offset     = (page - 1) * limit
+    const status     = req.query.status     ? String(req.query.status).trim()     : null
+    const q          = req.query.q          ? String(req.query.q).trim()          : null
+    const unassigned = req.query.unassigned === '1'
+    const tierReq    = req.query.tier_required ? String(req.query.tier_required).trim() : null
+
+    const params  = []
+    const where   = []
+
+    if (status) {
+      params.push(status)
+      where.push(`m.status = $${params.length}`)
+    }
+    if (q) {
+      params.push(`%${q}%`)
+      where.push(`(m.company_name ILIKE $${params.length} OR m.title ILIKE $${params.length})`)
+    }
+    if (unassigned) {
+      where.push(`m.assigned_to IS NULL`)
+    }
+    if (tierReq) {
+      params.push(tierReq)
+      where.push(`m.pac_tier_required = $${params.length}`)
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+    // Build queries with shared filter
+    const dataParams  = [...params, limit, offset]
+    const countParams = [...params]
 
     const [rowsResult, totalResult] = await Promise.all([
-      query(`SELECT m.*, u.name AS pac_name, u.email AS pac_email
-             FROM missions m LEFT JOIN users u ON u.id = m.assigned_to
-             ORDER BY m.id DESC LIMIT $1 OFFSET $2`, [limit, offset]),
-      query('SELECT COUNT(*)::int AS total FROM missions'),
+      query(`
+        SELECT m.*, u.name AS pac_name, u.email AS pac_email,
+               cu.email AS company_email
+        FROM missions m
+        LEFT JOIN users u  ON u.id  = m.assigned_to
+        LEFT JOIN companies c ON c.id = m.company_id
+        LEFT JOIN users cu ON cu.id = c.user_id
+        ${whereClause}
+        ORDER BY m.id DESC
+        LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+      `, dataParams),
+      query(`SELECT COUNT(*)::int AS total FROM missions m ${whereClause}`, countParams),
     ])
+
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {

@@ -57,6 +57,8 @@ export default function AdminPanel() {
   const [clientScoreModal, setClientScoreModal]     = useState(null) // { missionId, pacName }
   const [clientScoreVal, setClientScoreVal]         = useState(0)
   const [clientScoreSaving, setClientScoreSaving]   = useState(false)
+  // Mission filter bar
+  const [missionFilter, setMissionFilter] = useState({ status: '', q: '', unassigned: false, tier_required: '' })
 
   useEffect(() => {
     const user = getSession()
@@ -101,13 +103,19 @@ export default function AdminPanel() {
     } catch { /* silent */ }
   }, [q])
 
-  const fetchMissions = useCallback(async (page = 1) => {
+  const fetchMissions = useCallback(async (page = 1, filters) => {
     try {
-      const res = await api.get(`/api/admin/missions?page=${page}&limit=50`)
+      const f   = filters || missionFilter
+      const qs  = new URLSearchParams({ page, limit: 50 })
+      if (f.status)       qs.set('status',       f.status)
+      if (f.q)            qs.set('q',            f.q)
+      if (f.unassigned)   qs.set('unassigned',   '1')
+      if (f.tier_required) qs.set('tier_required', f.tier_required)
+      const res = await api.get(`/api/admin/missions?${qs}`)
       setMissions(res.data.data)
       setPagination(p => ({ ...p, missions: res.data.pagination }))
     } catch { /* silent */ }
-  }, [])
+  }, [missionFilter])
 
   const fetchAuditLog = useCallback(async (page = 1, q = '') => {
     try {
@@ -424,20 +432,66 @@ export default function AdminPanel() {
 
         {/* Overview */}
         {tab === 'overview' && stats && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-            {[
-              { label: t('admin.stats.total_users'),    value: stats.users?.total,     color: '#C9A84C' },
-              { label: t('admin.stats.new_30d'),        value: stats.users?.last_30d,  color: '#4a90e2' },
-              { label: t('admin.stats.total_companies'),value: stats.companies?.total, color: '#888' },
-              { label: t('admin.stats.certified'),      value: stats.companies?.certified, color: '#4CAF50' },
-              { label: t('admin.stats.revenue'),        value: `$${stats.revenue?.total_usd}`, color: '#C9A84C', raw: true },
-            ].map(item => (
-              <div key={item.label} style={{ ...G.card, marginBottom: 0, position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
-                <div style={{ color: '#555', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{item.label}</div>
-                <div style={{ color: item.color, fontSize: '2rem', fontWeight: '900' }}>{item.value}</div>
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {/* Core stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+              {[
+                { label: t('admin.stats.total_users'),    value: stats.users?.total,     color: '#C9A84C' },
+                { label: t('admin.stats.new_30d'),        value: stats.users?.last_30d,  color: '#4a90e2' },
+                { label: t('admin.stats.total_companies'),value: stats.companies?.total, color: '#888' },
+                { label: t('admin.stats.certified'),      value: stats.companies?.certified, color: '#4CAF50' },
+                { label: t('admin.stats.revenue'),        value: `$${stats.revenue?.total_usd}`, color: '#C9A84C' },
+              ].map(item => (
+                <div key={item.label} style={{ ...G.card, marginBottom: 0, position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
+                  <div style={{ color: '#555', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{item.label}</div>
+                  <div style={{ color: item.color, fontSize: '2rem', fontWeight: '900' }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* PAC Network stats */}
+            {stats.pac && (
+              <div>
+                <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>PAC Network</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+                  {[
+                    { label: 'S1 Associates', value: stats.pac.s1,                  color: '#888' },
+                    { label: 'S2 Certified',  value: stats.pac.s2,                  color: '#4a90e2' },
+                    { label: 'S3 Senior',     value: stats.pac.s3,                  color: '#C9A84C' },
+                    { label: '🎯 Éligibles upgrade', value: stats.pac.eligible_for_upgrade, color: '#4CAF50' },
+                    { label: '⚠️ Suspendus',  value: stats.pac.suspended,           color: '#ff6b6b' },
+                  ].map(item => (
+                    <div key={item.label} style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '10px', padding: '0.85rem 1rem', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
+                      <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{item.label}</div>
+                      <div style={{ color: item.color, fontSize: '1.6rem', fontWeight: '900' }}>{item.value ?? '—'}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+
+            {/* Missions stats */}
+            {stats.missions && (
+              <div>
+                <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Missions</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                  {[
+                    { label: 'Disponibles', value: stats.missions.available,  color: '#4a90e2' },
+                    { label: 'Assignées',   value: stats.missions.assigned,   color: '#C9A84C' },
+                    { label: 'Terminées',   value: stats.missions.completed,  color: '#4CAF50' },
+                    { label: 'Annulées',    value: stats.missions.cancelled,  color: '#555' },
+                  ].map(item => (
+                    <div key={item.label} style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '10px', padding: '0.85rem 1rem', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
+                      <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{item.label}</div>
+                      <div style={{ color: item.color, fontSize: '1.6rem', fontWeight: '900' }}>{item.value ?? '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -632,10 +686,68 @@ export default function AdminPanel() {
         {tab === 'missions' && (
           <div style={G.card}>
             {/* Header + create button */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div style={{ fontWeight: '700', fontSize: '1rem' }}>{t('admin.missions.title')}</div>
               <button onClick={() => setCreateMissionModal(true)} style={{ ...G.btn, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 ＋ Nouvelle mission
+              </button>
+            </div>
+
+            {/* Filter bar */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.25rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid #1e1e1e' }}>
+              <input
+                type="text"
+                placeholder="🔍 Rechercher…"
+                value={missionFilter.q}
+                onChange={e => setMissionFilter(f => ({ ...f, q: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && fetchMissions(1)}
+                style={{ ...G.inp, minWidth: '160px', flex: '1' }}
+              />
+              <select
+                value={missionFilter.status}
+                onChange={e => setMissionFilter(f => ({ ...f, status: e.target.value }))}
+                style={{ ...G.inp, fontSize: '0.75rem' }}
+              >
+                <option value="">Tous statuts</option>
+                <option value="available">Available</option>
+                <option value="assigned">Assigned</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <select
+                value={missionFilter.tier_required}
+                onChange={e => setMissionFilter(f => ({ ...f, tier_required: e.target.value }))}
+                style={{ ...G.inp, fontSize: '0.75rem' }}
+              >
+                <option value="">Tous tiers</option>
+                <option value="S1">S1</option>
+                <option value="S2">S2</option>
+                <option value="S3">S3</option>
+              </select>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#777', fontSize: '0.75rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={missionFilter.unassigned}
+                  onChange={e => setMissionFilter(f => ({ ...f, unassigned: e.target.checked }))}
+                  style={{ accentColor: '#C9A84C' }}
+                />
+                Non assignées
+              </label>
+              <button
+                onClick={() => fetchMissions(1)}
+                style={{ ...G.btn, padding: '0.4rem 1rem', fontSize: '0.75rem' }}
+              >
+                Filtrer
+              </button>
+              <button
+                onClick={() => {
+                  const reset = { status: '', q: '', unassigned: false, tier_required: '' }
+                  setMissionFilter(reset)
+                  fetchMissions(1, reset)
+                }}
+                style={{ ...G.outline, padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#555' }}
+              >
+                ✕ Reset
               </button>
             </div>
 
