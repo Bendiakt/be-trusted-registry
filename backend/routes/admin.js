@@ -1277,4 +1277,86 @@ router.get('/pac/supervision/pending', auth, requireAdmin, adminReadLimiter, asy
   }
 })
 
+// ── GET /api/admin/disputes — list all mission disputes ──────────────────────
+router.get('/disputes', auth, requireAdmin, adminReadLimiter, async (req, res) => {
+  try {
+    const status = req.query.status ? String(req.query.status).trim() : null
+    const page   = Math.max(1, parseInt(req.query.page || '1', 10) || 1)
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit || '50', 10) || 50))
+    const offset = (page - 1) * limit
+
+    const params = []
+    const where  = []
+    if (status && ['open','under_review','resolved'].includes(status)) {
+      params.push(status)
+      where.push(`d.status = $${params.length}`)
+    }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+    const dataParams  = [...params, limit, offset]
+
+    const [rows, countRow] = await Promise.all([
+      query(`
+        SELECT d.*, m.title AS mission_title, m.outcome AS mission_outcome,
+               c.name AS company_name, uc.email AS company_email,
+               ua.email AS resolver_email
+        FROM mission_disputes d
+        JOIN missions  m  ON m.id  = d.mission_id
+        JOIN companies c  ON c.id  = d.company_id
+        JOIN users     uc ON uc.id = d.opened_by
+        LEFT JOIN users ua ON ua.id = d.resolved_by
+        ${whereClause}
+        ORDER BY d.created_at DESC
+        LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+      `, dataParams),
+      query(`SELECT COUNT(*)::int AS total FROM mission_disputes d ${whereClause}`, params),
+    ])
+
+    res.json({ data: rows.rows, pagination: { page, limit, total: countRow.rows[0]?.total || 0 } })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_disputes_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to load disputes' })
+  }
+})
+
+// ── PATCH /api/admin/disputes/:id/resolve — admin resolves a dispute ─────────
+router.patch('/disputes/:id/resolve', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const disputeId = parseInt(req.params.id, 10)
+    if (Number.isNaN(disputeId)) return res.status(400).json({ error: 'Invalid dispute id' })
+
+    const { resolution, resolution_note } = req.body
+    if (!resolution || !['upheld','dismissed','second_audit'].includes(resolution)) {
+      return res.status(400).json({ error: 'resolution must be: upheld | dismissed | second_audit' })
+    }
+
+    const { rows } = await query(`
+      UPDATE mission_disputes SET
+        status          = 'resolved',
+        resolution      = $1,
+        resolution_note = $2,
+        resolved_by     = $3,
+        resolved_at     = NOW(),
+        updated_at      = NOW()
+      WHERE id = $4 AND status != 'resolved'
+      RETURNING *
+    `, [resolution, resolution_note || null, req.user.id, disputeId])
+
+    if (!rows.length) return res.status(404).json({ error: 'Dispute not found or already resolved' })
+
+    // If second_audit: re-open the mission as available
+    if (resolution === 'second_audit') {
+      await query(
+        `UPDATE missions SET status = 'available', assigned_to = NULL, updated_at = NOW() WHERE id = $1`,
+        [rows[0].mission_id]
+      )
+    }
+
+    logAudit(req.user.id, AUDIT.ADMIN_DISPUTE_RESOLVED, 'mission_disputes', req.ip, { disputeId, resolution })
+    res.json({ dispute: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_dispute_resolve_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to resolve dispute' })
+  }
+})
+
 module.exports = router

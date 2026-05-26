@@ -59,6 +59,8 @@ const AUDIT = Object.freeze({
   ADMIN_MISSION_CLIENT_SCORED:  'admin_mission_client_scored',
   ADMIN_RESOLVE_FRAUD_ALERT:    'admin_resolve_fraud_alert',
   COMPANY_MISSION_RATED:        'company_mission_rated',
+  COMPANY_DISPUTE_OPENED:       'company_dispute_opened',
+  ADMIN_DISPUTE_RESOLVED:       'admin_dispute_resolved',
 
   // ── GDPR ──────────────────────────────────────────────────────────────────
   USER_DATA_EXPORT:       'user_data_export',

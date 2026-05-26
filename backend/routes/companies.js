@@ -107,10 +107,22 @@ router.get('/me', auth, companyReadLimiter, async (req, res) => {
       }
     }
 
+    // Docs count + open disputes count for onboarding stepper
+    let docsCount    = 0
+    let disputeCount = 0
+    if (companyRow?.id) {
+      const [docsRes, disputeRes] = await Promise.all([
+        query(`SELECT COUNT(*)::int AS n FROM documents WHERE company_id = $1`, [companyRow.id]),
+        query(`SELECT COUNT(*)::int AS n FROM mission_disputes WHERE company_id = $1 AND status != 'resolved'`, [companyRow.id]),
+      ])
+      docsCount    = docsRes.rows[0]?.n    || 0
+      disputeCount = disputeRes.rows[0]?.n || 0
+    }
+
     const userRow = await query('SELECT id, name, email, role, email_verified FROM users WHERE id = $1 LIMIT 1', [req.user.id])
     const u       = userRow.rows[0] || req.user
     res.json({
-      company: company ? { ...company, certInfo } : null,
+      company: company ? { ...company, certInfo, docsCount, openDisputeCount: disputeCount } : null,
       user:    { id: u.id, name: u.name, email: u.email, role: u.role, emailVerified: u.email_verified ?? false },
     })
   } catch (err) {
@@ -445,6 +457,53 @@ router.patch('/missions/:id/rate', auth, async (req, res) => {
   } catch (err) {
     console.error(JSON.stringify({ event: 'company_mission_rate_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to submit rating' })
+  }
+})
+
+// ── POST /api/companies/missions/:id/dispute — open a dispute on a mission ────
+// Company can dispute a completed mission outcome (e.g. contested fail).
+// One dispute per mission maximum (409 if already open).
+router.patch('/missions/:id/dispute', auth, companyWriteLimiter, async (req, res) => {
+  try {
+    if (req.user.role !== 'company') return res.status(403).json({ error: 'Only company accounts can open disputes' })
+
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : ''
+    if (!reason || reason.length < 20) return res.status(400).json({ error: 'reason must be at least 20 characters' })
+    if (reason.length > 2000)          return res.status(400).json({ error: 'reason too long (max 2000 chars)' })
+
+    const compResult = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    if (!compResult.rows.length) return res.status(404).json({ error: 'Company not found' })
+    const companyId = compResult.rows[0].id
+
+    // Verify mission belongs to company and is completed
+    const mRes = await query(
+      `SELECT id FROM missions WHERE id = $1 AND company_id = $2 AND status = 'completed' LIMIT 1`,
+      [missionId, companyId]
+    )
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found, not yours, or not completed' })
+
+    // Idempotency — one dispute per mission
+    const existing = await query(
+      `SELECT id, status FROM mission_disputes WHERE mission_id = $1 AND company_id = $2 LIMIT 1`,
+      [missionId, companyId]
+    )
+    if (existing.rows.length) return res.status(409).json({ error: 'A dispute is already open for this mission', dispute: existing.rows[0] })
+
+    const { rows } = await query(
+      `INSERT INTO mission_disputes (mission_id, company_id, opened_by, reason)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, status, created_at`,
+      [missionId, companyId, req.user.id, reason]
+    )
+
+    logAudit(req.user.id, AUDIT.COMPANY_DISPUTE_OPENED, 'mission_disputes', req.ip, { missionId, companyId, disputeId: rows[0].id })
+    res.status(201).json({ message: 'Dispute opened', dispute: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'company_dispute_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to open dispute' })
   }
 })
 
