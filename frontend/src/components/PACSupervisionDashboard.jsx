@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '../lib/api'
+import { useMobile } from '../lib/useMobile'
 
 const G = {
   card:   { background: '#111', border: '1px solid #1e1e1e', borderRadius: 10, padding: '20px 24px', marginBottom: 16 },
@@ -234,6 +235,7 @@ function TaskChecklist ({ tasks, templates, summary, pacTier, onTaskComplete }) 
 
 // ── S2 Dashboard ──────────────────────────────────────────────────────────────
 function S2Dashboard () {
+  const isMobile = useMobile()
   const [team, setTeam]       = useState(null)
   const [tasks, setTasks]     = useState(null)
   const [bonus, setBonus]     = useState(null)
@@ -327,7 +329,7 @@ function S2Dashboard () {
               </span>
               <span style={{ ...G.tag }}>{agent.location || '—'}</span>
             </div>
-            <div style={{ display: 'flex', gap: 24, marginTop: 6 }}>
+            <div style={{ display: 'flex', gap: isMobile ? 12 : 24, marginTop: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.78rem', color: '#666' }}>
                 Missions ce mois : <strong style={{ color: '#ccc' }}>{agent.missions_completed_month}</strong>
               </span>

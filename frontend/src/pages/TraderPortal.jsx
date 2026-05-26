@@ -5,6 +5,7 @@ import api from '../lib/api'
 import { getSession, clearSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Skeleton from '../components/Skeleton'
+import { useMobile } from '../lib/useMobile'
 
 const LEVEL_COLORS = { 0: '#555', 1: '#CD7F32', 2: '#C0C0C0', 3: '#C9A84C' }
 
@@ -36,6 +37,7 @@ export default function TraderPortal() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const isMobile = useMobile()
 
   // ── state ──────────────────────────────────────────────────────────────────
   const [tab, setTab]               = useState('registry') // 'registry' | 'watchlist'
@@ -202,8 +204,8 @@ export default function TraderPortal() {
   // ── styles ─────────────────────────────────────────────────────────────────
   const G = {
     page:    { minHeight:'100vh', background:'#111', fontFamily:'sans-serif', color:'#eee' },
-    nav:     { background:'#1a1a1a', borderBottom:'1px solid #333', padding:'0 2rem', display:'flex', alignItems:'center', justifyContent:'space-between', height:'60px' },
-    main:    { maxWidth:'1100px', margin:'0 auto', padding:'2rem 1.5rem' },
+    nav:     { background:'#1a1a1a', borderBottom:'1px solid #333', padding: isMobile ? '0 1rem' : '0 2rem', display:'flex', alignItems:'center', justifyContent:'space-between', height:'60px' },
+    main:    { maxWidth:'1100px', margin:'0 auto', padding: isMobile ? '1.25rem 0.75rem' : '2rem 1.5rem' },
     inp:     { padding:'0.65rem 1rem', background:'#1f1f1f', border:'1px solid #2e2e2e', borderRadius:'8px', color:'#fff', fontSize:'0.9rem', outline:'none' },
     sel:     { padding:'0.65rem 1rem', background:'#1f1f1f', border:'1px solid #2e2e2e', borderRadius:'8px', color:'#fff', fontSize:'0.85rem', outline:'none', cursor:'pointer' },
     btn:     { background:'linear-gradient(135deg,#C9A84C,#9A7B2E)', color:'#111', padding:'0.55rem 1.1rem', borderRadius:'6px', border:'none', fontWeight:'700', cursor:'pointer', fontSize:'0.8rem' },
@@ -288,7 +290,7 @@ export default function TraderPortal() {
       <main style={G.main}>
         {/* ── Paywall — shown when subscription is inactive ── */}
         {!subscribed && (
-          <div style={{ maxWidth: 560, margin: '4rem auto', background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 16, padding: '3rem 2.5rem', textAlign: 'center' }}>
+          <div style={{ maxWidth: 560, margin: isMobile ? '1.5rem auto' : '4rem auto', background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 16, padding: isMobile ? '1.5rem 1.25rem' : '3rem 2.5rem', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔒</div>
             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '0.5rem' }}>
               Accès Trader Portal
@@ -298,7 +300,7 @@ export default function TraderPortal() {
             </div>
 
             {/* Plan selector */}
-            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
               {[
                 { id: 'monthly', label: 'Mensuel', price: '$49/mois', sub: 'Sans engagement' },
                 { id: 'annual',  label: 'Annuel',  price: '$499/an',  sub: '2 mois offerts ✦' },

@@ -31,8 +31,14 @@
     <!-- Canonical -->
     <link rel="canonical" href="https://mydd.work/" />
 
-    <!-- Theme color (browser chrome on mobile) -->
+    <!-- PWA / Mobile -->
     <meta name="theme-color" content="#C9A84C" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MyDD" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
 
     <!-- Content Security Policy
          script-src: only our own hashed/bundled scripts (Vite adds nonces in dev)
