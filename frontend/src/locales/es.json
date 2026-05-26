@@ -116,8 +116,12 @@
       "register": "Registrar empresa",
       "pricing": "Precios y mejoras",
       "metrics": "Métricas",
-      "documents": "Documents"
+      "documents": "Documents","billing": "Facturación"
     },
+    "billing_title": "Historial de pagos",
+    "billing_subtitle": "Sus certificaciones y transacciones de Stripe",
+    "billing_empty": "Sin pagos registrados",
+    "billing_empty_sub": "Sus transacciones aparecerán aquí después de la certificación.",
     "overview": {
       "cert_level": "Nivel de certificación",
       "registry_status": "Estado del registro",

@@ -116,8 +116,12 @@
       "register": "تسجيل الشركة",
       "pricing": "الأسعار والترقية",
       "metrics": "المقاييس",
-      "documents": "Documents"
+      "documents": "Documents","billing": "الفواتير"
     },
+    "billing_title": "سجل المدفوعات",
+    "billing_subtitle": "شهاداتك ومعاملات Stripe",
+    "billing_empty": "لا توجد مدفوعات مسجلة",
+    "billing_empty_sub": "ستظهر معاملاتك هنا بعد الحصول على الشهادة.",
     "overview": {
       "cert_level": "مستوى الاعتماد",
       "registry_status": "حالة السجل",
