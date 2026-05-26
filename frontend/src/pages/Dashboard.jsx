@@ -17,11 +17,13 @@ const LEVEL_CONFIG = {
 }
 
 // ── Onboarding stepper ────────────────────────────────────────────────────────
-function OnboardingProgress({ company, certLevel, t, onRegister, onPricing }) {
+function OnboardingProgress({ company, certLevel, docsUploaded, kycApproved, t, onRegister, onDocs, onPricing }) {
   const steps = [
-    { key: 'step_account',  done: true },
-    { key: 'step_profile',  done: Boolean(company), action: onRegister },
-    { key: 'step_certified',done: certLevel > 0,    action: onPricing  },
+    { key: 'step_account',  done: true,                        label: '✓ Compte créé',        action: null },
+    { key: 'step_profile',  done: Boolean(company),            label: 'Profil entreprise',     action: onRegister },
+    { key: 'step_docs',     done: Boolean(docsUploaded),       label: 'Documents déposés',     action: onDocs },
+    { key: 'step_kyc',      done: Boolean(kycApproved),        label: 'KYC validé',            action: null },
+    { key: 'step_certified',done: certLevel > 0,               label: 'Première certification', action: onPricing },
   ]
   const doneCount = steps.filter(s => s.done).length
   const pct = Math.round((doneCount / steps.length) * 100)
@@ -563,8 +565,11 @@ export default function Dashboard() {
                 <OnboardingProgress
                   company={company}
                   certLevel={lvl}
+                  docsUploaded={(company?.docsCount || 0) > 0}
+                  kycApproved={Boolean(company?.verifiedAt)}
                   t={t}
                   onRegister={() => setTab('register')}
+                  onDocs={() => setTab('documents')}
                   onPricing={() => setTab('pricing')}
                 />
               )}
@@ -1318,10 +1323,34 @@ function MissionCard({ m, sc, oc, G }) {
   const [rateSaving, setRateSaving] = useState(false)
   const [rateError, setRateError]   = useState('')
   const [localScore, setLocalScore] = useState(m.clientScore || null)
+  // Dispute state
+  const [disputeModal, setDisputeModal] = useState(false)
+  const [disputeReason, setDisputeReason] = useState('')
+  const [disputeSaving, setDisputeSaving] = useState(false)
+  const [disputeError, setDisputeError]   = useState('')
+  const [disputeSubmitted, setDisputeSubmitted] = useState(false)
 
   const TIER_COLOR = { S1: '#4a90e2', S2: '#C9A84C', S3: '#e056fd' }
   const tc = TIER_COLOR[m.tierRequired] || '#555'
   const canRate = m.status === 'completed' && localScore === null
+  const canDispute = m.status === 'completed' && m.outcome === 'fail' && !disputeSubmitted
+
+  const submitDispute = async () => {
+    if (disputeReason.trim().length < 20) return
+    setDisputeSaving(true)
+    setDisputeError('')
+    try {
+      await api.patch(`/api/companies/missions/${m.id}/dispute`, { reason: disputeReason.trim() })
+      setDisputeSubmitted(true)
+      setDisputeModal(false)
+    } catch (err) {
+      const msg = err?.response?.data?.error || 'Erreur lors de l\'envoi'
+      setDisputeError(msg)
+      if (err?.response?.status === 409) setDisputeSubmitted(true)
+    } finally {
+      setDisputeSaving(false)
+    }
+  }
 
   const submitRating = async () => {
     if (!selectedStar) return
@@ -1397,6 +1426,20 @@ function MissionCard({ m, sc, oc, G }) {
                   ⭐ Évaluer l'agent
                 </button>
               ) : null}
+              {/* Dispute button — only on failed completed missions */}
+              {canDispute && (
+                <button
+                  onClick={() => { setDisputeReason(''); setDisputeError(''); setDisputeModal(true) }}
+                  style={{ background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.2)', color: '#ff6b6b', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⚠️ Contester
+                </button>
+              )}
+              {disputeSubmitted && m.outcome === 'fail' && (
+                <span style={{ background: 'rgba(243,156,18,0.08)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
+                  ⏳ Contestation en cours
+                </span>
+              )}
               {m.feeUsd && (
                 <span style={{ color: '#C9A84C', fontSize: '0.75rem', fontWeight: '700' }}>${m.feeUsd}</span>
               )}
@@ -1500,6 +1543,57 @@ function MissionCard({ m, sc, oc, G }) {
                 style={{ flex: 1, background: selectedStar ? 'linear-gradient(135deg,#C9A84C,#a8863c)' : '#1a1a1a', border: 'none', color: selectedStar ? '#000' : '#444', borderRadius: '8px', padding: '0.65rem', cursor: selectedStar ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: '700', opacity: rateSaving ? 0.7 : 1 }}
               >
                 {rateSaving ? '…' : 'Soumettre'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Dispute modal ── */}
+      {disputeModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '480px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '0.2rem' }}>Contester le résultat</div>
+                <div style={{ color: '#555', fontSize: '0.78rem' }}>Mission #{m.id} — {m.title || 'Audit'}</div>
+              </div>
+              <button onClick={() => setDisputeModal(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.3rem' }}>✕</button>
+            </div>
+
+            <div style={{ background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.15)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', fontSize: '0.8rem', color: '#ff6b6b', lineHeight: 1.5 }}>
+              Une contestation sera examinée par l'équipe B&E dans un délai de 5 jours ouvrés. Si validée, un second audit peut être ordonné.
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem' }}>
+                Motif de la contestation *
+              </label>
+              <textarea
+                rows={5}
+                value={disputeReason}
+                onChange={e => setDisputeReason(e.target.value)}
+                placeholder="Décrivez précisément pourquoi vous contestez ce résultat (au moins 20 caractères)…"
+                style={{ width: '100%', boxSizing: 'border-box', background: '#111', border: '1px solid #252525', color: '#eee', borderRadius: '8px', padding: '0.75rem', fontSize: '0.82rem', lineHeight: 1.5, resize: 'vertical', outline: 'none' }}
+              />
+              <div style={{ color: disputeReason.trim().length < 20 ? '#444' : '#2ecc71', fontSize: '0.68rem', marginTop: '0.25rem', textAlign: 'right' }}>
+                {disputeReason.trim().length} / 20 min
+              </div>
+            </div>
+
+            {disputeError && (
+              <div style={{ color: '#ff6b6b', fontSize: '0.78rem', marginBottom: '1rem' }}>{disputeError}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setDisputeModal(false)} style={{ flex: 1, background: '#111', border: '1px solid #2a2a2a', color: '#666', borderRadius: '8px', padding: '0.65rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Annuler
+              </button>
+              <button
+                onClick={submitDispute}
+                disabled={disputeReason.trim().length < 20 || disputeSaving}
+                style={{ flex: 1, background: disputeReason.trim().length >= 20 ? 'linear-gradient(135deg,#e74c3c,#c0392b)' : '#1a1a1a', border: 'none', color: disputeReason.trim().length >= 20 ? '#fff' : '#444', borderRadius: '8px', padding: '0.65rem', cursor: disputeReason.trim().length >= 20 ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: '700', opacity: disputeSaving ? 0.7 : 1 }}
+              >
+                {disputeSaving ? '…' : 'Soumettre la contestation'}
               </button>
             </div>
           </div>
