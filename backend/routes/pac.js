@@ -357,4 +357,83 @@ router.post('/missions/:id/complete', auth, pacWriteLimiter, validate(schemas.su
   }
 })
 
+// ── GET /api/pac/progress — achievement progress for the logged-in agent ──────
+// Returns current stats vs. the next-tier thresholds so the frontend
+// can render the progress bars without computing anything.
+router.get('/progress', auth, pacReadLimiter, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') return res.status(403).json({ error: 'PAC agents only' })
+
+    const { rows } = await query(`
+      SELECT
+        pp.pac_tier, pp.eligible_for_s2, pp.eligible_for_s3,
+        pp.missions_completed, pp.missions_on_time,
+        pp.l2_missions_completed, pp.supervised_s1_completed,
+        pp.double_rejections, pp.months_as_s2,
+        pp.admin_score_total, pp.admin_score_count,
+        pp.client_score_total, pp.client_score_count,
+        pp.promotion_date_s2, pp.promotion_date_s3,
+        pp.tier_anniversary, pp.membership_active,
+        GREATEST(0, EXTRACT(MONTH FROM AGE(NOW(), u.created_at))::int) AS months_active
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE pp.user_id = $1
+      LIMIT 1
+    `, [req.user.id])
+
+    if (!rows.length) return res.status(404).json({ error: 'PAC profile not found' })
+    const p = rows[0]
+
+    const adminAvg  = p.admin_score_count  > 0 ? +(p.admin_score_total  / p.admin_score_count ).toFixed(2) : 0
+    const clientAvg = p.client_score_count > 0 ? +(p.client_score_total / p.client_score_count).toFixed(2) : 0
+    const onTimeRate = p.missions_completed > 0 ? +(p.missions_on_time / p.missions_completed).toFixed(2) : 0
+    const tier = (p.pac_tier || 'S1').toUpperCase()
+
+    // Build per-criterion progress for the relevant upgrade path
+    let criteria = null
+    let targetTier = null
+
+    if (tier === 'S1') {
+      targetTier = 'S2'
+      criteria = [
+        { key: 'missions',          label: 'Missions completed', value: p.missions_completed, target: 10,   met: p.missions_completed >= 10 },
+        { key: 'admin_score',       label: 'Admin score',        value: adminAvg,              target: 4.0,  met: adminAvg >= 4.0 },
+        { key: 'on_time_rate',      label: 'On-time rate',       value: onTimeRate,            target: 0.85, met: onTimeRate >= 0.85, format: 'percent' },
+        { key: 'double_rejections', label: 'Zero double rejections', value: p.double_rejections, target: 0, met: p.double_rejections === 0, inverse: true },
+        { key: 'seniority',         label: 'Platform seniority', value: p.months_active,       target: 6,   met: p.months_active >= 6, format: 'months' },
+      ]
+    } else if (tier === 'S2') {
+      targetTier = 'S3'
+      criteria = [
+        { key: 'missions',             label: 'Total missions',      value: p.missions_completed,      target: 25,  met: p.missions_completed >= 25 },
+        { key: 'l2_missions',          label: 'L2 missions',         value: p.l2_missions_completed,   target: 10,  met: p.l2_missions_completed >= 10 },
+        { key: 'admin_score',          label: 'Admin score',         value: adminAvg,                  target: 4.5, met: adminAvg >= 4.5 },
+        { key: 'client_score',         label: 'Client score',        value: clientAvg,                 target: 4.3, met: clientAvg >= 4.3 },
+        { key: 'on_time_rate',         label: 'On-time rate',        value: onTimeRate,                target: 0.90, met: onTimeRate >= 0.90, format: 'percent' },
+        { key: 'supervised_s1',        label: 'S1 agents supervised', value: p.supervised_s1_completed, target: 3,   met: p.supervised_s1_completed >= 3 },
+        { key: 'no_disputes',          label: 'Zero disputes',       value: p.double_rejections,       target: 0,   met: p.double_rejections === 0, inverse: true },
+        { key: 'months_as_s2',         label: 'Months as S2',        value: p.months_as_s2,            target: 12,  met: p.months_as_s2 >= 12, format: 'months' },
+      ]
+    }
+
+    const metCount   = criteria ? criteria.filter(c => c.met).length : 0
+    const totalCount = criteria ? criteria.length : 0
+    const pct = totalCount > 0 ? Math.round((metCount / totalCount) * 100) : 100
+
+    res.json({
+      current_tier:    tier,
+      target_tier:     targetTier,
+      eligible_for_s2: p.eligible_for_s2,
+      eligible_for_s3: p.eligible_for_s3,
+      progress_pct:    pct,
+      criteria,
+      tier_anniversary: p.tier_anniversary,
+      membership_active: p.membership_active,
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.progress.error', message: err.message }))
+    res.status(500).json({ error: 'Failed to load progress' })
+  }
+})
+
 module.exports = router

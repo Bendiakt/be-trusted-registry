@@ -519,6 +519,42 @@ paths:
         '200': { description: Mission completed }
         '400': { description: Validation error }
 
+  /api/pac/progress:
+    get:
+      tags: [PAC]
+      summary: Get agent achievement progress toward next tier
+      description: |
+        Returns the agent's current tier, target tier, overall completion
+        percentage, and a detailed breakdown of each achievement criterion
+        (value, target, whether it is met, and display format). Also returns
+        the tier anniversary date and current membership status.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Progress data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_tier:     { type: string, example: S1 }
+                  target_tier:      { type: string, example: S2 }
+                  progress_pct:     { type: integer, minimum: 0, maximum: 100 }
+                  membership_active: { type: boolean }
+                  tier_anniversary: { type: string, format: date, nullable: true }
+                  criteria:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:    { type: string }
+                        label:  { type: string }
+                        value:  {}
+                        target: {}
+                        met:    { type: boolean }
+                        format: { type: string, enum: [count, percent, boolean] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # ── Admin ─────────────────────────────────────────────────────────────────────
 
   /api/admin/companies/{id}/level:
@@ -568,6 +604,59 @@ paths:
       responses:
         '200': { description: Status updated }
 
+  /api/admin/pac/{id}/approve-upgrade:
+    patch:
+      tags: [Admin]
+      summary: Approve a PAC tier upgrade (S1→S2 or S2→S3)
+      description: |
+        Directly promotes an eligible agent to the next tier. Creates a Stripe
+        subscription with a 365-day free trial (no immediate charge). Updates the
+        agent's commission rate, max supervised count, and sets tier_anniversary.
+        Fires a promotion email. Requires the `eligible_for_s2` or `eligible_for_s3`
+        flag to be set on the agent's profile.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+          description: User ID of the PAC agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tier]
+              properties:
+                tier:
+                  type: string
+                  enum: [S2, S3]
+                  description: Target tier to promote the agent to
+      responses:
+        '200':
+          description: Upgrade approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:           { type: string }
+                  tier:              { type: string, example: s2 }
+                  commission_rate:   { type: number, example: 0.15 }
+                  membership_expires: { type: string, format: date-time }
+        '400':
+          description: Invalid tier or agent not eligible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        '404': { description: PAC profile not found }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /api/admin/pac/{id}/founder:
     patch:
       tags: [Admin]
@@ -575,7 +664,7 @@ paths:
       description: |
         Activates S3 Founder status for the given PAC user. Caps at 5 concurrent
         active founders. Sets pac_tier='s3', membership_active=true, and waives
-        the $799/yr fee for 12 months (founder_exemption_expires = now + 1yr).
+        the $799/yr fee for 24 months (founder_exemption_expires = now + 2yr).
         A welcome email is sent to the agent. The agent's KYC is set to 'pending'
         for admin review.
       security: [{ cookieAuth: [] }]

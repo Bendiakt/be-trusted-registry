@@ -26,6 +26,7 @@ export default function PACPortal() {
   const [upgradeMsg, setUpgradeMsg]       = useState(null) // { text, type }
   const [upgrading, setUpgrading]         = useState(false)
   const [upgradeBanner, setUpgradeBanner] = useState(null) // retour Stripe
+  const [progress, setProgress]           = useState(null) // GET /api/pac/progress
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -54,6 +55,8 @@ export default function PACPortal() {
 
     api.get('/api/pac/missions')
       .then(res => setMissions(res.data)).catch(() => {})
+    api.get('/api/pac/progress')
+      .then(res => setProgress(res.data)).catch(() => {})
     api.get('/api/pac/profile')
       .then(res => {
         if (res.data && Object.keys(res.data).length > 0) {
@@ -416,7 +419,124 @@ export default function PACPortal() {
               </div>
             </div>
 
-            {/* Upgrade path */}
+            {/* Achievement progress — fetched from /api/pac/progress */}
+            {progress && progress.criteria && progress.criteria.length > 0 && (
+              <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.75rem 2rem', marginBottom: '1.25rem' }}>
+                {/* Header row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    🎯 Critères — vers {progress.target_tier}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div style={{ color: progress.progress_pct === 100 ? '#2ecc71' : '#C9A84C', fontWeight: '900', fontSize: '1.35rem', letterSpacing: '-0.02em' }}>
+                      {progress.progress_pct}%
+                    </div>
+                    <div style={{ color: '#444', fontSize: '0.72rem' }}>complétés</div>
+                  </div>
+                </div>
+
+                {/* Global progress bar */}
+                <div style={{ height: '6px', background: '#1a1a1a', borderRadius: '3px', marginBottom: '1.5rem', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${progress.progress_pct}%`,
+                    background: progress.progress_pct === 100
+                      ? 'linear-gradient(90deg,#2ecc71,#27ae60)'
+                      : 'linear-gradient(90deg,#C9A84C,#9A7B2E)',
+                    borderRadius: '3px',
+                    transition: 'width 0.6s ease',
+                  }} />
+                </div>
+
+                {/* Criteria list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {progress.criteria.map((c) => {
+                    const fmtVal = (val, fmt) => {
+                      if (fmt === 'percent')  return `${Math.round(val * 100)}%`
+                      if (fmt === 'boolean')  return val ? 'Oui' : 'Non'
+                      return val
+                    }
+                    const fmtTarget = (tgt, fmt) => {
+                      if (fmt === 'percent')  return `${Math.round(tgt * 100)}%`
+                      if (fmt === 'boolean')  return 'Oui'
+                      return tgt
+                    }
+                    const barPct = c.format === 'boolean'
+                      ? (c.met ? 100 : 0)
+                      : Math.min(Math.round((c.value / c.target) * 100), 100)
+                    const icon = c.met ? '✅' : c.value > 0 ? '⏳' : '⚠️'
+
+                    return (
+                      <div key={c.key} style={{
+                        background: c.met ? 'rgba(46,204,113,0.04)' : '#111',
+                        border: `1px solid ${c.met ? 'rgba(46,204,113,0.15)' : '#1a1a1a'}`,
+                        borderRadius: '8px',
+                        padding: '0.85rem 1rem',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                            <span style={{ fontSize: '0.9rem', lineHeight: 1 }}>{icon}</span>
+                            <span style={{ fontSize: '0.85rem', color: c.met ? '#bbb' : '#777', fontWeight: c.met ? '500' : '400' }}>
+                              {c.label}
+                            </span>
+                          </div>
+                          <div style={{
+                            fontSize: '0.8rem', fontWeight: '700',
+                            color: c.met ? '#2ecc71' : barPct >= 50 ? '#C9A84C' : '#666',
+                            whiteSpace: 'nowrap', marginLeft: '0.75rem',
+                          }}>
+                            {fmtVal(c.value, c.format)}
+                            <span style={{ color: '#333', fontWeight: '400' }}> / {fmtTarget(c.target, c.format)}</span>
+                          </div>
+                        </div>
+                        {/* Per-criterion bar — only when not met and not boolean */}
+                        {!c.met && c.format !== 'boolean' && (
+                          <div style={{ height: '3px', background: '#1a1a1a', borderRadius: '2px', marginTop: '0.55rem', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%',
+                              width: `${barPct}%`,
+                              background: barPct >= 70 ? '#C9A84C' : barPct >= 40 ? '#4a90e2' : '#2c3e50',
+                              borderRadius: '2px',
+                              transition: 'width 0.4s ease',
+                            }} />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* All-criteria-met banner */}
+                {progress.progress_pct === 100 && (
+                  <div style={{
+                    marginTop: '1.25rem', padding: '1rem 1.25rem',
+                    background: 'rgba(46,204,113,0.08)', border: '1px solid rgba(46,204,113,0.25)',
+                    borderRadius: '10px', display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                  }}>
+                    <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🎉</span>
+                    <div>
+                      <div style={{ color: '#2ecc71', fontWeight: '700', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+                        Tous les critères sont remplis !
+                      </div>
+                      <div style={{ color: '#666', fontSize: '0.8rem', lineHeight: '1.5' }}>
+                        Votre dossier sera examiné lors de la prochaine revue mensuelle de l'équipe B&E.
+                        Vous recevrez un e-mail de confirmation dès la décision.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Anniversary date when active */}
+                {progress.tier_anniversary && (
+                  <div style={{ marginTop: '1rem', color: '#444', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>🗓</span>
+                    <span>Renouvellement le {new Date(progress.tier_anniversary).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upgrade path — Stripe checkout (self-initiated) */}
             {(() => {
               const nextTier = pacTier === 'S1' ? 'S2' : 'S3'
               const requiredMissions = pacTier === 'S1' ? 5 : 10
@@ -447,13 +567,12 @@ export default function PACPortal() {
                     </div>
                   </div>
 
-                  {/* Requirements */}
+                  {/* Minimal requirement reminder */}
                   <div style={{ background: '#111', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
                     <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                      Conditions d'éligibilité
+                      Pré-requis minimum pour postuler
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                      {/* Missions requirement */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <span style={{ color: meetsRequirement ? '#2ecc71' : '#333', fontSize: '1rem', width: '20px' }}>
                           {meetsRequirement ? '✓' : '○'}
@@ -472,7 +591,6 @@ export default function PACPortal() {
                           )}
                         </div>
                       </div>
-                      {/* Profile complete */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <span style={{ color: profile.name ? '#2ecc71' : '#333', fontSize: '1rem', width: '20px' }}>
                           {profile.name ? '✓' : '○'}
