@@ -81,6 +81,7 @@ export default function Landing() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <LanguageSwitcher />
+          <Link to="/agents" style={{ ...G.ghost, fontSize: '0.8rem', padding: '0.5rem 1.1rem', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.2)' }}>Experts PAC</Link>
           <Link to="/registry" style={{ ...G.ghost, fontSize: '0.8rem', padding: '0.5rem 1.1rem' }}>{t('landing.nav_registry')}</Link>
           <Link to="/login" style={G.ghost}>{t('nav.login')}</Link>
           <Link to="/register" style={G.btn}>{t('landing.cta_start')}</Link>
