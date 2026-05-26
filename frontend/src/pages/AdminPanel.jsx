@@ -44,6 +44,7 @@ export default function AdminPanel() {
   const [missionScoreModal, setMissionScoreModal] = useState(null)
   const [missionScoreForm, setMissionScoreForm]   = useState({ admin_score: '', payment_confirmed: false, stripe_invoice_id: '' })
   const [missionScoreSaving, setMissionScoreSaving] = useState(false)
+  const [upgradeApproving, setUpgradeApproving]   = useState({}) // { [pacId]: bool }
 
   useEffect(() => {
     const user = getSession()
@@ -179,6 +180,7 @@ export default function AdminPanel() {
       const qs = new URLSearchParams()
       if (pacAgentFilter.tier)       qs.set('tier', pacAgentFilter.tier)
       if (pacAgentFilter.kyc_status) qs.set('kyc_status', pacAgentFilter.kyc_status)
+      if (pacAgentFilter.eligible)   qs.set('eligible', pacAgentFilter.eligible)
       qs.set('limit', '100')
       const res = await api.get(`/api/admin/pac/agents?${qs}`)
       setPacAgents(res.data.agents || res.data.data || [])
@@ -719,6 +721,10 @@ export default function AdminPanel() {
                       <option value="rejected">Rejected</option>
                       <option value="suspended">Suspended</option>
                     </select>
+                    <select value={pacAgentFilter.eligible || ''} onChange={e => setPacAgentFilter(f => ({ ...f, eligible: e.target.value }))} style={{ ...G.inp, fontSize: '0.75rem' }}>
+                      <option value="">Tous</option>
+                      <option value="1">🎯 Éligibles upgrade</option>
+                    </select>
                     <button onClick={fetchPacAgents} style={G.btn}>Filter</button>
                   </div>
                 </div>
@@ -746,9 +752,16 @@ export default function AdminPanel() {
                               </td>
                               <td style={{ ...G.td, color: '#666', fontSize: '0.75rem' }}>{a.email}</td>
                               <td style={G.td}>
-                                <span style={{ background: `${tc}22`, color: tc, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                                  {a.pac_tier}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <span style={{ background: `${tc}22`, color: tc, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                                    {a.pac_tier}
+                                  </span>
+                                  {(a.eligible_for_s2 || a.eligible_for_s3) && (
+                                    <span title={`Éligible ${a.eligible_for_s3 ? 'S3' : 'S2'}`} style={{ fontSize: '0.65rem', background: 'rgba(201,168,76,0.15)', color: '#C9A84C', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '700', border: '1px solid rgba(201,168,76,0.3)' }}>
+                                      🎯 {a.eligible_for_s3 ? 'S3' : 'S2'}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td style={G.td}>
                                 <span style={{ background: kc.bg, color: kc.text, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase' }}>
@@ -761,12 +774,44 @@ export default function AdminPanel() {
                                 {a.pending_bonus_cents > 0 ? `$${(a.pending_bonus_cents / 100).toFixed(2)}` : '—'}
                               </td>
                               <td style={G.td}>
-                                <button
-                                  onClick={() => openKycModal(a)}
-                                  style={{ ...G.btn, padding: '0.25rem 0.75rem', fontSize: '0.7rem' }}
-                                >
-                                  KYC Review
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                  <button
+                                    onClick={() => openKycModal(a)}
+                                    style={{ ...G.btn, padding: '0.25rem 0.75rem', fontSize: '0.7rem' }}
+                                  >
+                                    KYC Review
+                                  </button>
+                                  {(a.eligible_for_s2 || a.eligible_for_s3) && (
+                                    <button
+                                      disabled={!!upgradeApproving[a.id]}
+                                      onClick={async () => {
+                                        const targetTier = a.eligible_for_s3 ? 'S3' : 'S2'
+                                        if (!window.confirm(`Approuver le passage de ${a.full_name || 'cet agent'} en ${targetTier} ?`)) return
+                                        setUpgradeApproving(prev => ({ ...prev, [a.id]: true }))
+                                        try {
+                                          await api.patch(`/api/admin/pac/${a.user_id}/approve-upgrade`, { tier: targetTier })
+                                          setPacAgents(prev => prev.map(ag => ag.id === a.id
+                                            ? { ...ag, pac_tier: targetTier.toLowerCase(), eligible_for_s2: false, eligible_for_s3: false }
+                                            : ag
+                                          ))
+                                        } catch (e) {
+                                          alert(e.response?.data?.error || 'Erreur lors de l\'approbation.')
+                                        } finally {
+                                          setUpgradeApproving(prev => ({ ...prev, [a.id]: false }))
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '0.25rem 0.75rem', fontSize: '0.7rem', borderRadius: '6px',
+                                        border: 'none', cursor: upgradeApproving[a.id] ? 'not-allowed' : 'pointer',
+                                        background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)',
+                                        color: '#111', fontWeight: '700',
+                                        opacity: upgradeApproving[a.id] ? 0.6 : 1,
+                                      }}
+                                    >
+                                      {upgradeApproving[a.id] ? '…' : `✓ Approuver ${a.eligible_for_s3 ? 'S3' : 'S2'}`}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           )

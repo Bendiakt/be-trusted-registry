@@ -327,14 +327,48 @@ router.post('/missions/:id/complete', auth, pacWriteLimiter, validate(schemas.su
 
     const result  = await query(
       `UPDATE missions SET status = 'completed', report_text = $1, outcome = $2, completed_at = NOW()
-       WHERE id = $3 AND assigned_to = $4 AND status = 'assigned' RETURNING *`,
+       WHERE id = $3 AND assigned_to = $4 AND status = 'assigned'
+       RETURNING *, (completed_at <= due_date OR due_date IS NULL) AS on_time`,
       [cleanReport, outcome, missionId, req.user.id],
     )
-    const mission = mapMissionRow(result.rows[0])
+    const missionRow = result.rows[0]
+    const mission = mapMissionRow(missionRow)
     if (!mission) return res.status(404).json({ error: 'Mission not found or not assigned to you' })
 
     res.json({ message: 'Mission completed', mission })
     logAudit(req.user.id, 'mission_completed', 'missions', req.ip, { missionId, outcome })
+
+    // ── Update achievement counters on pac_profiles (fire-and-forget) ────────
+    const isOnTime  = missionRow?.on_time !== false  // NULL due_date → on time
+    const isL2      = ['S2', 'S3'].includes(missionRow?.pac_tier_required)
+    query(`
+      UPDATE pac_profiles SET
+        missions_completed    = missions_completed + 1,
+        missions_on_time      = missions_on_time + $1,
+        l2_missions_completed = l2_missions_completed + $2,
+        updated_at            = NOW()
+      WHERE user_id = $3
+    `, [isOnTime ? 1 : 0, isL2 ? 1 : 0, req.user.id]).catch(e =>
+      console.error(JSON.stringify({ event: 'achievement_counter_error', message: e.message }))
+    )
+
+    // ── Increment supervisor's supervised_s1_completed (if agent is S1 with supervisor) ─
+    query(`
+      UPDATE pac_profiles SET
+        supervised_s1_completed = supervised_s1_completed + 1,
+        updated_at = NOW()
+      WHERE id = (
+        SELECT ps.supervisor_id
+        FROM pac_supervision ps
+        JOIN pac_profiles supervised ON supervised.id = ps.supervised_id
+        WHERE supervised.user_id = $1
+          AND ps.status = 'active'
+        LIMIT 1
+      )
+      AND pac_tier IN ('S2','S3')
+    `, [req.user.id]).catch(e =>
+      console.error(JSON.stringify({ event: 'supervisor_counter_error', message: e.message }))
+    )
 
     const companyUserQ = await query(
       `SELECT u.id, u.name, u.email FROM users u JOIN companies c ON c.user_id = u.id WHERE c.id = $1 LIMIT 1`,
