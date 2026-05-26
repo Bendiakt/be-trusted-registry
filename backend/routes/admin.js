@@ -12,6 +12,7 @@ const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
         sendCertRevoked,
         sendPacKycDecision }     = require('../lib/mailer')
+const { dispatchWebhook }        = require('../lib/webhookDispatch')
 const { isBlockedCompany }       = require('../lib/blocklist')
 const { validate, schemas }      = require('../lib/validators')
 
@@ -272,7 +273,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
           body:  `Your company has been awarded MyDD Level ${level} certification.`,
           link:  '/dashboard',
         })
-        // Upsert certification record and send PDF email
+        // Upsert certification record, send email, fire webhooks
         query(
           `INSERT INTO certifications (company_id, level, status, granted_at, expires_at)
            VALUES ($1, $2, 'active', NOW(), NOW() + INTERVAL '1 year')
@@ -296,6 +297,9 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
             grantedAt,
             certId,
           }).catch(() => {})
+          // Webhook fan-out (fire-and-forget)
+          dispatchWebhook('cert.issued', { companyId, level, status: 'active', certId })
+          dispatchWebhook('cert.status_changed', { companyId, level, oldStatus: 'pending', newStatus: 'active', certId })
         }).catch(() => {})
       } else {
         // Level set to 0 = certification revoked
@@ -311,6 +315,9 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
             if (!rows.length) return
             sendCertRevoked({ email: rows[0].email, name: rows[0].name, companyName: company.company_name }).catch(() => {})
           }).catch(() => {})
+        // Webhook fan-out for revocation (fire-and-forget)
+        dispatchWebhook('cert.revoked', { companyId, level: company.certification_level, status: 'revoked' })
+        dispatchWebhook('cert.status_changed', { companyId, level: company.certification_level, oldStatus: 'active', newStatus: 'revoked' })
       }
     }
     res.json({ company })

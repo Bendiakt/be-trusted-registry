@@ -927,7 +927,8 @@ function DeveloperTab({ G, t }) {
     setPingingId(id); setPingResult(prev => ({ ...prev, [id]: null }))
     try {
       const r = await api.post(`/api/webhooks/${id}/ping`)
-      setPingResult(prev => ({ ...prev, [id]: { ok: true, payload: r.data.payload } }))
+      const { success, statusCode, error: pingErr } = r.data
+      setPingResult(prev => ({ ...prev, [id]: { ok: success, statusCode, msg: pingErr } }))
     } catch (e) {
       setPingResult(prev => ({ ...prev, [id]: { ok: false, msg: e.response?.data?.error || 'Ping failed' } }))
     } finally { setPingingId(null) }
@@ -1151,8 +1152,8 @@ function DeveloperTab({ G, t }) {
                 {pingResult[h.id] && (
                   <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.78rem', background: pingResult[h.id].ok ? 'rgba(46,204,113,0.08)' : 'rgba(231,76,60,0.08)', border: `1px solid ${pingResult[h.id].ok ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)'}`, color: pingResult[h.id].ok ? '#2ecc71' : '#ff6b6b' }}>
                     {pingResult[h.id].ok
-                      ? `✓ Ping sent — event: ${pingResult[h.id].payload?.event}`
-                      : `✗ ${pingResult[h.id].msg}`}
+                      ? `✓ Ping delivered — HTTP ${pingResult[h.id].statusCode}`
+                      : `✗ ${pingResult[h.id].msg || `HTTP ${pingResult[h.id].statusCode || 'error'}`}`}
                   </div>
                 )}
               </div>
