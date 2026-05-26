@@ -237,9 +237,10 @@ function AgentCard({ agent }) {
     : null
 
   return (
-    <div style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '14px', padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = tm.color + '44'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}
+    <Link to={`/agents/${agent.id}`} style={{ textDecoration: 'none', display: 'block' }}>
+    <div style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '14px', padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, background 0.15s', cursor: 'pointer' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = tm.color + '44'; e.currentTarget.style.background = '#141414' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e1e1e'; e.currentTarget.style.background = '#111' }}
     >
       {/* Tier accent line */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg,${tm.color},transparent)` }} />
@@ -322,7 +323,9 @@ function AgentCard({ agent }) {
             Certifié {new Date(agent.promotedS3 || agent.promotedS2).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}
           </div>
         )}
+        <div style={{ color: tm.color, fontSize: '0.68rem', fontWeight: '600', marginTop: '0.5rem', opacity: 0.7 }}>Voir le profil →</div>
       </div>
     </div>
+    </Link>
   )
 }

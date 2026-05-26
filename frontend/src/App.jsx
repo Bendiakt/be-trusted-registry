@@ -15,6 +15,7 @@ import CertPrint from './pages/CertPrint'
 import Landing from './pages/Landing'
 import PublicRegistry from './pages/PublicRegistry'
 import PACDirectory from './pages/PACDirectory'
+import PACAgentProfile from './pages/PACAgentProfile'
 import NotFound from './pages/NotFound'
 import MissionReport from './pages/MissionReport'
 import VerifyEmail from './pages/VerifyEmail'
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/verify/:id/print"        element={<CertPrint />} />
         <Route path="/registry"                element={<PublicRegistry />} />
         <Route path="/agents"                  element={<PACDirectory />} />
+        <Route path="/agents/:id"              element={<PACAgentProfile />} />
         <Route path="/privacy"                 element={<Legal tab="privacy" />} />
         <Route path="/terms"                   element={<Legal tab="cgu" />} />
         <Route path="/legal"                   element={<Legal />} />
