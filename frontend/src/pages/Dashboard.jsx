@@ -534,6 +534,7 @@ export default function Dashboard() {
           <TabBtn id="register"   label={t('dashboard.tabs.register')} />
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
           <TabBtn id="documents"  label={t('dashboard.tabs.documents')} />
+          <TabBtn id="billing"    label={t('dashboard.tabs.billing', 'Billing')} />
           <TabBtn id="metrics"    label={t('dashboard.tabs.metrics')} />
         </div>
 
@@ -706,6 +707,11 @@ export default function Dashboard() {
           <DocumentsTab t={t} G={G} companyId={company?.id} />
         )}
 
+        {/* ── Billing ──────────────────────────────────────────────────────── */}
+        {tab === 'billing' && (
+          <BillingTab G={G} t={t} onManageBilling={handleBillingPortal} billingLoading={billingLoading} />
+        )}
+
         {/* ── Metrics ──────────────────────────────────────────────────────── */}
         {tab === 'metrics' && (
           <div style={G.card}>
@@ -715,6 +721,106 @@ export default function Dashboard() {
       </main>
 
       <ToastContainer toasts={toasts} />
+    </div>
+  )
+}
+
+// ── BillingTab ────────────────────────────────────────────────────────────────
+function BillingTab({ G, t, onManageBilling, billingLoading }) {
+  const [payments, setPayments]   = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(null)
+
+  useEffect(() => {
+    api.get('/api/payments/history')
+      .then(res => setPayments(res.data.payments || []))
+      .catch(() => setError('Impossible de charger l\'historique.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const STATUS_STYLE = {
+    completed: { color: '#2ecc71', bg: 'rgba(46,204,113,0.1)',  label: 'Payé'    },
+    pending:   { color: '#f39c12', bg: 'rgba(243,156,18,0.1)',  label: 'En cours' },
+    failed:    { color: '#ff6b6b', bg: 'rgba(231,76,60,0.1)',   label: 'Échoué'  },
+    refunded:  { color: '#9b59b6', bg: 'rgba(155,89,182,0.1)',  label: 'Remboursé'},
+  }
+
+  return (
+    <div style={G.card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#eee', marginBottom: '0.2rem' }}>
+            {t('dashboard.billing_title', 'Historique des paiements')}
+          </div>
+          <div style={{ color: '#555', fontSize: '0.8rem' }}>
+            {t('dashboard.billing_subtitle', 'Vos certifications et transactions Stripe')}
+          </div>
+        </div>
+        <button
+          onClick={onManageBilling}
+          disabled={billingLoading}
+          style={{ ...G.outlineBtn, fontSize: '0.82rem', opacity: billingLoading ? 0.5 : 1 }}
+        >
+          {billingLoading ? '…' : '⎘ ' + t('dashboard.billing', 'Gérer l\'abonnement')}
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {[1,2,3].map(i => <Skeleton key={i} height="56px" style={{ borderRadius: '8px' }} />)}
+        </div>
+      ) : error ? (
+        <div style={{ color: '#ff6b6b', fontSize: '0.875rem', padding: '1rem', background: 'rgba(231,76,60,0.08)', borderRadius: '8px' }}>{error}</div>
+      ) : payments.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#444' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>💳</div>
+          <div style={{ fontWeight: '600', color: '#666', marginBottom: '0.3rem' }}>
+            {t('dashboard.billing_empty', 'Aucun paiement enregistré')}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#444' }}>
+            {t('dashboard.billing_empty_sub', 'Vos transactions apparaîtront ici après la certification.')}
+          </div>
+        </div>
+      ) : (
+        <div>
+          {/* Summary row */}
+          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+            {[
+              { label: 'Total payé', value: '$' + payments.filter(p => p.status === 'completed').reduce((s, p) => s + parseFloat(p.amount_usd), 0).toFixed(2), color: '#C9A84C' },
+              { label: 'Transactions', value: payments.length, color: '#eee' },
+              { label: 'Dernière', value: payments[0] ? new Date(payments[0].created_at).toLocaleDateString('fr-FR') : '—', color: '#aaa' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ background: '#1a1a1a', padding: '0.75rem 1.25rem', borderRadius: '8px', border: '1px solid #222', flex: 1, minWidth: '110px' }}>
+                <div style={{ color: '#555', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>{label}</div>
+                <div style={{ color, fontWeight: '700', fontSize: '1.1rem' }}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Payment rows */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {payments.map(p => {
+              const s = STATUS_STYLE[p.status] || STATUS_STYLE.pending
+              return (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '160px' }}>
+                    <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem' }}>{p.plan_label}</div>
+                    <div style={{ color: '#555', fontSize: '0.75rem', marginTop: '0.15rem' }}>
+                      {new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <div style={{ display: 'inline-block', padding: '0.25rem 0.7rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', background: s.bg, color: s.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {s.label}
+                  </div>
+                  <div style={{ color: '#C9A84C', fontWeight: '700', fontSize: '0.95rem', minWidth: '70px', textAlign: 'right' }}>
+                    ${p.amount_usd}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

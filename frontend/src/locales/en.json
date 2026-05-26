@@ -116,8 +116,13 @@
       "register": "Register Company",
       "pricing": "Pricing & Upgrade",
       "metrics": "Metrics",
-      "documents": "Documents"
+      "documents": "Documents",
+      "billing": "Billing"
     },
+    "billing_title": "Payment History",
+    "billing_subtitle": "Your certification payments and Stripe transactions",
+    "billing_empty": "No payments on record",
+    "billing_empty_sub": "Your transactions will appear here after certification.",
     "overview": {
       "cert_level": "Certification Level",
       "registry_status": "Registry Status",
