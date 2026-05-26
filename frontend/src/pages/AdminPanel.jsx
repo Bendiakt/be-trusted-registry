@@ -45,6 +45,18 @@ export default function AdminPanel() {
   const [missionScoreForm, setMissionScoreForm]   = useState({ admin_score: '', payment_confirmed: false, stripe_invoice_id: '' })
   const [missionScoreSaving, setMissionScoreSaving] = useState(false)
   const [upgradeApproving, setUpgradeApproving]   = useState({}) // { [pacId]: bool }
+  // Mission create modal
+  const [createMissionModal, setCreateMissionModal] = useState(false)
+  const [createMissionForm, setCreateMissionForm]   = useState({ title: '', description: '', company_name: '', location: '', type: '', fee_usd: '500', pac_tier_required: 'S1', due_date: '' })
+  const [createMissionSaving, setCreateMissionSaving] = useState(false)
+  // Per-mission assign / cancel / client-score
+  const [assignModal, setAssignModal]               = useState(null) // { missionId }
+  const [assignAgentId, setAssignAgentId]           = useState('')
+  const [assignSaving, setAssignSaving]             = useState({})
+  const [cancelSaving, setCancelSaving]             = useState({})
+  const [clientScoreModal, setClientScoreModal]     = useState(null) // { missionId, pacName }
+  const [clientScoreVal, setClientScoreVal]         = useState(0)
+  const [clientScoreSaving, setClientScoreSaving]   = useState(false)
 
   useEffect(() => {
     const user = getSession()
@@ -199,6 +211,67 @@ export default function AdminPanel() {
       const res = await api.get('/api/pac/admin/bonus/statements')
       setPacBonus(res.data.statements || [])
     } catch { /* silent */ }
+  }
+
+  // ── Mission CRUD handlers ──────────────────────────────────────────────────
+  const createMission = async () => {
+    setCreateMissionSaving(true)
+    try {
+      const res = await api.post('/api/admin/missions', {
+        ...createMissionForm,
+        fee_usd: parseInt(createMissionForm.fee_usd, 10) || 500,
+      })
+      setMissions(prev => [res.data.mission, ...prev])
+      setCreateMissionModal(false)
+      setCreateMissionForm({ title: '', description: '', company_name: '', location: '', type: '', fee_usd: '500', pac_tier_required: 'S1', due_date: '' })
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de la création.')
+    } finally {
+      setCreateMissionSaving(false)
+    }
+  }
+
+  const assignMission = async (missionId) => {
+    if (!assignAgentId) return
+    setAssignSaving(prev => ({ ...prev, [missionId]: true }))
+    try {
+      const res = await api.patch(`/api/admin/missions/${missionId}/assign`, { pac_user_id: parseInt(assignAgentId, 10) })
+      setMissions(prev => prev.map(m => m.id === missionId ? { ...m, ...res.data.mission, pac_name: res.data.agent?.name } : m))
+      setAssignModal(null)
+      setAssignAgentId('')
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de l\'assignation.')
+    } finally {
+      setAssignSaving(prev => ({ ...prev, [missionId]: false }))
+    }
+  }
+
+  const cancelMission = async (missionId) => {
+    if (!window.confirm('Annuler cette mission ?')) return
+    setCancelSaving(prev => ({ ...prev, [missionId]: true }))
+    try {
+      await api.patch(`/api/admin/missions/${missionId}/cancel`)
+      setMissions(prev => prev.map(m => m.id === missionId ? { ...m, status: 'cancelled' } : m))
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de l\'annulation.')
+    } finally {
+      setCancelSaving(prev => ({ ...prev, [missionId]: false }))
+    }
+  }
+
+  const submitClientScore = async () => {
+    if (!clientScoreModal || !clientScoreVal) return
+    setClientScoreSaving(true)
+    try {
+      await api.patch(`/api/admin/missions/${clientScoreModal.missionId}/client-score`, { client_score: clientScoreVal })
+      setMissions(prev => prev.map(m => m.id === clientScoreModal.missionId ? { ...m, client_score: clientScoreVal } : m))
+      setClientScoreModal(null)
+      setClientScoreVal(0)
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de la notation client.')
+    } finally {
+      setClientScoreSaving(false)
+    }
   }
 
   const openKycModal = (agent) => {
@@ -558,7 +631,110 @@ export default function AdminPanel() {
         {/* Missions */}
         {tab === 'missions' && (
           <div style={G.card}>
-            <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '1.25rem' }}>{t('admin.missions.title')}</div>
+            {/* Header + create button */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem' }}>{t('admin.missions.title')}</div>
+              <button onClick={() => setCreateMissionModal(true)} style={{ ...G.btn, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                ＋ Nouvelle mission
+              </button>
+            </div>
+
+            {/* Create mission modal */}
+            {createMissionModal && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '14px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee' }}>Créer une mission</div>
+                    <button onClick={() => setCreateMissionModal(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {[
+                      { key: 'title',        label: 'Titre *',            type: 'text',   ph: 'Ex: Audit Fournisseur ACME' },
+                      { key: 'company_name', label: 'Nom entreprise',     type: 'text',   ph: 'Nom du client' },
+                      { key: 'location',     label: 'Localisation',       type: 'text',   ph: 'Paris, France' },
+                      { key: 'type',         label: 'Type de mission',    type: 'text',   ph: 'supply_chain, esg, finance…' },
+                      { key: 'fee_usd',      label: 'Honoraires ($)',     type: 'number', ph: '500' },
+                      { key: 'due_date',     label: 'Date limite',        type: 'date',   ph: '' },
+                    ].map(({ key, label, type, ph }) => (
+                      <div key={key}>
+                        <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</label>
+                        <input type={type} placeholder={ph} value={createMissionForm[key]}
+                          onChange={e => setCreateMissionForm(f => ({ ...f, [key]: e.target.value }))}
+                          style={{ ...G.inp, width: '100%', boxSizing: 'border-box' }} />
+                      </div>
+                    ))}
+                    <div>
+                      <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tier requis</label>
+                      <select value={createMissionForm.pac_tier_required} onChange={e => setCreateMissionForm(f => ({ ...f, pac_tier_required: e.target.value }))} style={{ ...G.inp, width: '100%' }}>
+                        <option value="S1">S1 Associate</option>
+                        <option value="S2">S2 Certified</option>
+                        <option value="S3">S3 Senior</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Description</label>
+                      <textarea rows={3} placeholder="Contexte et objectifs de la mission…" value={createMissionForm.description}
+                        onChange={e => setCreateMissionForm(f => ({ ...f, description: e.target.value }))}
+                        style={{ ...G.inp, width: '100%', resize: 'vertical', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                      <button onClick={() => setCreateMissionModal(false)} style={{ ...G.outline, padding: '0.6rem 1.25rem' }}>Annuler</button>
+                      <button onClick={createMission} disabled={createMissionSaving || !createMissionForm.title.trim()} style={{ ...G.btn, padding: '0.6rem 1.5rem', opacity: createMissionSaving ? 0.7 : 1 }}>
+                        {createMissionSaving ? '…' : 'Créer'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Assign agent modal */}
+            {assignModal && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '14px', padding: '1.75rem', width: '100%', maxWidth: '400px' }}>
+                  <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '1.25rem' }}>Assigner la mission #{assignModal.missionId}</div>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>User ID de l'agent PAC</label>
+                    <input type="number" placeholder="ex: 42" value={assignAgentId}
+                      onChange={e => setAssignAgentId(e.target.value)}
+                      style={{ ...G.inp, width: '100%', boxSizing: 'border-box' }} />
+                    <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.3rem' }}>Visible dans l'onglet PAC → Agents (colonne PAC #id → user_id = pp.user_id)</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setAssignModal(null); setAssignAgentId('') }} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Annuler</button>
+                    <button onClick={() => assignMission(assignModal.missionId)} disabled={assignSaving[assignModal.missionId] || !assignAgentId}
+                      style={{ ...G.btn, padding: '0.5rem 1.25rem', opacity: assignSaving[assignModal.missionId] ? 0.7 : 1 }}>
+                      {assignSaving[assignModal.missionId] ? '…' : '✓ Assigner'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Client score modal */}
+            {clientScoreModal && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '14px', padding: '1.75rem', width: '100%', maxWidth: '380px' }}>
+                  <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '0.5rem' }}>Note client — Mission #{clientScoreModal.missionId}</div>
+                  <div style={{ color: '#555', fontSize: '0.8rem', marginBottom: '1.25rem' }}>Agent : {clientScoreModal.pacName}</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', justifyContent: 'center' }}>
+                    {[1,2,3,4,5].map(n => (
+                      <button key={n} onClick={() => setClientScoreVal(n)}
+                        style={{ width: '48px', height: '48px', borderRadius: '8px', border: `2px solid ${clientScoreVal === n ? '#C9A84C' : '#2a2a2a'}`, background: clientScoreVal === n ? 'rgba(201,168,76,0.15)' : '#111', color: clientScoreVal === n ? '#C9A84C' : '#555', fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer' }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setClientScoreModal(null); setClientScoreVal(0) }} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Annuler</button>
+                    <button onClick={submitClientScore} disabled={clientScoreSaving || !clientScoreVal}
+                      style={{ ...G.btn, padding: '0.5rem 1.25rem', opacity: clientScoreSaving ? 0.7 : 1 }}>
+                      {clientScoreSaving ? '…' : '✓ Enregistrer'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {missions.length === 0 && (
                 <div style={{ ...G.td, textAlign: 'center', color: '#444', padding: '2rem' }}>{t('admin.no_data')}</div>
@@ -579,7 +755,19 @@ export default function AdminPanel() {
                           <span style={{ fontWeight: '700', fontSize: '0.9rem', color: '#eee' }}>{m.company_name || '—'}</span>
                         </div>
                         <div style={{ color: '#555', fontSize: '0.75rem' }}>{m.location || '—'}{m.type ? ` · ${m.type}` : ''}</div>
-                        {m.pac_name && <div style={{ color: '#555', fontSize: '0.7rem', marginTop: '0.2rem' }}>PAC: {m.pac_name}</div>}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                          {m.pac_name && <div style={{ color: '#555', fontSize: '0.7rem' }}>PAC: {m.pac_name}</div>}
+                          {m.pac_tier_required && m.pac_tier_required !== 'S1' && (
+                            <span style={{ fontSize: '0.6rem', background: 'rgba(74,144,226,0.1)', color: '#4a90e2', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '700' }}>
+                              {m.pac_tier_required}+
+                            </span>
+                          )}
+                          {m.due_date && (
+                            <span style={{ fontSize: '0.6rem', color: '#555' }}>
+                              📅 {new Date(m.due_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -624,6 +812,42 @@ export default function AdminPanel() {
                             style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#e056fd', border: '1px solid rgba(224,86,253,0.3)' }}
                           >
                             ⭐ Score
+                          </button>
+                        )}
+
+                        {/* Client score button */}
+                        {m.status === 'completed' && !m.client_score && (
+                          <button
+                            onClick={() => { setClientScoreModal({ missionId: m.id, pacName: m.pac_name || '—' }); setClientScoreVal(0) }}
+                            style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#f39c12', border: '1px solid rgba(243,156,18,0.3)' }}
+                          >
+                            👤 Note client
+                          </button>
+                        )}
+                        {m.client_score && (
+                          <span style={{ background: 'rgba(243,156,18,0.1)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                            👤 {m.client_score}/5
+                          </span>
+                        )}
+
+                        {/* Assign button (available missions) */}
+                        {m.status === 'available' && (
+                          <button
+                            onClick={() => setAssignModal({ missionId: m.id })}
+                            style={{ ...G.btn, padding: '0.2rem 0.6rem', fontSize: '0.65rem' }}
+                          >
+                            👤 Assigner
+                          </button>
+                        )}
+
+                        {/* Cancel button */}
+                        {!['completed','cancelled'].includes(m.status) && (
+                          <button
+                            disabled={cancelSaving[m.id]}
+                            onClick={() => cancelMission(m.id)}
+                            style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#ff6b6b', border: '1px solid rgba(231,76,60,0.25)', opacity: cancelSaving[m.id] ? 0.5 : 1 }}
+                          >
+                            {cancelSaving[m.id] ? '…' : '✕ Annuler'}
                           </button>
                         )}
 

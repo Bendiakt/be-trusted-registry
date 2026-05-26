@@ -357,6 +357,174 @@ router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, va
   }
 })
 
+// ── POST /api/admin/missions — create a new mission ──────────────────────────
+router.post('/missions', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const { title, description, company_id, company_name, location, type,
+            fee_usd, pac_tier_required, due_date } = req.body
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'title is required' })
+    }
+    const feeNum  = parseInt(fee_usd, 10)
+    if (Number.isNaN(feeNum) || feeNum < 0) {
+      return res.status(400).json({ error: 'fee_usd must be a non-negative integer (USD)' })
+    }
+    const VALID_TIERS = ['S1', 'S2', 'S3']
+    const tier = pac_tier_required || 'S1'
+    if (!VALID_TIERS.includes(tier)) {
+      return res.status(400).json({ error: 'pac_tier_required must be S1, S2 or S3' })
+    }
+
+    const { rows } = await query(`
+      INSERT INTO missions
+        (title, description, company_id, company_name, location, type,
+         fee_usd, pac_tier_required, due_date, status, created_at, updated_at)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, 'available', NOW(), NOW())
+      RETURNING *
+    `, [
+      title.trim(), description || null,
+      company_id   ? parseInt(company_id, 10) : null,
+      company_name || null,
+      location     || null,
+      type         || null,
+      feeNum,
+      tier,
+      due_date     || null,
+    ])
+
+    logAudit(req.user.id, 'admin_mission_created', 'missions', req.ip, { missionId: rows[0].id, title, tier })
+    res.status(201).json({ mission: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_create_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to create mission' })
+  }
+})
+
+// ── PATCH /api/admin/missions/:id/assign — assign to a PAC agent ─────────────
+router.patch('/missions/:id/assign', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    const { pac_user_id } = req.body
+
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+    const agentId = parseInt(pac_user_id, 10)
+    if (Number.isNaN(agentId))   return res.status(400).json({ error: 'pac_user_id is required' })
+
+    // Verify agent is an active PAC user
+    const agentQ = await query(
+      `SELECT u.id, u.name, pp.pac_tier FROM users u
+       JOIN pac_profiles pp ON pp.user_id = u.id
+       WHERE u.id = $1 AND u.role = 'pac'
+       LIMIT 1`,
+      [agentId]
+    )
+    if (!agentQ.rows.length) return res.status(404).json({ error: 'PAC agent not found' })
+    const agent = agentQ.rows[0]
+
+    const { rows } = await query(`
+      UPDATE missions SET
+        assigned_to = $1,
+        status      = 'assigned',
+        updated_at  = NOW()
+      WHERE id = $2 AND status IN ('available','assigned')
+      RETURNING *
+    `, [agentId, missionId])
+
+    if (!rows.length) return res.status(404).json({ error: 'Mission not found or not assignable' })
+
+    logAudit(req.user.id, 'admin_mission_assigned', 'missions', req.ip, { missionId, agentId, agentName: agent.name })
+
+    // Notify agent
+    const { sendMissionAssigned } = require('../lib/mailer')
+    sendMissionAssigned({ email: null, name: agent.name, missionId, companyName: rows[0].company_name }).catch(() => {})
+
+    res.json({ mission: rows[0], agent: { id: agent.id, name: agent.name, tier: agent.pac_tier } })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_assign_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to assign mission' })
+  }
+})
+
+// ── PATCH /api/admin/missions/:id/cancel — cancel a mission ──────────────────
+router.patch('/missions/:id/cancel', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const { rows } = await query(`
+      UPDATE missions SET
+        status     = 'cancelled',
+        updated_at = NOW()
+      WHERE id = $1 AND status NOT IN ('completed','cancelled')
+      RETURNING id, status, title
+    `, [missionId])
+
+    if (!rows.length) return res.status(404).json({ error: 'Mission not found or already completed/cancelled' })
+    logAudit(req.user.id, 'admin_mission_cancelled', 'missions', req.ip, { missionId })
+    res.json({ mission: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_cancel_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to cancel mission' })
+  }
+})
+
+// ── PATCH /api/admin/missions/:id/client-score — company rates agent ──────────
+// Called by admin on behalf of company (or by company if company portal is wired).
+// Updates client_score_total/count on pac_profiles.
+// If score < 2 and agent already has a prior low score on this mission → double_rejection.
+router.patch('/missions/:id/client-score', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    const { client_score } = req.body
+
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+    if (!client_score || client_score < 1 || client_score > 5) {
+      return res.status(400).json({ error: 'client_score must be 1–5' })
+    }
+
+    const mRes = await query(
+      `SELECT m.assigned_to, m.client_score AS prev_score, pp.double_rejections
+       FROM missions m
+       LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
+       WHERE m.id = $1 AND m.status = 'completed'
+       LIMIT 1`,
+      [missionId]
+    )
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found or not completed' })
+    const { assigned_to, prev_score, double_rejections } = mRes.rows[0]
+
+    // Stamp client_score on mission
+    await query(
+      `UPDATE missions SET client_score = $1, client_scored_at = NOW(), updated_at = NOW() WHERE id = $2`,
+      [client_score, missionId]
+    )
+
+    if (assigned_to) {
+      // Is this a second consecutive low-score (< 2)?
+      const isLowScore   = client_score < 2
+      const prevWasLow   = prev_score !== null && prev_score < 2
+      const newDoubleRej = isLowScore && prevWasLow ? 1 : 0
+
+      await query(`
+        UPDATE pac_profiles SET
+          client_score_total  = client_score_total + $1,
+          client_score_count  = client_score_count + 1,
+          double_rejections   = double_rejections + $2,
+          updated_at          = NOW()
+        WHERE user_id = $3
+      `, [client_score, newDoubleRej, assigned_to])
+    }
+
+    logAudit(req.user.id, 'admin_mission_client_scored', 'missions', req.ip, { missionId, client_score })
+    res.json({ message: 'Client score recorded', missionId, client_score })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_client_score_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to record client score' })
+  }
+})
+
 // ── PATCH /api/admin/missions/:id/status ─────────────────────────────────────
 router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, validate(schemas.updateCompanyStatus), async (req, res) => {
   try {
