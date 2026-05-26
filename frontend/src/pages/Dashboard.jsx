@@ -1311,98 +1311,200 @@ function RegisterCompanyForm({ company, onSaved, onError }) {
 
 // ── MissionCard — company audit view ─────────────────────────────────────────
 function MissionCard({ m, sc, oc, G }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]             = useState(false)
+  const [rateModal, setRateModal]   = useState(false)
+  const [hoverStar, setHoverStar]   = useState(0)
+  const [selectedStar, setSelectedStar] = useState(0)
+  const [rateSaving, setRateSaving] = useState(false)
+  const [rateError, setRateError]   = useState('')
+  const [localScore, setLocalScore] = useState(m.clientScore || null)
 
   const TIER_COLOR = { S1: '#4a90e2', S2: '#C9A84C', S3: '#e056fd' }
   const tc = TIER_COLOR[m.tierRequired] || '#555'
+  const canRate = m.status === 'completed' && localScore === null
+
+  const submitRating = async () => {
+    if (!selectedStar) return
+    setRateSaving(true)
+    setRateError('')
+    try {
+      await api.patch(`/api/companies/missions/${m.id}/rate`, { client_score: selectedStar })
+      setLocalScore(selectedStar)
+      setRateModal(false)
+    } catch (err) {
+      setRateError(err?.response?.data?.error || 'Erreur lors de la soumission')
+    } finally {
+      setRateSaving(false)
+    }
+  }
 
   return (
-    <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden' }}>
-      {/* Main row */}
-      <div style={{ padding: '1.25rem 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
-            <span style={{ color: '#888', fontSize: '0.7rem' }}>#{m.id}</span>
-            <span style={{ fontWeight: '700', color: '#eee', fontSize: '0.95rem' }}>{m.title || m.description?.slice(0, 50) || 'Audit'}</span>
+    <>
+      <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden' }}>
+        {/* Main row */}
+        <div style={{ padding: '1.25rem 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+              <span style={{ color: '#888', fontSize: '0.7rem' }}>#{m.id}</span>
+              <span style={{ fontWeight: '700', color: '#eee', fontSize: '0.95rem' }}>{m.title || m.description?.slice(0, 50) || 'Audit'}</span>
+            </div>
+            <div style={{ color: '#666', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+              {m.location || '—'}{m.type ? ` · ${m.type}` : ''}
+            </div>
+            {m.pacName && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ color: '#555', fontSize: '0.72rem' }}>Agent :</span>
+                <span style={{ color: '#bbb', fontSize: '0.78rem', fontWeight: '600' }}>{m.pacName}</span>
+                {m.pacTier && (
+                  <span style={{ fontSize: '0.62rem', background: `${tc}22`, color: tc, padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: '700' }}>{m.pacTier.toUpperCase()}</span>
+                )}
+              </div>
+            )}
+            {m.dueDate && (
+              <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.3rem' }}>
+                📅 Échéance : {new Date(m.dueDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            )}
           </div>
-          <div style={{ color: '#666', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
-            {m.location || '—'}{m.type ? ` · ${m.type}` : ''}
-          </div>
-          {m.pacName && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ color: '#555', fontSize: '0.72rem' }}>Agent :</span>
-              <span style={{ color: '#bbb', fontSize: '0.78rem', fontWeight: '600' }}>{m.pacName}</span>
-              {m.pacTier && (
-                <span style={{ fontSize: '0.62rem', background: `${tc}22`, color: tc, padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: '700' }}>{m.pacTier.toUpperCase()}</span>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+            {/* Status */}
+            <span style={{ background: sc.bg, color: sc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {m.status}
+            </span>
+            {/* Outcome */}
+            {oc && (
+              <span style={{ background: oc.bg, color: oc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {m.outcome}
+              </span>
+            )}
+            {/* Scores row */}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+              {m.adminScore && (
+                <span title="Note B&E" style={{ background: 'rgba(224,86,253,0.1)', color: '#e056fd', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                  ⭐ {m.adminScore}/5
+                </span>
+              )}
+              {localScore ? (
+                <span title="Votre note" style={{ background: 'rgba(201,168,76,0.1)', color: '#C9A84C', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                  👤 {localScore}/5
+                </span>
+              ) : canRate ? (
+                <button
+                  onClick={() => { setSelectedStar(0); setRateError(''); setRateModal(true) }}
+                  style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.25)', color: '#C9A84C', fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⭐ Évaluer l'agent
+                </button>
+              ) : null}
+              {m.feeUsd && (
+                <span style={{ color: '#C9A84C', fontSize: '0.75rem', fontWeight: '700' }}>${m.feeUsd}</span>
               )}
             </div>
-          )}
-          {m.dueDate && (
-            <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.3rem' }}>
-              📅 Échéance : {new Date(m.dueDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-          {/* Status */}
-          <span style={{ background: sc.bg, color: sc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            {m.status}
-          </span>
-          {/* Outcome */}
-          {oc && (
-            <span style={{ background: oc.bg, color: oc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {m.outcome}
-            </span>
-          )}
-          {/* Scores row */}
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {m.adminScore && (
-              <span title="Note B&E" style={{ background: 'rgba(224,86,253,0.1)', color: '#e056fd', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
-                ⭐ {m.adminScore}/5
-              </span>
-            )}
-            {m.clientScore && (
-              <span title="Votre note" style={{ background: 'rgba(201,168,76,0.1)', color: '#C9A84C', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
-                👤 {m.clientScore}/5
-              </span>
-            )}
-            {m.feeUsd && (
-              <span style={{ color: '#C9A84C', fontSize: '0.75rem', fontWeight: '700' }}>${m.feeUsd}</span>
+            {/* Dates */}
+            {m.completedAt && (
+              <div style={{ color: '#444', fontSize: '0.68rem' }}>
+                Terminé le {new Date(m.completedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
             )}
           </div>
-          {/* Dates */}
-          {m.completedAt && (
-            <div style={{ color: '#444', fontSize: '0.68rem' }}>
-              Terminé le {new Date(m.completedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </div>
-          )}
         </div>
+
+        {/* Description preview */}
+        {m.description && (
+          <div style={{ padding: '0 1.5rem 0.75rem', color: '#555', fontSize: '0.78rem', lineHeight: '1.5' }}>
+            {m.description.length > 120 ? m.description.slice(0, 120) + '…' : m.description}
+          </div>
+        )}
+
+        {/* Report expand */}
+        {m.reportText && (
+          <>
+            <div style={{ borderTop: '1px solid #252525' }}>
+              <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '0.6rem 1.5rem', cursor: 'pointer', color: '#555', fontSize: '0.75rem', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                {open ? '▲' : '▼'} Rapport d'audit
+              </button>
+            </div>
+            {open && (
+              <div style={{ borderTop: '1px solid #222', padding: '1rem 1.5rem', background: 'rgba(46,204,113,0.02)' }}>
+                <div style={{ color: '#444', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Rapport</div>
+                <div style={{ color: '#888', fontSize: '0.82rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{m.reportText}</div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Description preview */}
-      {m.description && (
-        <div style={{ padding: '0 1.5rem 0.75rem', color: '#555', fontSize: '0.78rem', lineHeight: '1.5' }}>
-          {m.description.length > 120 ? m.description.slice(0, 120) + '…' : m.description}
+      {/* ── Rating modal ────────────────────────────────────────────────────── */}
+      {rateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '400px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '0.25rem' }}>Évaluer l'agent</div>
+                <div style={{ color: '#555', fontSize: '0.78rem' }}>Mission #{m.id} — {m.title || 'Audit'}</div>
+              </div>
+              <button onClick={() => setRateModal(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
+            </div>
+
+            {/* Agent info */}
+            {m.pacName && (
+              <div style={{ background: '#111', border: '1px solid #222', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: `${tc}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>👤</div>
+                <div>
+                  <div style={{ color: '#ddd', fontSize: '0.85rem', fontWeight: '700' }}>{m.pacName}</div>
+                  {m.pacTier && <div style={{ color: tc, fontSize: '0.68rem', fontWeight: '700' }}>{m.pacTier.toUpperCase()}</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Star picker */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ color: '#666', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Votre évaluation</div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    onMouseEnter={() => setHoverStar(star)}
+                    onMouseLeave={() => setHoverStar(0)}
+                    onClick={() => setSelectedStar(star)}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '2.2rem', lineHeight: 1, opacity: star <= (hoverStar || selectedStar) ? 1 : 0.2, transition: 'opacity 0.1s', filter: star <= (hoverStar || selectedStar) ? 'drop-shadow(0 0 6px #C9A84C88)' : 'none' }}
+                  >
+                    ⭐
+                  </button>
+                ))}
+              </div>
+              {selectedStar > 0 && (
+                <div style={{ textAlign: 'center', marginTop: '0.6rem', color: '#C9A84C', fontSize: '0.82rem', fontWeight: '600' }}>
+                  {['', 'Très insuffisant', 'Insuffisant', 'Satisfaisant', 'Bien', 'Excellent'][selectedStar]}
+                </div>
+              )}
+            </div>
+
+            {rateError && (
+              <div style={{ color: '#ff6b6b', fontSize: '0.78rem', marginBottom: '1rem', textAlign: 'center' }}>{rateError}</div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => setRateModal(false)}
+                style={{ flex: 1, background: '#111', border: '1px solid #2a2a2a', color: '#666', borderRadius: '8px', padding: '0.65rem', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={submitRating}
+                disabled={!selectedStar || rateSaving}
+                style={{ flex: 1, background: selectedStar ? 'linear-gradient(135deg,#C9A84C,#a8863c)' : '#1a1a1a', border: 'none', color: selectedStar ? '#000' : '#444', borderRadius: '8px', padding: '0.65rem', cursor: selectedStar ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: '700', opacity: rateSaving ? 0.7 : 1 }}
+              >
+                {rateSaving ? '…' : 'Soumettre'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Report expand */}
-      {m.reportText && (
-        <>
-          <div style={{ borderTop: '1px solid #252525' }}>
-            <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '0.6rem 1.5rem', cursor: 'pointer', color: '#555', fontSize: '0.75rem', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              {open ? '▲' : '▼'} Rapport d'audit
-            </button>
-          </div>
-          {open && (
-            <div style={{ borderTop: '1px solid #222', padding: '1rem 1.5rem', background: 'rgba(46,204,113,0.02)' }}>
-              <div style={{ color: '#444', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Rapport</div>
-              <div style={{ color: '#888', fontSize: '0.82rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{m.reportText}</div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+    </>
   )
 }

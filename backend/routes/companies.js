@@ -8,6 +8,7 @@ const { query }              = require('../db')
 const { auth }               = require('../lib/authUtils')
 const { mapCompanyRow }      = require('../lib/mappers')
 const { logAudit }           = require('../lib/audit')
+const { AUDIT }              = require('../lib/auditActions')
 const { checkFraud }         = require('../lib/fraudDetection')
 const { computeTrustScore }  = require('../lib/trustScore')
 const { validate, schemas }  = require('../lib/validators')
@@ -373,6 +374,77 @@ router.get('/missions', auth, companyReadLimiter, async (req, res) => {
   } catch (err) {
     console.error(JSON.stringify({ event: 'company_missions_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load missions' })
+  }
+})
+
+// ── PATCH /api/companies/missions/:id/rate — company rates the PAC agent ──────
+// One-time: company submits a 1–5 score after mission completion.
+// Writes client_score on the mission, updates pac_profiles counters,
+// and checks for double_rejections (two consecutive scores < 2 on this agent).
+router.patch('/missions/:id/rate', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'company') return res.status(403).json({ error: 'Only company accounts can rate missions' })
+
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const { client_score } = req.body
+    const score = parseInt(client_score, 10)
+    if (!score || score < 1 || score > 5) return res.status(400).json({ error: 'client_score must be 1–5' })
+
+    // Resolve company_id from logged-in user
+    const compResult = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    if (!compResult.rows.length) return res.status(404).json({ error: 'Company not found' })
+    const companyId = compResult.rows[0].id
+
+    // Load mission — must belong to this company, be completed, and unscored
+    const mRes = await query(
+      `SELECT m.id, m.assigned_to, m.client_score AS prev_score, pp.double_rejections
+         FROM missions m
+         LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
+        WHERE m.id = $1
+          AND m.company_id = $2
+          AND m.status = 'completed'
+        LIMIT 1`,
+      [missionId, companyId]
+    )
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found, not yours, or not completed' })
+
+    const { assigned_to, prev_score } = mRes.rows[0]
+
+    // Idempotency — already scored?
+    if (prev_score !== null) return res.status(409).json({ error: 'Mission already rated' })
+
+    // Stamp score
+    const { rows } = await query(
+      `UPDATE missions SET client_score = $1, client_scored_at = NOW(), updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, client_score, client_scored_at`,
+      [score, missionId]
+    )
+
+    // Update pac_profiles counters (fire-and-forget, do not block response)
+    if (assigned_to) {
+      const isLow        = score < 2
+      const prevWasLow   = prev_score !== null && prev_score < 2
+      const newDoubleRej = isLow && prevWasLow ? 1 : 0
+
+      query(
+        `UPDATE pac_profiles SET
+           client_score_total = client_score_total + $1,
+           client_score_count = client_score_count + 1,
+           double_rejections  = double_rejections + $2,
+           updated_at         = NOW()
+         WHERE user_id = $3`,
+        [score, newDoubleRej, assigned_to]
+      ).catch(err => console.error(JSON.stringify({ event: 'company_rate_counter_error', message: err.message })))
+    }
+
+    logAudit(req.user.id, AUDIT.COMPANY_MISSION_RATED, 'missions', req.ip, { missionId, score, companyId })
+    res.json({ message: 'Rating submitted', missionId, clientScore: rows[0].client_score })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'company_mission_rate_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to submit rating' })
   }
 })
 
