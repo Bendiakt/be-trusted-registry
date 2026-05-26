@@ -751,4 +751,96 @@ const sendSupervisionTaskReminder = async ({ email, name, tier, pendingTasks, co
   }
 }
 
-module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder }
+// ─────────────────────────────────────────────────────────────────────────────
+// PAC membership confirmation (sent on first payment)
+// ─────────────────────────────────────────────────────────────────────────────
+const PAC_TIER_DISPLAY = { S2: 'PAC Certified (S2)', S3: 'PAC Senior (S3)' }
+const PAC_TIER_PRICE   = { S2: '399', S3: '799' }
+
+const sendPacMembershipConfirmation = async ({ email, agentName, tier, membershipExpires }) => {
+  if (!email) return
+  const tierName   = PAC_TIER_DISPLAY[tier]  || tier
+  const tierPrice  = PAC_TIER_PRICE[tier]    || '?'
+  const expiresStr = membershipExpires
+    ? new Date(membershipExpires).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+    : 'Annual'
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'pac.membership.email.queued', mode: 'log_only', email, tier }))
+    return
+  }
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: email,
+      subject: `Your MyDD PAC ${tier} Membership is confirmed`,
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#C9A84C,#9A7B2E);padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD PAC Network</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.4rem;margin:0 0 8px;color:#f5f5f5">Membership Payment Confirmed</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">Hello ${agentName ? `<strong style="color:#f5f5f5">${agentName}</strong>` : 'there'}, your <strong style="color:#C9A84C">${tierName}</strong> annual membership has been received. Your application is now under KYC review — you will be notified once approved.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.95rem;margin-bottom:24px">
+        <tr><td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Membership</td><td style="padding:8px 0;text-align:right;color:#C9A84C;border-bottom:1px solid #222"><strong>${tierName}</strong></td></tr>
+        <tr><td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Annual fee</td><td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222"><strong>$${tierPrice} USD</strong></td></tr>
+        <tr><td style="padding:8px 0;color:#aaa">Valid until</td><td style="padding:8px 0;text-align:right;color:#f5f5f5"><strong>${expiresStr}</strong></td></tr>
+      </table>
+      <p style="color:#aaa;font-size:0.85rem;margin:0">Questions? <a href="mailto:support@mydd.work" style="color:#C9A84C">support@mydd.work</a></p>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.membership.email.sent', email, tier }))
+  } catch (err) {
+    console.error('[mailer] sendPacMembershipConfirmation failed:', err.message)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAC KYC decision (sent when admin approves or rejects)
+// ─────────────────────────────────────────────────────────────────────────────
+const sendPacKycDecision = async ({ email, agentName, kyc_status, pac_tier, notes }) => {
+  if (!email) return
+  const approved  = kyc_status === 'approved'
+  const tierName  = PAC_TIER_DISPLAY[pac_tier] || pac_tier || ''
+  const subject   = approved
+    ? `✅ Your MyDD PAC ${pac_tier} application is approved`
+    : `Your MyDD PAC application status: ${kyc_status}`
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'pac.kyc.email.queued', mode: 'log_only', email, kyc_status, pac_tier }))
+    return
+  }
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: email,
+      subject,
+      html: `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:${approved ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1a1a1a'};padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:${approved ? '#000' : '#C9A84C'}">MyDD PAC Network</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.4rem;margin:0 0 8px;color:${approved ? '#2ecc71' : '#ff6b6b'}">${approved ? '✅ Application Approved' : `Application ${kyc_status.charAt(0).toUpperCase() + kyc_status.slice(1)}`}</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">Hello ${agentName ? `<strong style="color:#f5f5f5">${agentName}</strong>` : 'there'},<br><br>
+      ${approved
+        ? `Your application for <strong style="color:#C9A84C">${tierName}</strong> has been approved by the B&amp;E team. You can now supervise agents and earn commissions as a ${tierName}.`
+        : `Your ${tierName ? `<strong>${tierName}</strong> ` : ''}application has been <strong style="color:#ff6b6b">${kyc_status}</strong>.${notes ? `<br><br><em style="color:#888">${notes}</em>` : ''} Please contact support if you have questions.`
+      }</p>
+      ${approved ? `<a href="https://mydd.work/pac" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#9A7B2E);color:#111;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem">Open PAC Portal →</a>` : ''}
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="https://mydd.work" style="color:#555">mydd.work</a></td></tr>
+  </table>
+</body></html>`,
+    })
+    console.log(JSON.stringify({ event: 'pac.kyc.email.sent', email, kyc_status, pac_tier }))
+  } catch (err) {
+    console.error('[mailer] sendPacKycDecision failed:', err.message)
+  }
+}
+
+module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision }

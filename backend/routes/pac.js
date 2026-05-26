@@ -225,8 +225,18 @@ router.get('/profile', auth, pacReadLimiter, async (req, res) => {
     const result = await query('SELECT * FROM pac_profiles WHERE user_id = $1 LIMIT 1', [req.user.id])
     const row    = result.rows[0] || null
     res.json(row ? {
-      name: row.full_name || '', location: row.location || '',
-      languages: row.languages || '', certifications: row.certifications || '', bio: row.bio || '',
+      name:               row.full_name           || '',
+      location:           row.location            || '',
+      languages:          row.languages           || '',
+      certifications:     row.certifications      || '',
+      bio:                row.bio                 || '',
+      pac_tier:           row.pac_tier            || 'S1',
+      kyc_status:         row.kyc_status          || 'pending',
+      membership_active:  row.membership_active   || false,
+      membership_expires: row.membership_expires  || null,
+      commission_rate:    row.commission_rate      || 0.10,
+      max_supervised:     row.max_supervised       || 0,
+      supervision_score:  row.supervision_score    || null,
     } : {})
   } catch (err) {
     console.error(JSON.stringify({ event: 'pac_profile_get_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
