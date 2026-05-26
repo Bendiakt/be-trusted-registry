@@ -52,6 +52,11 @@ const AUDIT = Object.freeze({
   ADMIN_SUSPEND_COMPANY:        'admin_suspend_company',
   ADMIN_UNSUSPEND_COMPANY:      'admin_unsuspend_company',
   ADMIN_MISSION_STATUS_UPDATE:  'admin_mission_status_update',
+  ADMIN_MISSION_CREATED:        'admin_mission_created',
+  ADMIN_MISSION_ASSIGNED:       'admin_mission_assigned',
+  ADMIN_MISSION_CANCELLED:      'admin_mission_cancelled',
+  ADMIN_MISSION_SCORED:         'admin_mission_scored',
+  ADMIN_MISSION_CLIENT_SCORED:  'admin_mission_client_scored',
   ADMIN_RESOLVE_FRAUD_ALERT:    'admin_resolve_fraud_alert',
 
   // ── GDPR ──────────────────────────────────────────────────────────────────
