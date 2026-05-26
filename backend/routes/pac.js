@@ -563,4 +563,102 @@ router.get('/directory', pacPublicLimiter, async (req, res) => {
   }
 })
 
+// ── GET /api/pac/directory/:id — public single agent profile ─────────────────
+// Returns full profile for one approved+active agent.
+// Includes anonymised mission history (company_name hidden, report_text hidden).
+router.get('/directory/:id', pacPublicLimiter, async (req, res) => {
+  try {
+    const agentId = parseInt(req.params.id, 10)
+    if (Number.isNaN(agentId)) return res.status(400).json({ error: 'Invalid agent id' })
+
+    const agentRes = await query(`
+      SELECT
+        pp.id,
+        COALESCE(pp.full_name, u.name)                AS name,
+        pp.pac_tier,
+        pp.location,
+        pp.bio,
+        pp.expertise,
+        pp.languages,
+        pp.certifications,
+        pp.missions_completed,
+        pp.missions_on_time,
+        pp.l2_missions_completed,
+        CASE WHEN pp.admin_score_count > 0
+             THEN ROUND(pp.admin_score_total::numeric / pp.admin_score_count, 2)
+             ELSE NULL END                            AS avg_admin_score,
+        CASE WHEN pp.client_score_count > 0
+             THEN ROUND(pp.client_score_total::numeric / pp.client_score_count, 2)
+             ELSE NULL END                            AS avg_client_score,
+        pp.promotion_date_s2,
+        pp.promotion_date_s3,
+        pp.created_at                                 AS member_since
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE pp.id = $1
+        AND pp.kyc_status = 'approved'
+        AND pp.membership_active = TRUE
+      LIMIT 1
+    `, [agentId])
+
+    if (!agentRes.rows.length) return res.status(404).json({ error: 'Agent not found' })
+    const agent = agentRes.rows[0]
+
+    // Anonymised mission history — no company names, no report text
+    const missionsRes = await query(`
+      SELECT
+        m.type,
+        m.location,
+        m.pac_tier_required,
+        m.status,
+        m.outcome,
+        m.admin_score,
+        m.client_score,
+        m.completed_at,
+        CASE WHEN m.due_date IS NULL OR m.completed_at IS NULL THEN NULL
+             WHEN m.completed_at::date <= m.due_date THEN true
+             ELSE false END AS on_time
+      FROM missions m
+      WHERE m.assigned_to = (SELECT user_id FROM pac_profiles WHERE id = $1)
+        AND m.status = 'completed'
+      ORDER BY m.completed_at DESC
+      LIMIT 20
+    `, [agentId])
+
+    res.json({
+      agent: {
+        id:               agent.id,
+        name:             agent.name             || null,
+        tier:             agent.pac_tier,
+        location:         agent.location         || null,
+        bio:              agent.bio              || null,
+        expertise:        agent.expertise        || null,
+        languages:        agent.languages        || null,
+        certifications:   agent.certifications   || null,
+        missionsCompleted: agent.missions_completed,
+        missionsOnTime:    agent.missions_on_time,
+        l2MissionsCompleted: agent.l2_missions_completed,
+        avgAdminScore:    agent.avg_admin_score  ? Number(agent.avg_admin_score)  : null,
+        avgClientScore:   agent.avg_client_score ? Number(agent.avg_client_score) : null,
+        promotedS2:       agent.promotion_date_s2 || null,
+        promotedS3:       agent.promotion_date_s3 || null,
+        memberSince:      agent.member_since,
+      },
+      missionHistory: missionsRes.rows.map(m => ({
+        type:        m.type        || null,
+        location:    m.location    || null,
+        tierRequired: m.pac_tier_required,
+        outcome:     m.outcome     || null,
+        adminScore:  m.admin_score || null,
+        clientScore: m.client_score || null,
+        completedAt: m.completed_at,
+        onTime:      m.on_time,
+      })),
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.directory.agent.error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to load agent profile' })
+  }
+})
+
 module.exports = router
