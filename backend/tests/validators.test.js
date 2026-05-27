@@ -611,3 +611,40 @@ describe('schemas.renewalCheckout', () => {
     expectFail(schemas.renewalCheckout, {})
   })
 })
+
+describe('schemas.missionCheckout', () => {
+  test('accepts valid missionId', () => {
+    const d = expectOk(schemas.missionCheckout, { missionId: 42 })
+    assert.equal(d.missionId, 42)
+  })
+
+  test('accepts missionId = 1 (minimum positive)', () => {
+    const d = expectOk(schemas.missionCheckout, { missionId: 1 })
+    assert.equal(d.missionId, 1)
+  })
+
+  test('rejects missing missionId', () => {
+    const errs = expectFail(schemas.missionCheckout, {})
+    assert.ok(errs.some(e => e.field === 'missionId'), `expected missionId error, got: ${JSON.stringify(errs)}`)
+  })
+
+  test('rejects missionId = 0', () => {
+    const errs = expectFail(schemas.missionCheckout, { missionId: 0 })
+    assert.ok(errs.some(e => e.field === 'missionId'))
+  })
+
+  test('rejects negative missionId', () => {
+    const errs = expectFail(schemas.missionCheckout, { missionId: -5 })
+    assert.ok(errs.some(e => e.field === 'missionId'))
+  })
+
+  test('rejects float missionId', () => {
+    const errs = expectFail(schemas.missionCheckout, { missionId: 1.5 })
+    assert.ok(errs.some(e => e.field === 'missionId'))
+  })
+
+  test('rejects string missionId', () => {
+    const errs = expectFail(schemas.missionCheckout, { missionId: '42' })
+    assert.ok(errs.some(e => e.field === 'missionId'))
+  })
+})
