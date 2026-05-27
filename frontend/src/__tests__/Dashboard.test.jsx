@@ -39,7 +39,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('../lib/api', () => ({
-  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }))
 
 vi.mock('../lib/session', () => ({
@@ -308,6 +308,161 @@ describe('Dashboard — missions (audits) tab', () => {
     await waitFor(() => {
       // t() mock returns key → empty state text is the i18n key
       expect(screen.getByText('dashboard.audits.empty')).toBeInTheDocument()
+    })
+  })
+})
+
+// ── NotificationsPanel ────────────────────────────────────────────────────────
+describe('Dashboard — notifications tab', () => {
+  const NOTIFS_EMPTY  = { notifications: [], unread: 0 }
+  const NOTIFS_LIST   = {
+    unread: 2,
+    notifications: [
+      { id: 1, type: 'mission_assigned', title: 'Mission assigned', body: 'PAC agent Bob assigned', link: null, read: false, createdAt: new Date(Date.now() - 5 * 60000).toISOString() },
+      { id: 2, type: 'payment_confirmed', title: 'Payment received', body: null, link: '/dashboard', read: false, createdAt: new Date(Date.now() - 3600000).toISOString() },
+      { id: 3, type: 'cert_update', title: 'Certificate ready', body: null, link: null, read: true, createdAt: new Date(Date.now() - 86400000).toISOString() },
+    ],
+  }
+
+  function mockWithNotifs(notifData) {
+    getSession.mockReturnValue(COMPANY_SESSION)
+    api.get.mockImplementation((url) => {
+      if (url === '/api/companies/me')  return Promise.resolve(PROFILE_RESPONSE)
+      if (url === '/api/documents')     return Promise.resolve({ data: [] })
+      if (url === '/api/notifications') return Promise.resolve({ data: notifData })
+      return Promise.resolve({ data: [] })
+    })
+    api.patch.mockResolvedValue({ data: {} })
+  }
+
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('renders notifications tab button', async () => {
+    mockWithNotifs(NOTIFS_EMPTY)
+    render(<Dashboard />)
+    await waitFor(() => expect(screen.getByText('dashboard.tabs.notifications')).toBeInTheDocument())
+  })
+
+  it('calls GET /api/notifications when tab is opened', async () => {
+    mockWithNotifs(NOTIFS_EMPTY)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith('/api/notifications')
+    })
+  })
+
+  it('shows empty-state when no notifications', async () => {
+    mockWithNotifs(NOTIFS_EMPTY)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(screen.getByText('dashboard.notifications.empty')).toBeInTheDocument()
+      expect(screen.getByText('dashboard.notifications.empty_sub')).toBeInTheDocument()
+    })
+  })
+
+  it('renders notification titles in the list', async () => {
+    mockWithNotifs(NOTIFS_LIST)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(screen.getByText('Mission assigned')).toBeInTheDocument()
+      expect(screen.getByText('Payment received')).toBeInTheDocument()
+      expect(screen.getByText('Certificate ready')).toBeInTheDocument()
+    })
+  })
+
+  it('shows unread count badge when there are unread notifications', async () => {
+    mockWithNotifs(NOTIFS_LIST)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      // t() mock returns key; badge renders t('dashboard.notifications.unread_count', { count: 2 })
+      expect(screen.getByText('dashboard.notifications.unread_count')).toBeInTheDocument()
+    })
+  })
+
+  it('shows mark-all-read button when there are unread notifications', async () => {
+    mockWithNotifs(NOTIFS_LIST)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(screen.getByText('dashboard.notifications.mark_all_read')).toBeInTheDocument()
+    })
+  })
+
+  it('calls PATCH /api/notifications/read-all when mark-all clicked', async () => {
+    mockWithNotifs(NOTIFS_LIST)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => screen.getByText('dashboard.notifications.mark_all_read'))
+    fireEvent.click(screen.getByText('dashboard.notifications.mark_all_read'))
+    await waitFor(() => {
+      expect(api.patch).toHaveBeenCalledWith('/api/notifications/read-all')
+    })
+  })
+
+  it('calls PATCH /api/notifications/:id/read when mark-read clicked on one item', async () => {
+    mockWithNotifs(NOTIFS_LIST)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    // Two unread items have a mark-read button; click the first
+    await waitFor(() => {
+      const btns = screen.getAllByText('dashboard.notifications.mark_read')
+      expect(btns.length).toBeGreaterThanOrEqual(1)
+    })
+    fireEvent.click(screen.getAllByText('dashboard.notifications.mark_read')[0])
+    await waitFor(() => {
+      expect(api.patch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/notifications\/\d+\/read/))
+    })
+  })
+
+  it('shows refresh button in header', async () => {
+    mockWithNotifs(NOTIFS_EMPTY)
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(screen.getByText(/dashboard\.notifications\.refresh/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows error message when API call fails', async () => {
+    getSession.mockReturnValue(COMPANY_SESSION)
+    api.get.mockImplementation((url) => {
+      if (url === '/api/companies/me')  return Promise.resolve(PROFILE_RESPONSE)
+      if (url === '/api/documents')     return Promise.resolve({ data: [] })
+      if (url === '/api/notifications') return Promise.reject(new Error('Network error'))
+      return Promise.resolve({ data: [] })
+    })
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(screen.getByText('dashboard.notifications.error')).toBeInTheDocument()
+    })
+  })
+
+  it('shows all-caught-up banner when all notifications are read', async () => {
+    mockWithNotifs({
+      unread: 0,
+      notifications: [
+        { id: 5, type: 'cert_update', title: 'All done', body: null, link: null, read: true, createdAt: new Date().toISOString() },
+      ],
+    })
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.notifications'))
+    fireEvent.click(screen.getByText('dashboard.tabs.notifications'))
+    await waitFor(() => {
+      expect(screen.getByText(/dashboard\.notifications\.all_caught_up/)).toBeInTheDocument()
     })
   })
 })

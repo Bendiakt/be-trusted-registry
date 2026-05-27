@@ -1162,4 +1162,271 @@ const sendLicenseReinstated = async ({ email, full_name, tier }) => {
   }
 }
 
-module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome, sendS2Eligible, sendS2Promoted, sendS3Eligible, sendS3Promoted, sendLicenseRenewalReminder, sendLicenseSuspended, sendLicenseReinstated }
+/**
+ * Send a mission fee payment receipt to the company that paid.
+ * Triggered by the Stripe webhook when mission_fee checkout completes.
+ */
+const sendMissionFeeReceipt = async ({ email, name, companyName, feeUsd, missionId }) => {
+  if (!email) return
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'mission_fee_receipt.email.queued', mode: 'log_only', email, missionId, feeUsd }))
+    return
+  }
+
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: email,
+      subject: `Payment confirmed — Mission audit #${missionId}`,
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#b8972a;padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD — Payment Receipt</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Audit Fee Confirmed ✓</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
+        Hi${name ? ` ${name}` : ''},<br>
+        Your payment for the B&amp;E audit mission has been received and confirmed.
+        Your assigned PAC agent will coordinate the audit schedule shortly.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.95rem;margin-bottom:24px">
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Company</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222"><strong>${companyName || '—'}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Mission #</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">#${missionId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa">Amount Paid</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:#b8972a">$${feeUsd} USD</td>
+        </tr>
+      </table>
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/dashboard"
+         style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
+        View Mission Status
+      </a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; This is an automated receipt — please keep for your records.
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    })
+    console.log(JSON.stringify({ event: 'mission_fee_receipt.email.sent', email, missionId, feeUsd }))
+  } catch (err) {
+    console.error('[mailer] sendMissionFeeReceipt failed:', err.message)
+  }
+}
+
+/**
+ * Notify a PAC agent that their commission for a completed & paid mission is earned.
+ * Triggered by the Stripe webhook when mission_fee checkout completes.
+ */
+const sendMissionCommissionEarned = async ({ email, name, companyName, commissionUsd, missionId }) => {
+  if (!email) return
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'mission_commission.email.queued', mode: 'log_only', email, missionId, commissionUsd }))
+    return
+  }
+
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: email,
+      subject: `Commission earned — Mission #${missionId}`,
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#b8972a;padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD — Commission Notification</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Commission Credited 💰</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
+        Hi${name ? ` ${name}` : ''},<br>
+        Great news — the company has paid the audit fee for Mission #${missionId}.
+        Your commission has been recorded and will be included in your next payout.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.95rem;margin-bottom:24px">
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Company</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222"><strong>${companyName || '—'}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Mission #</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">#${missionId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa">Your Commission</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:#2ecc71">+$${commissionUsd} USD</td>
+        </tr>
+      </table>
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/pac"
+         style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
+        View Earnings in PAC Portal
+      </a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
+      B&amp;E Consult FZCO &bull; Dubai, UAE
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    })
+    console.log(JSON.stringify({ event: 'mission_commission.email.sent', email, missionId, commissionUsd }))
+  } catch (err) {
+    console.error('[mailer] sendMissionCommissionEarned failed:', err.message)
+  }
+}
+
+/**
+ * Notify admin that a company has submitted a dispute on a completed mission.
+ */
+const sendDisputeSubmitted = async ({ adminEmail, companyName, reason, missionId, disputeId }) => {
+  if (!adminEmail) return
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'dispute_submitted.email.queued', mode: 'log_only', adminEmail, disputeId, missionId }))
+    return
+  }
+
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: adminEmail,
+      subject: `[Action Required] Dispute #${disputeId} — Mission #${missionId}`,
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#c0392b;padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#fff">MyDD — Dispute Alert</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">New Dispute Submitted</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
+        A company has filed a dispute on a completed mission. Please review and take action.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.95rem;margin-bottom:24px">
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Dispute #</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">#${disputeId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Mission #</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">#${missionId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Company</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222"><strong>${companyName || '—'}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;vertical-align:top">Reason</td>
+          <td style="padding:8px 0;text-align:right;color:#ff6b6b;font-style:italic">"${(reason || '').slice(0, 200)}"</td>
+        </tr>
+      </table>
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/admin"
+         style="display:inline-block;background:#c0392b;color:#fff;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
+        Review in Admin Panel
+      </a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
+      B&amp;E Consult FZCO &bull; Dubai, UAE
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    })
+    console.log(JSON.stringify({ event: 'dispute_submitted.email.sent', adminEmail, disputeId, missionId }))
+  } catch (err) {
+    console.error('[mailer] sendDisputeSubmitted failed:', err.message)
+  }
+}
+
+/**
+ * Notify a company that their dispute has been resolved (upheld or dismissed).
+ */
+const sendDisputeResolved = async ({ email, name, companyName, missionId, disputeId, resolution, notes }) => {
+  if (!email) return
+
+  const upheld    = resolution === 'upheld'
+  const accentColor = upheld ? '#2ecc71' : '#f39c12'
+  const resultLabel = upheld ? '✅ Upheld — Outcome overturned' : '⚠️ Dismissed — Original outcome stands'
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'dispute_resolved.email.queued', mode: 'log_only', email, disputeId, resolution }))
+    return
+  }
+
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to: email,
+      subject: `Dispute resolved — Mission #${missionId}`,
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:${accentColor};padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#000">MyDD — Dispute Decision</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.4rem;margin:0 0 16px;color:#f5f5f5">Dispute #${disputeId} Resolved</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
+        Hi${name ? ` ${name}` : ''},<br>
+        The B&amp;E team has reviewed your dispute for Mission #${missionId} and reached a decision.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.95rem;margin-bottom:24px">
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Company</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222"><strong>${companyName || '—'}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Mission #</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">#${missionId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Decision</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:${accentColor}">${resultLabel}</td>
+        </tr>
+        ${notes ? `<tr>
+          <td style="padding:8px 0;color:#aaa;vertical-align:top">Notes</td>
+          <td style="padding:8px 0;text-align:right;color:#aaa;font-style:italic">"${notes.slice(0, 300)}"</td>
+        </tr>` : ''}
+      </table>
+      <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/dashboard"
+         style="display:inline-block;background:#b8972a;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
+        View in Dashboard
+      </a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; If you have further questions, contact support@mydd.work
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    })
+    console.log(JSON.stringify({ event: 'dispute_resolved.email.sent', email, disputeId, missionId, resolution }))
+  } catch (err) {
+    console.error('[mailer] sendDisputeResolved failed:', err.message)
+  }
+}
+
+module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome, sendS2Eligible, sendS2Promoted, sendS3Eligible, sendS3Promoted, sendLicenseRenewalReminder, sendLicenseSuspended, sendLicenseReinstated, sendMissionFeeReceipt, sendMissionCommissionEarned, sendDisputeSubmitted, sendDisputeResolved }

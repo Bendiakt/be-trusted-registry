@@ -30,7 +30,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('../lib/api', () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn() },
 }))
 
 import CertPrint from '../pages/CertPrint'
@@ -138,5 +138,47 @@ describe('CertPrint', () => {
     // First button in the no-print toolbar is the back button
     fireEvent.click(document.querySelector('.no-print button'))
     expect(mockNavigate).toHaveBeenCalledWith('/verify/cert_xyz')
+  })
+
+  it('renders download PDF button in toolbar', async () => {
+    api.get.mockResolvedValueOnce({ data: CERT_DATA })
+    render(<CertPrint />)
+    await waitFor(() => screen.getByText('Global Supply Ltd'))
+    expect(screen.getByText('cert_print.download_pdf')).toBeInTheDocument()
+  })
+
+  it('calls GET /api/verify/:id/pdf with blob responseType when download is clicked', async () => {
+    // First call: mount data. Second call: PDF download
+    api.get
+      .mockResolvedValueOnce({ data: CERT_DATA })
+      .mockResolvedValueOnce({ data: new Blob(['%PDF'], { type: 'application/pdf' }) })
+
+    // Mock URL methods used by the download handler
+    const mockCreateObjectURL = vi.fn().mockReturnValue('blob:http://localhost/fake')
+    const mockRevokeObjectURL = vi.fn()
+    global.URL.createObjectURL = mockCreateObjectURL
+    global.URL.revokeObjectURL = mockRevokeObjectURL
+
+    // Mock anchor click
+    const mockAnchorClick = vi.fn()
+    const origCreate = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      if (tag === 'a') {
+        const a = origCreate('a')
+        a.click = mockAnchorClick
+        return a
+      }
+      return origCreate(tag)
+    })
+
+    render(<CertPrint />)
+    await waitFor(() => screen.getByText('cert_print.download_pdf'))
+    fireEvent.click(screen.getByText('cert_print.download_pdf'))
+
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith('/api/verify/cert_xyz/pdf', { responseType: 'blob' })
+    })
+
+    vi.restoreAllMocks()
   })
 })

@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "Facturación",
       "developer": "Desarrollador",
-      "audits": "🔍 Auditorías"
+      "audits": "🔍 Auditorías",
+      "notifications": "Notificaciones"
     },
     "billing_title": "Historial de pagos",
     "billing_subtitle": "Sus certificaciones y transacciones de Stripe",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ Disputar",
       "rate_agent": "⭐ Valorar al agente",
       "pending_dispute": "⏳ Disputa en curso"
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "empty": "Sin notificaciones aún",
+      "empty_sub": "Las actualizaciones de misión, confirmaciones de pago y alertas aparecerán aquí.",
+      "mark_all_read": "Marcar todo como leído",
+      "unread_count": "{{count}} sin leer",
+      "refresh": "Actualizar",
+      "loading": "Cargando…",
+      "error": "Error al cargar notificaciones",
+      "mark_read": "Marcar como leído",
+      "all_caught_up": "¡Todo al día!"
     }
   },
   "dev": {
@@ -524,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "Imprimir / Guardar PDF",
-    "copy_link": "Copiar enlace de verificación"
+    "copy_link": "Copiar enlace de verificación",
+    "download_pdf": "Descargar PDF"
   },
   "cookie": {
     "title": "Usamos cookies",
