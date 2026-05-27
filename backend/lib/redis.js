@@ -37,9 +37,12 @@ const getRedis = () => {
       enableOfflineQueue:   false,
     })
 
-    _client.on('connect',   () => console.log(JSON.stringify({ event: 'redis.connected', url: url.replace(/:[^:@]+@/, ':***@') })))
-    _client.on('error',     (err) => console.error(JSON.stringify({ event: 'redis.error', message: err.message })))
+    _client.on('connect',      () => console.log(JSON.stringify({ event: 'redis.connected', url: url.replace(/:[^:@]+@/, ':***@') })))
+    _client.on('ready',        () => console.log(JSON.stringify({ event: 'redis.ready' })))
+    _client.on('error',        (err) => console.error(JSON.stringify({ event: 'redis.error', message: err.message })))
     _client.on('reconnecting', () => console.log(JSON.stringify({ event: 'redis.reconnecting' })))
+    _client.on('close',        () => console.warn(JSON.stringify({ event: 'redis.disconnected', note: 'rate limiters fail-open until reconnected' })))
+    _client.on('end',          () => console.warn(JSON.stringify({ event: 'redis.end', note: 'connection permanently closed' })))
 
     _client.connect().catch(() => { /* handled by error event */ })
     return _client
