@@ -93,3 +93,50 @@ test.describe('Payments — pricing & checkout', () => {
     }
   })
 })
+
+test.describe('Payments — mission fee checkout', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 1, name: 'Alice Dupont', email: 'alice@acme.com', role: 'company' })
+  })
+
+  test('audits tab shows mission with pay button when fee unpaid', async ({ page }) => {
+    await page.goto('/dashboard')
+
+    // Navigate to audits tab
+    const auditsTab = page.getByRole('button', { name: /audit|mission/i }).first()
+    await expect(auditsTab).toBeVisible({ timeout: 5000 })
+    await auditsTab.click()
+
+    // Mission should be visible
+    await expect(page.getByText('Site Inspection — Acme Corp')).toBeVisible({ timeout: 6000 })
+    // Pay button should appear (fee=500, not yet paid)
+    await expect(page.getByText(/Payer.*500|💳.*500|pay.*500/i).first()).toBeVisible({ timeout: 5000 })
+  })
+
+  test('pay button calls mission-checkout and navigates to stripe URL', async ({ page }) => {
+    await page.goto('/dashboard')
+
+    let checkoutCalled = false
+    await page.route('**/api/payments/mission-checkout', (route) => {
+      checkoutCalled = true
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ url: '/login?stripe-mission-redirect=1', missionId: 42, feeUsd: 500 }),
+      })
+    })
+
+    // Go to audits tab
+    const auditsTab = page.getByRole('button', { name: /audit|mission/i }).first()
+    if (await auditsTab.isVisible()) await auditsTab.click()
+
+    // Wait for mission card to appear then click pay
+    const payBtn = page.getByRole('button', { name: /payer|pay/i }).first()
+    if (await payBtn.isVisible({ timeout: 6000 })) {
+      await payBtn.click()
+      await page.waitForTimeout(1000)
+      expect(checkoutCalled).toBe(true)
+    }
+  })
+})

@@ -139,6 +139,35 @@ async function stubApi(page) {
     }),
   )
 
+  // Company missions (audits tab)
+  await page.route('**/api/companies/missions**', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        missions: [
+          {
+            id: 42, title: 'Site Inspection — Acme Corp', status: 'in_progress',
+            outcome: null, reportText: null, location: 'Paris, France',
+            type: 'site_inspection', description: 'Scheduled site audit.',
+            feeUsd: 500, paymentConfirmedAt: null, tierRequired: 'S1',
+            dueDate: null, adminScore: null, clientScore: null,
+            createdAt: '2026-05-01T00:00:00Z', completedAt: null,
+            pacName: 'Jean Martin', pacLocation: 'Paris', pacTier: 'S1',
+          },
+        ],
+        pagination: { page: 1, limit: 50, total: 1, pages: 1 },
+      }),
+    }),
+  )
+
+  // Mission fee checkout
+  await page.route('**/api/payments/mission-checkout', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ url: '/login?stripe-mission-redirect=1', missionId: 42, feeUsd: 500 }),
+    }),
+  )
+
   // Payments
   await page.route('**/api/payments/create-checkout-session', (route) =>
     route.fulfill({
