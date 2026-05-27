@@ -1,5 +1,56 @@
 /**
  * helpers.js — shared utilities for MyDD Playwright E2E tests.
+ *
+ * ─── TESTING RULES (read before writing a new spec) ──────────────────────────
+ *
+ * 1. ROUTE ORDERING — register specific routes BEFORE broad ones.
+ *
+ *    Playwright matches routes in registration order: the LAST registered route
+ *    that matches a URL takes precedence (LIFO). In practice this means that
+ *    a broad glob registered AFTER a specific one will shadow the specific one.
+ *
+ *    ✅ Correct — specific first, broad fallback second:
+ *      await page.route('**/api/admin/disputes/*/resolve', resolveHandler)
+ *      await page.route('**/api/admin/disputes**', listHandler)
+ *
+ *    ❌ Wrong — broad registered last shadows the specific:
+ *      await page.route('**/api/admin/disputes**', listHandler)
+ *      await page.route('**/api/admin/disputes/*/resolve', resolveHandler)
+ *
+ *    The same rule applies when stubApi() (called in beforeEach) has already
+ *    registered a broad route: override it in the test by registering your
+ *    specific route AFTER stubApi() — it will then have higher LIFO priority.
+ *
+ * 2. MULTI-STEP MODAL FLOWS — always complete every step before asserting.
+ *
+ *    Many actions (dispute resolve, KYC decision, payment confirm) use a
+ *    two-step modal pattern: a primary button opens the modal, and a confirm
+ *    button inside the modal fires the API call. Assert the API only after
+ *    all steps are done.
+ *
+ *    ✅ Correct:
+ *      await page.click('button:has-text("Resolve")')            // opens modal
+ *      await page.click('button:has-text("Confirm Resolution")') // fires API
+ *      await expect(page.getByText('Resolved')).toBeVisible()
+ *
+ *    ❌ Wrong — API is never called because the modal step was skipped:
+ *      await page.click('button:has-text("Resolve")')
+ *      expect(resolveCalled).toBe(true)  // always false
+ *
+ * 3. I18N BADGE MATCHING — always match both the EN and FR text.
+ *
+ *    The app runs in the browser's default locale during E2E. Hardcoding a
+ *    French string breaks when the locale resolves to English (the default).
+ *
+ *    ✅ Correct — locale-aware regex:
+ *      page.getByText(/✓.*(Paid|Payé)/i)
+ *      page.getByText(/Pending|En attente/i)
+ *
+ *    ❌ Wrong — fails when locale ≠ FR:
+ *      page.getByText(/✓.*Payé/i)
+ *      page.getByText(/En attente/i)
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 /** sessionStorage key used by frontend/src/lib/session.js */
@@ -27,8 +78,9 @@ async function seedSession(page, user) {
  * @param {import('@playwright/test').Page} page
  */
 async function stubApi(page) {
-  // Catch-all FIRST — Playwright matches routes LIFO (last-registered wins),
-  // so registering the catch-all first lets every specific stub below override it.
+  // Catch-all registered FIRST so that every specific stub below (registered later)
+  // takes precedence via Playwright's LIFO matching (last-registered wins).
+  // Any /api/* URL not matched by a specific stub returns 404 "not mocked".
   await page.route('**/api/**', (route) =>
     route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) }),
   )
