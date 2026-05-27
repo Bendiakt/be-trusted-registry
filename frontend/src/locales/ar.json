@@ -116,8 +116,10 @@
       "register": "تسجيل الشركة",
       "pricing": "الأسعار والترقية",
       "metrics": "المقاييس",
-      "documents": "Documents","billing": "الفواتير",
-      "developer": "المطور"
+      "documents": "Documents",
+      "billing": "الفواتير",
+      "developer": "المطور",
+      "audits": "🔍 التدقيقات"
     },
     "billing_title": "سجل المدفوعات",
     "billing_subtitle": "شهاداتك ومعاملات Stripe",
@@ -227,6 +229,16 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "تدقيقاتي في B&E",
+      "empty": "ستظهر مهام التدقيق PAC الخاصة بك هنا فور تعيينها من قِبَل فريق B&E.",
+      "pay_fee": "💳 ادفع ${{amount}}",
+      "fee_paid": "✓ مدفوع ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ اعتراض",
+      "rate_agent": "⭐ تقييم الوكيل",
+      "pending_dispute": "⏳ الاعتراض قيد المعالجة"
     }
   },
   "dev": {
@@ -257,7 +269,9 @@
     "portal": "بوابة وكيل PAC",
     "tabs": {
       "missions": "المهام المتاحة",
-      "profile": "ملفي الشخصي"
+      "profile": "ملفي الشخصي",
+      "earnings": "💰 الأرباح",
+      "progression": "🎯 التقدم"
     },
     "missions": {
       "status_title": "حالتك",
@@ -301,6 +315,23 @@
       "save": "حفظ الملف",
       "saved": "تم حفظ الملف بنجاح",
       "error": "خطأ أثناء الحفظ"
+    },
+    "earnings": {
+      "loading": "جارٍ التحميل…",
+      "total_earned": "إجمالي المكتسب",
+      "pending": "قيد الانتظار",
+      "commission_rate": "نسبة العمولة",
+      "total_missions": "إجمالي المهام",
+      "paid_missions": "مهمة(مهام) مدفوعة",
+      "completed_missions": "مهمة(مهام) مكتملة",
+      "assigned": "مُسنَدة أو مكتملة",
+      "paid_badge": "✓ مدفوع",
+      "pending_badge": "⏳ قيد الانتظار",
+      "no_missions": "لا توجد مهام مُسنَدة حتى الآن.",
+      "detail_title": "تفاصيل المهام",
+      "entries": "إدخال(ات)",
+      "commission_note": "كيف تُحسب عمولاتك؟",
+      "commission_desc": "لكل مهمة أتعاب ثابتة. تُحسب عمولتك ({{pct}}% كوكيل {{tier}}) فور تأكيد الشركة العميلة للدفع عبر Stripe. تُعالَج المدفوعات من قِبَل B&E Consult FZCO وفق دورتك الشهرية."
     }
   },
   "verify": {
@@ -377,7 +408,8 @@
       "users": "المستخدمون",
       "companies": "الشركات",
       "missions": "المهام",
-      "audit": "سجل التدقيق"
+      "audit": "سجل التدقيق",
+      "disputes": "النزاعات"
     },
     "stats": {
       "total_users": "إجمالي المستخدمين",
@@ -429,7 +461,20 @@
     "saving": "جارٍ الحفظ…",
     "saved": "تمّ الحفظ",
     "no_data": "لا توجد سجلات.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "نزاعات المهام",
+      "empty": "لا توجد نزاعات مفتوحة.",
+      "reason": "السبب",
+      "status": "الحالة",
+      "open": "مفتوح",
+      "resolved": "محلول",
+      "resolve": "حل",
+      "upheld": "مقبول",
+      "dismissed": "مرفوض",
+      "second_audit": "تدقيق ثانٍ",
+      "resolution": "القرار"
+    }
   },
   "metrics": {
     "title": "مقاييس الأعمال",

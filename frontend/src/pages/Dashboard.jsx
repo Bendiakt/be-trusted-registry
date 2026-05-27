@@ -552,7 +552,7 @@ export default function Dashboard() {
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
           <TabBtn id="documents"  label={t('dashboard.tabs.documents')} />
           <TabBtn id="billing"    label={t('dashboard.tabs.billing', 'Billing')} />
-          <TabBtn id="missions"   label="🔍 Audits" onClick={fetchCompanyMissions} />
+          <TabBtn id="missions"   label={t('dashboard.tabs.audits')} onClick={fetchCompanyMissions} />
           <TabBtn id="developer"  label={t('dashboard.tabs.developer', 'Developer')} />
           <TabBtn id="metrics"    label={t('dashboard.tabs.metrics')} />
         </div>
@@ -750,7 +750,7 @@ export default function Dashboard() {
         {tab === 'missions' && (
           <div>
             <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
-              Mes audits B&E
+              {t('dashboard.audits.title')}
             </div>
 
             {companyMissions.length === 0 && (
@@ -758,7 +758,7 @@ export default function Dashboard() {
                 <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔍</div>
                 <div style={{ color: '#C9A84C', fontWeight: '700', marginBottom: '0.5rem' }}>Aucun audit en cours</div>
                 <div style={{ color: '#555', fontSize: '0.875rem' }}>
-                  Vos missions d'audit PAC apparaîtront ici une fois assignées par l'équipe B&E.
+                  {t('dashboard.audits.empty')}
                 </div>
               </div>
             )}

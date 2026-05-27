@@ -116,8 +116,10 @@
       "register": "注册公司",
       "pricing": "价格与升级",
       "metrics": "数据指标",
-      "documents": "Documents","billing": "账单",
-      "developer": "开发者"
+      "documents": "Documents",
+      "billing": "账单",
+      "developer": "开发者",
+      "audits": "🔍 审计"
     },
     "billing_title": "付款历史",
     "billing_subtitle": "您的认证和 Stripe 交易记录",
@@ -227,6 +229,16 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "我的 B&E 审计",
+      "empty": "一旦 B&E 团队分配 PAC 审计任务，将显示在此处。",
+      "pay_fee": "💳 支付 ${{amount}}",
+      "fee_paid": "✓ 已付款 ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ 申诉",
+      "rate_agent": "⭐ 评价代理",
+      "pending_dispute": "⏳ 申诉处理中"
     }
   },
   "dev": {
@@ -257,7 +269,9 @@
     "portal": "PAC 专员门户",
     "tabs": {
       "missions": "可接任务",
-      "profile": "我的资料"
+      "profile": "我的资料",
+      "earnings": "💰 收益",
+      "progression": "🎯 进度"
     },
     "missions": {
       "status_title": "我的状态",
@@ -301,6 +315,23 @@
       "save": "保存资料",
       "saved": "资料保存成功",
       "error": "保存失败"
+    },
+    "earnings": {
+      "loading": "加载中…",
+      "total_earned": "累计收益",
+      "pending": "待处理",
+      "commission_rate": "佣金比例",
+      "total_missions": "任务总数",
+      "paid_missions": "个任务已付款",
+      "completed_missions": "个任务已完成",
+      "assigned": "已分配或已完成",
+      "paid_badge": "✓ 已付款",
+      "pending_badge": "⏳ 待处理",
+      "no_missions": "暂无分配任务。",
+      "detail_title": "任务明细",
+      "entries": "条记录",
+      "commission_note": "您的佣金如何计算？",
+      "commission_desc": "每个任务均有固定费用。当客户公司通过 Stripe 确认付款后，您的佣金（作为 {{tier}} 级代理，佣金比例为 {{pct}}%）将自动计算。款项由 B&E Consult FZCO 按您的月度周期处理。"
     }
   },
   "verify": {
@@ -377,7 +408,8 @@
       "users": "用户",
       "companies": "企业",
       "missions": "任务",
-      "audit": "审计日志"
+      "audit": "审计日志",
+      "disputes": "争议"
     },
     "stats": {
       "total_users": "总用户数",
@@ -429,7 +461,20 @@
     "saving": "保存中…",
     "saved": "已保存",
     "no_data": "暂无记录。",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "任务争议",
+      "empty": "暂无未解决争议。",
+      "reason": "原因",
+      "status": "状态",
+      "open": "未解决",
+      "resolved": "已解决",
+      "resolve": "解决",
+      "upheld": "支持",
+      "dismissed": "驳回",
+      "second_audit": "二次审计",
+      "resolution": "决定"
+    }
   },
   "metrics": {
     "title": "业务指标",

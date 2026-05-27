@@ -116,8 +116,10 @@
       "register": "Registrar empresa",
       "pricing": "Planos e atualização",
       "metrics": "Métricas",
-      "documents": "Documents","billing": "Faturamento",
-      "developer": "Desenvolvedor"
+      "documents": "Documents",
+      "billing": "Faturamento",
+      "developer": "Desenvolvedor",
+      "audits": "🔍 Auditorias"
     },
     "billing_title": "Histórico de pagamentos",
     "billing_subtitle": "Suas certificações e transações do Stripe",
@@ -227,6 +229,16 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "Minhas auditorias B&E",
+      "empty": "As suas missões de auditoria PAC aparecerão aqui quando atribuídas pela equipa B&E.",
+      "pay_fee": "💳 Pagar ${{amount}}",
+      "fee_paid": "✓ Pago ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ Contestar",
+      "rate_agent": "⭐ Avaliar o agente",
+      "pending_dispute": "⏳ Contestação pendente"
     }
   },
   "dev": {
@@ -257,7 +269,9 @@
     "portal": "Portal do Agente PAC",
     "tabs": {
       "missions": "Missões disponíveis",
-      "profile": "Meu perfil"
+      "profile": "Meu perfil",
+      "earnings": "💰 Ganhos",
+      "progression": "🎯 Progressão"
     },
     "missions": {
       "status_title": "Seu status",
@@ -301,6 +315,23 @@
       "save": "SALVAR PERFIL",
       "saved": "Perfil salvo com sucesso",
       "error": "Erro ao salvar o perfil"
+    },
+    "earnings": {
+      "loading": "Carregando…",
+      "total_earned": "Total recebido",
+      "pending": "Pendente",
+      "commission_rate": "Taxa de comissão",
+      "total_missions": "Total de missões",
+      "paid_missions": "missão(ões) paga(s)",
+      "completed_missions": "missão(ões) concluída(s)",
+      "assigned": "atribuídas ou concluídas",
+      "paid_badge": "✓ Pago",
+      "pending_badge": "⏳ Pendente",
+      "no_missions": "Nenhuma missão atribuída por enquanto.",
+      "detail_title": "Detalhes das missões",
+      "entries": "entrada(s)",
+      "commission_note": "Como são calculadas as suas comissões?",
+      "commission_desc": "Cada missão tem um honorário fixo. A sua comissão ({{pct}}% como agente {{tier}}) é calculada quando a empresa cliente confirma o pagamento via Stripe. Os pagamentos são processados pela B&E Consult FZCO no seu ciclo mensal."
     }
   },
   "verify": {
@@ -377,7 +408,8 @@
       "users": "Usuários",
       "companies": "Empresas",
       "missions": "Missões",
-      "audit": "Log de auditoria"
+      "audit": "Log de auditoria",
+      "disputes": "Litígios"
     },
     "stats": {
       "total_users": "Total de usuários",
@@ -429,7 +461,20 @@
     "saving": "Salvando…",
     "saved": "Salvo",
     "no_data": "Nenhum registro encontrado.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "Litígios de missões",
+      "empty": "Nenhum litígio aberto.",
+      "reason": "Motivo",
+      "status": "Estado",
+      "open": "Aberto",
+      "resolved": "Resolvido",
+      "resolve": "Resolver",
+      "upheld": "Confirmado",
+      "dismissed": "Indeferido",
+      "second_audit": "Segunda auditoria",
+      "resolution": "Resolução"
+    }
   },
   "metrics": {
     "title": "Métricas de negócio",

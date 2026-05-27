@@ -118,7 +118,8 @@
       "metrics": "Metrics",
       "documents": "Documents",
       "billing": "Billing",
-      "developer": "Developer"
+      "developer": "Developer",
+      "audits": "🔍 Audits"
     },
     "billing_title": "Payment History",
     "billing_subtitle": "Your certification payments and Stripe transactions",
@@ -228,6 +229,16 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "My B&E Audits",
+      "empty": "Your PAC audit missions will appear here once assigned by the B&E team.",
+      "pay_fee": "💳 Pay ${{amount}}",
+      "fee_paid": "✓ Paid ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ Contest",
+      "rate_agent": "⭐ Rate Agent",
+      "pending_dispute": "⏳ Contest pending"
     }
   },
   "dev": {
@@ -258,7 +269,9 @@
     "portal": "PAC Agent Portal",
     "tabs": {
       "missions": "Available Missions",
-      "profile": "My Profile"
+      "profile": "My Profile",
+      "earnings": "💰 Earnings",
+      "progression": "🎯 Progression"
     },
     "missions": {
       "status_title": "Your Status",
@@ -302,6 +315,23 @@
       "save": "SAVE PROFILE",
       "saved": "Profile saved successfully",
       "error": "Error saving profile"
+    },
+    "earnings": {
+      "loading": "Loading…",
+      "total_earned": "Total Earned",
+      "pending": "Pending",
+      "commission_rate": "Commission Rate",
+      "total_missions": "Total Missions",
+      "paid_missions": "mission(s) paid",
+      "completed_missions": "mission(s) completed",
+      "assigned": "assigned or completed",
+      "paid_badge": "✓ Paid",
+      "pending_badge": "⏳ Pending",
+      "no_missions": "No missions assigned yet.",
+      "detail_title": "Mission Breakdown",
+      "entries": "entry(ies)",
+      "commission_note": "How are your commissions calculated?",
+      "commission_desc": "Each mission has a fixed fee. Your commission ({{pct}}% as agent {{tier}}) is calculated once the client company confirms payment via Stripe. Payouts are processed by B&E Consult FZCO on your monthly cycle."
     }
   },
   "verify": {
@@ -378,7 +408,8 @@
       "users": "Users",
       "companies": "Companies",
       "missions": "Missions",
-      "audit": "Audit Log"
+      "audit": "Audit Log",
+      "disputes": "Disputes"
     },
     "stats": {
       "total_users": "Total Users",
@@ -430,7 +461,20 @@
     "saving": "Saving…",
     "saved": "Saved",
     "no_data": "No records found.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "Mission Disputes",
+      "empty": "No open disputes.",
+      "reason": "Reason",
+      "status": "Status",
+      "open": "Open",
+      "resolved": "Resolved",
+      "resolve": "Resolve",
+      "upheld": "Upheld",
+      "dismissed": "Dismissed",
+      "second_audit": "Second Audit",
+      "resolution": "Resolution"
+    }
   },
   "not_found": {
     "title": "Page not found",
