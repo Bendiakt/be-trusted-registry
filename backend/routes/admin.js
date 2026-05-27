@@ -5,7 +5,8 @@ const rateLimit = require('express-rate-limit')
 const router    = express.Router()
 
 const { query }                  = require('../db')
-const { auth, requireAdmin }     = require('../lib/authUtils')
+const { auth, requireAdmin,
+        requireAdminMFA }        = require('../lib/authUtils')
 const { logAudit }               = require('../lib/audit')
 const { AUDIT }                  = require('../lib/auditActions')
 const { notifyUser }             = require('../lib/wsNotify')
@@ -114,7 +115,7 @@ router.get('/users/:id', auth, requireAdmin, adminReadLimiter, async (req, res) 
 })
 
 // ── PATCH /api/admin/users/:id/role ─────────────────────────────────────────
-router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, validate(schemas.assignRole), async (req, res) => {
+router.patch('/users/:id/role', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.assignRole), async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10)
     const { role } = req.body
@@ -140,7 +141,7 @@ router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, validate(
 })
 
 // ── DELETE /api/admin/users/:id ──────────────────────────────────────────────
-router.delete('/users/:id', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.delete('/users/:id', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10)
     if (Number.isNaN(userId)) return res.status(400).json({ error: 'Invalid user id' })
@@ -257,7 +258,7 @@ router.get('/companies', auth, requireAdmin, adminReadLimiter, async (req, res) 
 })
 
 // ── PATCH /api/admin/companies/:id/level ─────────────────────────────────────
-router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, validate(schemas.certifyCompany), async (req, res) => {
+router.patch('/companies/:id/level', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.certifyCompany), async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     const level     = parseInt(req.body?.level, 10)
@@ -345,7 +346,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
 })
 
 // ── PATCH /api/admin/companies/:id/suspend ────────────────────────────────────
-router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, validate(schemas.suspendCompany), async (req, res) => {
+router.patch('/companies/:id/suspend', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.suspendCompany), async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
@@ -371,7 +372,7 @@ router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, va
 })
 
 // ── POST /api/admin/missions — create a new mission ──────────────────────────
-router.post('/missions', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.post('/missions', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const { title, description, company_id, company_name, location, type,
             fee_usd, pac_tier_required, due_date } = req.body
@@ -416,7 +417,7 @@ router.post('/missions', auth, requireAdmin, adminWriteLimiter, async (req, res)
 })
 
 // ── PATCH /api/admin/missions/:id/assign — assign to a PAC agent ─────────────
-router.patch('/missions/:id/assign', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/missions/:id/assign', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { pac_user_id } = req.body
@@ -471,7 +472,7 @@ router.patch('/missions/:id/assign', auth, requireAdmin, adminWriteLimiter, asyn
 })
 
 // ── PATCH /api/admin/missions/:id/cancel — cancel a mission ──────────────────
-router.patch('/missions/:id/cancel', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/missions/:id/cancel', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
@@ -497,7 +498,7 @@ router.patch('/missions/:id/cancel', auth, requireAdmin, adminWriteLimiter, asyn
 // Called by admin on behalf of company (or by company if company portal is wired).
 // Updates client_score_total/count on pac_profiles.
 // If score < 2 and agent already has a prior low score on this mission → double_rejection.
-router.patch('/missions/:id/client-score', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/missions/:id/client-score', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { client_score } = req.body
@@ -549,7 +550,7 @@ router.patch('/missions/:id/client-score', auth, requireAdmin, adminWriteLimiter
 })
 
 // ── PATCH /api/admin/missions/:id/status ─────────────────────────────────────
-router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, validate(schemas.updateCompanyStatus), async (req, res) => {
+router.patch('/missions/:id/status', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.updateCompanyStatus), async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { status }  = req.body
@@ -704,7 +705,7 @@ router.get('/fraud-alerts', auth, requireAdmin, adminReadLimiter, async (req, re
 })
 
 // ── PATCH /api/admin/fraud-alerts/:id/resolve ─────────────────────────────────
-router.patch('/fraud-alerts/:id/resolve', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/fraud-alerts/:id/resolve', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const alertId = parseInt(req.params.id, 10)
     if (Number.isNaN(alertId)) return res.status(400).json({ error: 'Invalid alert id' })
@@ -838,7 +839,7 @@ router.get('/export/companies', auth, requireAdmin, adminReadLimiter, async (req
 // PATCH /api/admin/missions/:id/score
 // Admin scores a completed mission (1–5) and optionally confirms client payment.
 // Setting payment_confirmed=true stamps payment_confirmed_at and calculates commission.
-router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/missions/:id/score', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { admin_score, payment_confirmed, stripe_invoice_id } = req.body
@@ -947,7 +948,7 @@ router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res)
 })
 
 // PATCH /api/admin/pac/agents/:id/kyc — approve or reject KYC + optionally set tier
-router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/pac/agents/:id/kyc', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const pacId = parseInt(req.params.id, 10)
     const { kyc_status, pac_tier, notes } = req.body
@@ -1015,7 +1016,7 @@ router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async
 // Requires: agent must have eligible_for_s2 or eligible_for_s3 = TRUE (set by nightly cron).
 // Creates a Stripe subscription with 365-day free trial.
 // Body: { tier: 'S2'|'S3' }
-router.patch('/pac/:id/approve-upgrade', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/pac/:id/approve-upgrade', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   const { tier } = req.body
   const userId   = parseInt(req.params.id, 10)
   const VALID_UPGRADE_TIERS = ['S2', 'S3']
@@ -1160,7 +1161,7 @@ router.patch('/pac/:id/approve-upgrade', auth, requireAdmin, adminWriteLimiter, 
 // - Caps active founders at 5
 // - Sets pac_tier='s3', membership_active=true, membership_expires=+1yr, kyc_status='pending'
 // - Bypasses Stripe entirely — no charge for Y1
-router.patch('/pac/:id/founder', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/pac/:id/founder', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   const VALID_REGIONS = ['west_africa', 'central_east_africa', 'mena', 'europe', 'asia']
   const { region } = req.body
   const userId = parseInt(req.params.id, 10)

@@ -619,4 +619,98 @@ router.delete('/me', auth, profileLimiter, validate(schemas.deleteAccount), asyn
   }
 })
 
+// ── Session management (SOC 2 CC6.1) ─────────────────────────────────────────
+/**
+ * GET /api/auth/sessions
+ * List all active refresh-token sessions for the authenticated user.
+ * Returns session metadata (id, created_at, last_used, user_agent, ip_address)
+ * without exposing actual token values.
+ */
+router.get('/sessions', auth, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, created_at, expires_at, user_agent, ip_address,
+              (revoked_at IS NOT NULL OR expires_at < NOW()) AS expired
+         FROM refresh_tokens
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [req.user.id]
+    )
+    res.json({ sessions: result.rows })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'list_sessions.error', userId: req.user?.id, err: err.message }))
+    res.status(500).json({ error: 'Failed to list sessions' })
+  }
+})
+
+/**
+ * DELETE /api/auth/sessions/:id
+ * Revoke a specific refresh-token session. Users can only revoke their own sessions.
+ * Admins can revoke any session (for incident response).
+ */
+router.delete('/sessions/:id', auth, async (req, res) => {
+  const sessionId = Number(req.params.id)
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    return res.status(400).json({ error: 'Invalid session id' })
+  }
+  try {
+    // Verify ownership (or admin)
+    const check = await query(
+      'SELECT user_id FROM refresh_tokens WHERE id = $1 LIMIT 1',
+      [sessionId]
+    )
+    if (!check.rows.length) return res.status(404).json({ error: 'Session not found' })
+    if (check.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+    await query(
+      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1',
+      [sessionId]
+    )
+    logAudit(req.user.id, 'SESSION_REVOKED', 'refresh_tokens', req.ip, { sessionId })
+    res.json({ message: 'Session revoked' })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'revoke_session.error', userId: req.user?.id, sessionId, err: err.message }))
+    res.status(500).json({ error: 'Failed to revoke session' })
+  }
+})
+
+/**
+ * DELETE /api/auth/sessions
+ * Revoke ALL other active sessions for the authenticated user (global sign-out).
+ * Keeps the current session alive (identified by current refresh token cookie).
+ */
+router.delete('/sessions', auth, async (req, res) => {
+  try {
+    const currentTokenHash = req.cookies?.refresh_token
+      ? hashToken(req.cookies.refresh_token)
+      : null
+
+    let q, params
+    if (currentTokenHash) {
+      q = `UPDATE refresh_tokens
+              SET revoked_at = NOW()
+            WHERE user_id = $1
+              AND revoked_at IS NULL
+              AND token_hash != $2`
+      params = [req.user.id, currentTokenHash]
+    } else {
+      q = `UPDATE refresh_tokens
+              SET revoked_at = NOW()
+            WHERE user_id = $1
+              AND revoked_at IS NULL`
+      params = [req.user.id]
+    }
+    const result = await query(q, params)
+    logAudit(req.user.id, 'ALL_SESSIONS_REVOKED', 'refresh_tokens', req.ip, { count: result.rowCount })
+    res.json({ message: `${result.rowCount} session(s) revoked` })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'revoke_all_sessions.error', userId: req.user?.id, err: err.message }))
+    res.status(500).json({ error: 'Failed to revoke sessions' })
+  }
+})
+
 module.exports = router

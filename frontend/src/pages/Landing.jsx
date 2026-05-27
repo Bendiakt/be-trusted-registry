@@ -1,210 +1,756 @@
-import { useState, useEffect } from 'react'
+/**
+ * Landing.jsx — MyDD public homepage
+ * Design: editorial, minimal, bilingual FR/EN with DeepL extension
+ * © 2024–2026 B&E Consult FZCO — All rights reserved.
+ * Proprietary and confidential. Unauthorised reproduction prohibited.
+ *
+ * @trademark MyDD® · PAC Network® · B&E Consult FZCO®
+ */
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import LanguageSwitcher from '../components/LanguageSwitcher'
+import api from '../lib/api'
 
+// ── Bilingual content — authoritative source (FR / EN) ────────────────────────
+// Derived from MyDD Master Copy File © B&E Consult FZCO
+const COPY = {
+  fr: {
+    nav: {
+      buyers:    'Acheteurs',
+      companies: 'Entreprises',
+      pac:       'Experts PAC',
+      legal:     'Cadre légal',
+      registry:  'Registre',
+      cta:       'Demander une démo',
+    },
+    hero: {
+      eyebrow: 'Plateforme privée de vérification commerciale',
+      h1:      'Vérification commerciale structurée pour le commerce international',
+      sub:     'MyDD aide les entreprises, acheteurs et partenaires à mieux documenter une contrepartie grâce à une vérification progressive, un registre public et, selon le niveau, une inspection terrain.',
+      body:    "Opéré par B&E Consult FZCO, MyDD est un service privé conçu pour améliorer la lisibilité d'un dossier commercial dans des environnements cross-border et multi-juridictions.",
+      cta1:    'Demander une démo',
+      cta2:    'Vérifier un profil',
+      cta3:    'Rejoindre la bêta',
+    },
+    deliverables: {
+      title: 'Livrables clés',
+      items: ['Badge public selon niveau', 'Rapport PDF structuré', 'Profil registre', 'Historique documentaire et suivi'],
+    },
+    problem: {
+      h2:  'Quand l\'information est dispersée, la décision ralentit.',
+      p:   'En commerce international, il est souvent difficile d\'évaluer rapidement la qualité réelle d\'une contrepartie. Un site web, un profil LinkedIn et des documents fournis par la partie elle-même ne suffisent pas toujours à produire une base de décision robuste.',
+    },
+    solution: {
+      h2: 'Un cadre structuré pour lire, partager et archiver des éléments de confiance.',
+      p:  'MyDD apporte un cadre de vérification plus structuré : collecte documentaire, revue standardisée, livrables lisibles et inspection terrain lorsque le niveau choisi l\'exige.',
+    },
+    audiences: [
+      { title: 'Pour les acheteurs',       desc: 'Mieux qualifier une contrepartie avant un onboarding, un paiement ou une négociation avancée.' },
+      { title: 'Pour les entreprises',     desc: 'Présenter à des tiers des éléments vérifiés de manière plus lisible et plus structurée.' },
+      { title: 'Pour finance / compliance',desc: 'Conserver un historique et fluidifier une première revue interne.' },
+      { title: 'Pour les experts PAC',     desc: 'Intervenir dans un cadre méthodologique défini, avec protocole et validation qualité.' },
+    ],
+    process: {
+      h2:   'Un processus simple, des livrables plus lisibles.',
+      sub:  'MyDD structure la vérification en quatre étapes, avec un niveau de profondeur adapté au contexte commercial.',
+      steps: [
+        { n: '01', title: 'Création du dossier',    desc: 'L\'entreprise crée son profil et choisit un niveau de vérification.' },
+        { n: '02', title: 'Dépôt documentaire',     desc: 'Les documents requis sont déposés dans un environnement sécurisé.' },
+        { n: '03', title: 'Vérification',           desc: 'Revue documentaire ou mission terrain selon le niveau choisi.' },
+        { n: '04', title: 'Restitution',            desc: 'Badge, certificat, rapport et profil public selon le niveau sélectionné.' },
+      ],
+    },
+    levels: {
+      h2:     'Trois niveaux pour trois profondeurs de lecture.',
+      sub:    'Chaque niveau correspond à un périmètre de vérification défini. Il ne constitue ni une garantie de solvabilité, ni une garantie de bonne exécution, ni une validation réglementaire automatique.',
+      tiers: [
+        { label: 'Bronze', level: 'Level 1', sub: 'Une base simple de crédibilité.', items: ['Identité des dirigeants', 'Existence légale', 'Adresse déclarée'] },
+        { label: 'Silver', level: 'Level 2', sub: 'Un dossier renforcé par des éléments complémentaires.', featured: true, items: ['Inclut Bronze', 'Éléments documentaires sélectionnés', 'Éléments financiers et opérationnels'] },
+        { label: 'Gold',   level: 'Level 3', sub: 'Une couche terrain lorsque le contexte l\'exige.', items: ['Inclut Silver', 'Inspection terrain par agent PAC', 'Rapport détaillé selon protocole'] },
+      ],
+    },
+    buyers: {
+      eyebrow: 'Pour les acheteurs',
+      h2:      'Mieux évaluer une contrepartie avant de s\'engager.',
+      p:       'MyDD aide les acheteurs, importateurs, brokers, fonds et équipes trade finance à structurer une revue plus homogène d\'un fournisseur ou partenaire commercial.',
+      items:   ['Consultation d\'un profil vérifié selon niveau', 'Téléchargement de documents et certificats', 'Historique et suivi d\'expiration', 'Base plus cohérente pour une première revue interne'],
+    },
+    companies: {
+      eyebrow: 'Pour les entreprises',
+      h2:      'Montrer plus clairement qui vous êtes à vos futurs partenaires.',
+      p:       'MyDD aide les entreprises à présenter à des tiers des éléments vérifiés de manière plus indépendante, plus lisible et plus structurée.',
+      items:   ['Dossier plus structuré', 'Meilleure lisibilité externe', 'Partage simplifié avec prospects et partenaires', 'Renforcement de la présentation commerciale'],
+    },
+    pac: {
+      eyebrow: 'Pour les experts PAC',
+      h2:      'Rejoindre un cadre structuré pour les missions documentaires et terrain.',
+      p:       'Le réseau PAC rassemble des experts indépendants appelés à intervenir selon leur zone géographique, leur qualification et la nature des missions.',
+      path:    ['Candidature', 'Évaluation', 'Activation', 'Missions', 'Rapport', 'Progression'],
+      levels:  ['S1 Associate', 'S2 Certified', 'S3 Senior Expert'],
+    },
+    legal: {
+      h2:   'Un cadre clair renforce la confiance.',
+      p:    'MyDD est une plateforme privée de vérification commerciale opérée par B&E Consult FZCO. Les badges, certificats, rapports et profils publiés reflètent un périmètre de vérification fondé sur les documents reçus, les contrôles réalisés et, selon le cas, des observations terrain.',
+      notice: 'Ces éléments ne constituent ni une garantie de solvabilité, ni une garantie de bonne exécution, ni un avis juridique, ni un audit légal, ni une validation réglementaire automatique.',
+    },
+    cta: {
+      h2: 'Construire une relation commerciale commence par une information plus lisible.',
+      p:  'Que vous soyez acheteur, entreprise candidate à la vérification ou expert PAC, MyDD vous donne un cadre plus structuré et plus partageable.',
+    },
+    footer: {
+      pages: ['Acheteurs', 'Entreprises', 'Experts PAC', 'Registre', 'À propos', 'Legal'],
+      links: ['/registry', '/register', '/agents', '/registry', '/registry', '/legal'],
+    },
+  },
+  en: {
+    nav: {
+      buyers:    'Buyers',
+      companies: 'Companies',
+      pac:       'PAC Experts',
+      legal:     'Framework',
+      registry:  'Registry',
+      cta:       'Request a demo',
+    },
+    hero: {
+      eyebrow: 'Private commercial verification platform',
+      h1:      'Structured commercial verification for international trade',
+      sub:     'MyDD helps companies, buyers and partners better document a counterparty through progressive verification, a public registry and, depending on the level, an on-site inspection.',
+      body:    'Operated by B&E Consult FZCO, MyDD is a private service designed to improve the readability of a commercial file across borders and jurisdictions.',
+      cta1:    'Request a demo',
+      cta2:    'Verify a profile',
+      cta3:    'Join the beta',
+    },
+    deliverables: {
+      title: 'Core deliverables',
+      items: ['Public badge depending on level', 'Structured PDF report', 'Registry profile', 'Document history and tracking'],
+    },
+    problem: {
+      h2: 'When information is fragmented, decisions slow down.',
+      p:  'In international trade, it is often difficult to quickly assess the real quality of a counterparty. A website, a LinkedIn page and documents provided by the party itself do not always create a sufficiently robust basis for decision-making.',
+    },
+    solution: {
+      h2: 'A structured framework to read, share and retain trust elements.',
+      p:  'MyDD provides a more structured verification framework: document collection, standardized review, readable deliverables and on-site inspection where the selected level requires it.',
+    },
+    audiences: [
+      { title: 'For buyers',           desc: 'Better qualify a counterparty before onboarding, payment or advanced negotiation.' },
+      { title: 'For companies',        desc: 'Present independently verified elements to third parties in a clearer and more structured way.' },
+      { title: 'For finance / compliance', desc: 'Retain history and streamline a first-level internal review.' },
+      { title: 'For PAC experts',      desc: 'Operate within a defined methodological framework with protocol and quality validation.' },
+    ],
+    process: {
+      h2:   'A simple process, clearer deliverables.',
+      sub:  'MyDD structures verification in four steps, with a level of depth adapted to the commercial context.',
+      steps: [
+        { n: '01', title: 'File creation',        desc: 'The company creates its profile and selects a verification level.' },
+        { n: '02', title: 'Document submission',  desc: 'Required documents are uploaded to a secure environment.' },
+        { n: '03', title: 'Verification',         desc: 'Document review or field mission depending on the selected level.' },
+        { n: '04', title: 'Delivery',             desc: 'Badge, certificate, report and public profile depending on the selected level.' },
+      ],
+    },
+    levels: {
+      h2:  'Three levels for three depths of review.',
+      sub: 'Each level corresponds to a defined verification scope. It does not constitute a guarantee of solvency, future performance or automatic regulatory validation.',
+      tiers: [
+        { label: 'Bronze', level: 'Level 1', sub: 'A simple credibility baseline.', items: ['Management identity', 'Legal existence', 'Declared address'] },
+        { label: 'Silver', level: 'Level 2', sub: 'A stronger file with additional elements.', featured: true, items: ['Includes Bronze', 'Selected documentary elements', 'Financial and operational elements'] },
+        { label: 'Gold',   level: 'Level 3', sub: 'A field layer when context requires it.', items: ['Includes Silver', 'On-site inspection by PAC agent', 'Detailed report under protocol'] },
+      ],
+    },
+    buyers: {
+      eyebrow: 'For buyers',
+      h2:      'Assess counterparties more clearly before you commit.',
+      p:       'MyDD helps buyers, importers, brokers, funds and trade finance teams structure a more consistent review of a supplier or commercial counterparty.',
+      items:   ['Access to a level-based verified profile', 'Downloadable documents and certificates', 'History and expiry tracking', 'A more consistent basis for first-level internal review'],
+    },
+    companies: {
+      eyebrow: 'For companies',
+      h2:      'Present your business more clearly to future partners.',
+      p:       'MyDD helps companies present independently verified trust elements in a clearer and more structured way to third parties.',
+      items:   ['More structured file', 'Better external readability', 'Easier sharing with prospects and partners', 'Stronger commercial presentation'],
+    },
+    pac: {
+      eyebrow: 'For PAC experts',
+      h2:      'Join a structured framework for documentary and field assignments.',
+      p:       'The PAC network brings together independent experts assigned based on geography, qualification and mission type.',
+      path:    ['Application', 'Evaluation', 'Activation', 'Missions', 'Reporting', 'Progression'],
+      levels:  ['S1 Associate', 'S2 Certified', 'S3 Senior Expert'],
+    },
+    legal: {
+      h2:     'A clear framework strengthens trust.',
+      p:      'MyDD is a private commercial verification platform operated by B&E Consult FZCO. The badges, certificates, reports and profiles published reflect a verification scope based on received documents, performed checks and, where applicable, field observations.',
+      notice: 'These elements do not constitute a guarantee of solvency, future performance, legal advice, statutory audit or automatic regulatory validation.',
+    },
+    cta: {
+      h2: 'Better commercial relationships start with more readable information.',
+      p:  'Whether you are a buyer, a company applying for verification or a PAC expert, MyDD gives you a more structured and shareable framework.',
+    },
+    footer: {
+      pages: ['Buyers', 'Companies', 'PAC Experts', 'Registry', 'About', 'Legal'],
+      links: ['/registry', '/register', '/agents', '/registry', '/registry', '/legal'],
+    },
+  },
+}
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const T = {
+  bg:      '#f7f6f2',
+  surface: '#f9f8f5',
+  surface2:'#fbfbf9',
+  offset:  '#f0ede8',
+  border:  'rgba(40,37,29,0.1)',
+  text:    '#28251d',
+  muted:   '#6e6a63',
+  faint:   '#9b988f',
+  primary: '#01696f',
+  primaryH:'#0c4e54',
+  inverse: '#f9f8f4',
+  teal10:  'rgba(1,105,111,0.08)',
+  teal20:  'rgba(1,105,111,0.18)',
+  teal30:  'rgba(1,105,111,0.30)',
+}
+
+// ── DeepL helper ──────────────────────────────────────────────────────────────
+// Used when user selects a language other than FR or EN.
+// Results are cached in sessionStorage.
+async function deeplTranslate(strings, targetLang) {
+  const cacheKey = `mydd_tl_${targetLang}`
+  const cached = sessionStorage.getItem(cacheKey)
+  if (cached) {
+    try { return JSON.parse(cached) } catch { /* ignore */ }
+  }
+  try {
+    const res = await fetch('/api/translate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ text: strings, target_lang: targetLang }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const translations = data.translations?.map(t => t.text) || null
+    if (translations) sessionStorage.setItem(cacheKey, JSON.stringify(translations))
+    return translations
+  } catch {
+    return null
+  }
+}
+
+// ── Logo SVG ──────────────────────────────────────────────────────────────────
+function Logo({ size = 40 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="6" y="10" width="22" height="44" rx="8" stroke={T.primary} strokeWidth="4"/>
+      <path d="M17 22L17 42" stroke={T.primary} strokeWidth="4" strokeLinecap="round"/>
+      <path d="M36 18H44C52.837 18 60 25.163 60 34C60 42.837 52.837 50 44 50H36V18Z" stroke={T.primary} strokeWidth="4"/>
+      <path d="M42 24H44C49.523 24 54 28.477 54 34C54 39.523 49.523 44 44 44H42" stroke={T.primary} strokeWidth="4" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+// ── Chevron ───────────────────────────────────────────────────────────────────
+function Chevron({ open }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+      <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+// ── Language picker ───────────────────────────────────────────────────────────
+const LANGS = [
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'en', label: 'English',  flag: '🇬🇧' },
+  { code: 'AR', label: 'العربية',  flag: '🇦🇪', deepl: true },
+  { code: 'ES', label: 'Español',  flag: '🇪🇸', deepl: true },
+  { code: 'PT', label: 'Português',flag: '🇧🇷', deepl: true },
+  { code: 'ZH', label: '中文',     flag: '🇨🇳', deepl: true },
+]
+
+function LangPicker({ lang, setLang, setDeepl, loadingLang }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const current = LANGS.find(l => l.code === lang) || LANGS[0]
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const select = (l) => {
+    setLang(l.code)
+    if (l.deepl) setDeepl(true)
+    else setDeepl(false)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'transparent', border: `1px solid ${T.border}`, borderRadius: '999px', padding: '0.35rem 0.75rem', color: T.muted, cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', transition: 'border-color 0.2s' }} aria-label="Select language">
+        <span>{current.flag}</span>
+        <span>{current.code.toUpperCase()}</span>
+        {loadingLang ? <span style={{ fontSize: '0.65rem' }}>⟳</span> : <Chevron open={open} />}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: '10px', overflow: 'hidden', zIndex: 999, minWidth: '170px', boxShadow: '0 8px 32px rgba(40,37,29,0.12)' }}>
+          {LANGS.map(l => (
+            <button key={l.code} onClick={() => select(l)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.55rem 1rem', background: l.code === lang ? T.teal10 : 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`, color: l.code === lang ? T.primary : T.muted, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit', textAlign: 'left' }}>
+              <span style={{ fontSize: '1.05rem' }}>{l.flag}</span>
+              <span>{l.label}</span>
+              {l.deepl && <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: T.faint }}>DeepL</span>}
+              {l.code === lang && <span style={{ marginLeft: 'auto', color: T.primary, fontSize: '0.7rem' }}>✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Checkmark list ────────────────────────────────────────────────────────────
+function CheckList({ items, color = T.primary }) {
+  return (
+    <ul style={{ margin: '1rem 0 0', paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      {items.map((item, i) => (
+        <li key={i} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', color: T.muted, fontSize: '0.95rem' }}>
+          <span style={{ color, marginTop: '0.1rem', flexShrink: 0 }}>✓</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function Landing() {
-  const { t } = useTranslation()
-  const [certifiedCount, setCertifiedCount] = useState(null)
+  const [lang, setLang]         = useState('fr')
+  const [usingDeepl, setDeepl]  = useState(false)
+  const [loadingLang, setLoadingLang] = useState(false)
+  const [deepLContent, setDeepLContent] = useState(null)
+  const [certCount, setCertCount] = useState(null)
 
+  // Fetch live cert count for social proof
   useEffect(() => {
     fetch('/api/registry?limit=1')
       .then(r => r.json())
-      .then(d => { if (typeof d?.pagination?.total === 'number') setCertifiedCount(d.pagination.total) })
+      .then(d => { if (typeof d?.pagination?.total === 'number') setCertCount(d.pagination.total) })
       .catch(() => {})
   }, [])
 
+  // SEO meta
   useEffect(() => {
     const BASE = 'https://mydd.work'
-    document.title = 'MyDD — Trusted Supplier Certification'
-    const meta = [
-      { name: 'description',        content: 'MyDD is the trusted supplier certification platform for global trade. Verify suppliers instantly with Level 1-3 due-diligence certifications.' },
+    document.title = lang === 'fr'
+      ? 'MyDD — Plateforme de vérification commerciale internationale'
+      : 'MyDD — Structured commercial verification platform'
+    const metas = [
+      { name: 'description', content: lang === 'fr'
+          ? 'MyDD est une plateforme privée de vérification commerciale opérée par B&E Consult FZCO. Vérification progressive, registre public, inspection terrain.'
+          : 'MyDD is a private commercial verification platform operated by B&E Consult FZCO. Progressive verification, public registry, on-site inspection.' },
       { property: 'og:type',        content: 'website' },
       { property: 'og:url',         content: BASE },
-      { property: 'og:title',       content: 'MyDD — Certified Supplier Registry' },
-      { property: 'og:description', content: 'The trusted certification registry for global supply chains. 3 certification levels, 6 languages, instant verification.' },
-      { property: 'og:image',       content: `${BASE}/og-image.svg` },
-      { name: 'twitter:card',       content: 'summary_large_image' },
-      { name: 'twitter:title',      content: 'MyDD — Certified Supplier Registry' },
-      { name: 'twitter:description',content: 'Verify suppliers instantly. MyDD certified registry for global trade.' },
-      { name: 'twitter:image',      content: `${BASE}/og-image.svg` },
+      { property: 'og:title',       content: 'MyDD — B&E Consult FZCO' },
+      { property: 'og:description', content: 'Private commercial verification platform. Bronze · Silver · Gold.' },
+      { property: 'og:locale',      content: lang === 'fr' ? 'fr_FR' : 'en_US' },
     ]
-    const added = meta.map(attrs => {
-      const existing = document.querySelector(attrs.property ? `meta[property="${attrs.property}"]` : `meta[name="${attrs.name}"]`)
-      const el = existing || document.createElement('meta')
+    const added = metas.map(attrs => {
+      const sel = attrs.property ? `meta[property="${attrs.property}"]` : `meta[name="${attrs.name}"]`
+      const el = document.querySelector(sel) || document.createElement('meta')
       Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v))
-      if (!existing) document.head.appendChild(el)
+      if (!el.parentNode) document.head.appendChild(el)
       return el
     })
-    return () => { added.forEach(el => { if (!document.querySelector(`meta[property="${el.getAttribute('property')}"][data-static]`)) el.remove() }) }
+    return () => { added.forEach(el => { try { if (!el.getAttribute('data-static')) el.remove() } catch {} }) }
+  }, [lang])
+
+  // DeepL auto-translate when non-FR/EN language selected
+  const getFlatStrings = useCallback(() => {
+    const c = COPY.en
+    return [
+      c.nav.buyers, c.nav.companies, c.nav.pac, c.nav.legal, c.nav.cta,
+      c.hero.eyebrow, c.hero.h1, c.hero.sub, c.hero.body, c.hero.cta1, c.hero.cta2, c.hero.cta3,
+      c.deliverables.title, ...c.deliverables.items,
+      c.problem.h2, c.problem.p,
+      c.solution.h2, c.solution.p,
+      ...c.audiences.map(a => a.title), ...c.audiences.map(a => a.desc),
+      c.process.h2, c.process.sub, ...c.process.steps.map(s => s.title), ...c.process.steps.map(s => s.desc),
+      c.levels.h2, c.levels.sub,
+      ...c.levels.tiers.flatMap(t => [t.label, t.level, t.sub, ...t.items]),
+      c.buyers.eyebrow, c.buyers.h2, c.buyers.p, ...c.buyers.items,
+      c.companies.eyebrow, c.companies.h2, c.companies.p, ...c.companies.items,
+      c.pac.eyebrow, c.pac.h2, c.pac.p, ...c.pac.path, ...c.pac.levels,
+      c.legal.h2, c.legal.p, c.legal.notice,
+      c.cta.h2, c.cta.p,
+    ]
   }, [])
 
-  const G = {
-    page: { minHeight: '100vh', background: '#0a0a0a', fontFamily: 'Inter,sans-serif', color: '#eee' },
-    nav:  { background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #1f1f1f', padding: '0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px', position: 'sticky', top: 0, zIndex: 100 },
-    btn:  { background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.65rem 1.5rem', borderRadius: '8px', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'none', display: 'inline-block' },
-    ghost:{ background: 'transparent', color: '#C9A84C', padding: '0.6rem 1.4rem', borderRadius: '8px', border: '1px solid #C9A84C44', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'none', display: 'inline-block' },
+  useEffect(() => {
+    if (!usingDeepl) { setDeepLContent(null); return }
+    let cancelled = false
+    setLoadingLang(true)
+    deeplTranslate(getFlatStrings(), lang).then(results => {
+      if (cancelled) return
+      setDeepLContent(results)
+      setLoadingLang(false)
+    })
+    return () => { cancelled = true }
+  }, [lang, usingDeepl, getFlatStrings])
+
+  // Choose content source
+  const C = usingDeepl && deepLContent
+    ? (() => {
+        // Rebuild COPY-like structure from flat translated strings
+        const t = deepLContent
+        let i = 0
+        const n = () => t[i++] ?? ''
+        const arr = (count) => Array.from({ length: count }, () => n())
+        const c = COPY.en
+        return {
+          nav: { buyers: n(), companies: n(), pac: n(), legal: n(), cta: n() },
+          hero: { eyebrow: n(), h1: n(), sub: n(), body: n(), cta1: n(), cta2: n(), cta3: n() },
+          deliverables: { title: n(), items: arr(c.deliverables.items.length) },
+          problem: { h2: n(), p: n() },
+          solution: { h2: n(), p: n() },
+          audiences: c.audiences.map(() => ({ title: n(), desc: '' })).map((a, idx) => ({ ...a, desc: t[i - c.audiences.length + idx] ?? '' })),
+          process: { h2: n(), sub: n(), steps: c.process.steps.map(() => ({ n: n(), title: n(), desc: '' })) },
+          levels: { h2: n(), sub: n(), tiers: c.levels.tiers.map(tier => ({ ...tier, sub: n(), items: arr(tier.items.length) })) },
+          buyers:    { eyebrow: n(), h2: n(), p: n(), items: arr(c.buyers.items.length) },
+          companies: { eyebrow: n(), h2: n(), p: n(), items: arr(c.companies.items.length) },
+          pac:    { eyebrow: n(), h2: n(), p: n(), path: arr(c.pac.path.length), levels: arr(c.pac.levels.length) },
+          legal:  { h2: n(), p: n(), notice: n() },
+          cta:    { h2: n(), p: n() },
+          footer: COPY.en.footer,
+        }
+      })()
+    : COPY[lang] || COPY.fr
+
+  // ── Styles ──────────────────────────────────────────────────────────────────
+  const S = {
+    page: { minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'Inter', 'General Sans', system-ui, sans-serif", overflowX: 'hidden' },
+    header: { position: 'sticky', top: 0, zIndex: 50, background: `color-mix(in srgb, ${T.bg} 88%, transparent)`, backdropFilter: 'blur(12px)', borderBottom: `1px solid ${T.border}` },
+    headerInner: { maxWidth: '1040px', margin: '0 auto', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', height: '64px' },
+    brand: { display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', color: T.text },
+    brandText: { fontWeight: '600', fontSize: '1.05rem', letterSpacing: '-0.01em' },
+    brandSub: { fontSize: '0.72rem', color: T.muted, letterSpacing: '0.02em' },
+    nav: { display: 'flex', gap: '1.5rem', alignItems: 'center' },
+    navLink: { fontSize: '0.875rem', color: T.muted, textDecoration: 'none' },
+    btnPrimary: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.7rem 1.4rem', background: T.primary, color: T.inverse, border: 'none', borderRadius: '999px', fontWeight: '600', fontSize: '0.875rem', cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+    btnSecondary: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.65rem 1.3rem', background: 'transparent', color: T.text, border: `1px solid ${T.border}`, borderRadius: '999px', fontWeight: '500', fontSize: '0.875rem', cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+    container: { maxWidth: '1040px', margin: '0 auto', padding: '0 1.5rem' },
+    section: { padding: 'clamp(3.5rem, 6vw, 6rem) 0' },
+    eyebrow: { textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: '0.75rem', color: T.muted, marginBottom: '0.85rem' },
+    h1: { fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: 'clamp(2rem, 4vw, 3.5rem)', fontWeight: '700', lineHeight: '1.04', letterSpacing: '-0.03em', margin: '0 0 1.25rem', color: T.text },
+    h2: { fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: '700', lineHeight: '1.08', letterSpacing: '-0.025em', margin: '0 0 1rem', color: T.text },
+    h3: { fontSize: '1.05rem', fontWeight: '600', margin: '0 0 0.5rem', color: T.text },
+    p: { color: T.muted, lineHeight: '1.7', margin: '0 0 1rem' },
+    card: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: '14px', padding: '1.4rem' },
+    notice: { background: T.offset, border: `1px solid ${T.border}`, borderRadius: '14px', padding: '1.25rem 1.5rem' },
   }
 
-  const FEATURES = [
-    { icon: '🔍', title: t('landing.features.level1_title'), desc: t('landing.features.level1_desc') },
-    { icon: '🪪', title: t('landing.features.level2_title'), desc: t('landing.features.level2_desc') },
-    { icon: '🏭', title: t('landing.features.level3_title'), desc: t('landing.features.level3_desc') },
-    { icon: '🌍', title: t('landing.features.global_title'), desc: t('landing.features.global_desc') },
-    { icon: '⚡', title: t('landing.features.realtime_title'), desc: t('landing.features.realtime_desc') },
-    { icon: '🔒', title: t('landing.features.secure_title'), desc: t('landing.features.secure_desc') },
-  ]
-
-  const STEPS = [
-    { n: '01', title: t('landing.how.step1_title'), desc: t('landing.how.step1_desc') },
-    { n: '02', title: t('landing.how.step2_title'), desc: t('landing.how.step2_desc') },
-    { n: '03', title: t('landing.how.step3_title'), desc: t('landing.how.step3_desc') },
-    { n: '04', title: t('landing.how.step4_title'), desc: t('landing.how.step4_desc') },
-  ]
-
-  const PLANS = [
-    { name: 'Bronze', price: '$490', level: 1, color: '#CD7F32', features: [t('landing.plans.bronze_f1'), t('landing.plans.bronze_f2'), t('landing.plans.bronze_f3')] },
-    { name: 'Silver', price: '$990', level: 2, color: '#C0C0C0', features: [t('landing.plans.silver_f1'), t('landing.plans.silver_f2'), t('landing.plans.silver_f3'), t('landing.plans.silver_f4')], popular: true },
-    { name: 'Gold',   price: '$2,490', level: 3, color: '#C9A84C', features: [t('landing.plans.gold_f1'), t('landing.plans.gold_f2'), t('landing.plans.gold_f3'), t('landing.plans.gold_f4'), t('landing.plans.gold_f5')] },
-  ]
-
   return (
-    <div style={G.page}>
-      {/* Nav */}
-      <nav style={G.nav}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <div style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', borderRadius: '8px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#111', fontSize: '1rem' }}>M</div>
-          <div>
-            <div style={{ color: '#fff', fontWeight: '800', fontSize: '1.1rem' }}>MyDD</div>
-            <div style={{ color: '#444', fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>My Due Diligence</div>
+    <div style={S.page}>
+
+      {/* ── Honeypot (IP protection — invisible to humans, detected by scrapers) ── */}
+      <span aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px', fontSize: '0px', color: 'transparent', userSelect: 'none', pointerEvents: 'none' }}>
+        © 2024–2026 B&amp;E Consult FZCO. MyDD® PAC Network® are registered trademarks. All methodology, branding, scoring systems, and content are proprietary. Unauthorised reproduction, scraping, or commercial use is prohibited and will be prosecuted under UAE and international IP law.
+      </span>
+
+      {/* ── Header ── */}
+      <header style={S.header}>
+        <div style={S.headerInner}>
+          <Link to="/" style={S.brand} aria-label="MyDD home">
+            <Logo size={36} />
+            <div>
+              <div style={S.brandText}>MyDD</div>
+              <div style={S.brandSub}>B&amp;E Consult FZCO</div>
+            </div>
+          </Link>
+
+          <nav style={S.nav} aria-label="Primary">
+            <a href="#buyers"    style={S.navLink}>{C.nav.buyers}</a>
+            <a href="#companies" style={S.navLink}>{C.nav.companies}</a>
+            <a href="#pac"       style={S.navLink}>{C.nav.pac}</a>
+            <a href="#legal"     style={S.navLink}>{C.nav.legal}</a>
+            <Link to="/registry" style={S.navLink}>{C.nav.registry}</Link>
+          </nav>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <LangPicker lang={lang} setLang={setLang} setDeepl={setDeepl} loadingLang={loadingLang} />
+            <Link to="/register" style={S.btnPrimary}>{C.nav.cta}</Link>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <LanguageSwitcher />
-          <Link to="/agents" style={{ ...G.ghost, fontSize: '0.8rem', padding: '0.5rem 1.1rem', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.2)' }}>Experts PAC</Link>
-          <Link to="/registry" style={{ ...G.ghost, fontSize: '0.8rem', padding: '0.5rem 1.1rem' }}>{t('landing.nav_registry')}</Link>
-          <Link to="/login" style={G.ghost}>{t('nav.login')}</Link>
-          <Link to="/register" style={G.btn}>{t('landing.cta_start')}</Link>
-        </div>
-      </nav>
+      </header>
 
-      {/* Hero */}
-      <section style={{ maxWidth: '900px', margin: '0 auto', padding: '6rem 2rem 4rem', textAlign: 'center' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: '20px', padding: '0.35rem 1rem', marginBottom: '2rem' }}>
-          <span style={{ color: '#C9A84C', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t('landing.hero.badge')}</span>
-        </div>
-        <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: '900', lineHeight: 1.1, marginBottom: '1.5rem', color: '#fff', letterSpacing: '-0.02em' }}>
-          {t('landing.hero.title_1')}{' '}
-          <span style={{ background: 'linear-gradient(135deg,#C9A84C,#E8C96D)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {t('landing.hero.title_highlight')}
-          </span>
-          <br />{t('landing.hero.title_2')}
-        </h1>
-        <p style={{ fontSize: '1.1rem', color: '#888', lineHeight: 1.6, maxWidth: '620px', margin: '0 auto 2.5rem' }}>
-          {t('landing.hero.subtitle')}
-        </p>
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link to="/register" style={{ ...G.btn, fontSize: '1rem', padding: '0.85rem 2rem' }}>{t('landing.cta_start')}</Link>
-          <Link to="/registry" style={{ ...G.ghost, fontSize: '1rem', padding: '0.8rem 2rem' }}>{t('landing.cta_registry')}</Link>
-          <Link to="/login" style={{ color: '#555', fontSize: '0.9rem', padding: '0.8rem 1rem', textDecoration: 'none' }}>{t('landing.cta_login')}</Link>
-        </div>
-        <div style={{ marginTop: '3rem', display: 'flex', justifyContent: 'center', gap: '2.5rem', flexWrap: 'wrap' }}>
-          {[
-            { n: certifiedCount !== null ? String(certifiedCount) : '…', label: t('landing.stats.certified_companies') },
-            { n: '6', label: t('landing.stats.languages') },
-            { n: '24h', label: t('landing.stats.verification') },
-          ].map(s => (
-            <div key={s.label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '2rem', fontWeight: '900', color: '#C9A84C' }}>{s.n}</div>
-              <div style={{ color: '#555', fontSize: '0.8rem', marginTop: '0.2rem' }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
+      <main id="content">
 
-      {/* Features */}
-      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '4rem 2rem' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.75rem', color: '#fff' }}>{t('landing.features.title')}</h2>
-        <p style={{ textAlign: 'center', color: '#666', marginBottom: '3rem', fontSize: '0.95rem' }}>{t('landing.features.subtitle')}</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '1.25rem' }}>
-          {FEATURES.map(f => (
-            <div key={f.title} style={{ background: '#141414', border: '1px solid #1f1f1f', borderRadius: '12px', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg,#C9A84C22,#C9A84C,#C9A84C22)' }} />
-              <div style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>{f.icon}</div>
-              <div style={{ color: '#fff', fontWeight: '700', marginBottom: '0.5rem', fontSize: '0.95rem' }}>{f.title}</div>
-              <div style={{ color: '#555', fontSize: '0.85rem', lineHeight: 1.5 }}>{f.desc}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section style={{ maxWidth: '900px', margin: '0 auto', padding: '4rem 2rem' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.75rem', color: '#fff' }}>{t('landing.how.title')}</h2>
-        <p style={{ textAlign: 'center', color: '#666', marginBottom: '3rem', fontSize: '0.95rem' }}>{t('landing.how.subtitle')}</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {STEPS.map((s, i) => (
-            <div key={s.n} style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', background: '#141414', border: '1px solid #1f1f1f', borderRadius: '12px', padding: '1.5rem' }}>
-              <div style={{ flexShrink: 0, width: '48px', height: '48px', borderRadius: '50%', background: i === 3 ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1a1a1a', border: i === 3 ? 'none' : '1px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.8rem', color: i === 3 ? '#111' : '#444' }}>
-                {s.n}
+        {/* ── Hero ── */}
+        <section style={{ padding: 'clamp(4rem, 8vw, 8rem) 0 3rem' }}>
+          <div style={{ ...S.container, display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,0.85fr)', gap: '3rem', alignItems: 'end' }}>
+            <div>
+              <div style={S.eyebrow}>{C.hero.eyebrow}</div>
+              <h1 style={S.h1}>{C.hero.h1}</h1>
+              <p style={{ ...S.p, maxWidth: '58ch', fontSize: '1.05rem' }}>{C.hero.sub}</p>
+              <p style={{ ...S.p, maxWidth: '58ch', fontSize: '0.92rem', color: T.faint }}>{C.hero.body}</p>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
+                <Link to="/register" style={S.btnPrimary}>{C.hero.cta1}</Link>
+                <Link to="/registry" style={S.btnSecondary}>{C.hero.cta2}</Link>
+                <Link to="/register" style={{ ...S.btnSecondary, borderColor: T.teal20, color: T.primary }}>{C.hero.cta3}</Link>
               </div>
-              <div>
-                <div style={{ color: '#fff', fontWeight: '700', marginBottom: '0.35rem' }}>{s.title}</div>
-                <div style={{ color: '#555', fontSize: '0.875rem', lineHeight: 1.5 }}>{s.desc}</div>
-              </div>
+              {/* Live stat */}
+              {certCount !== null && (
+                <div style={{ marginTop: '2rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                  {[
+                    [certCount, lang === 'fr' ? 'Entreprises vérifiées' : 'Verified companies'],
+                    ['3', lang === 'fr' ? 'Niveaux de vérification' : 'Verification levels'],
+                    ['5–21j', lang === 'fr' ? 'Délai de traitement' : 'Processing time'],
+                  ].map(([val, label], i) => (
+                    <div key={i} style={{ borderTop: `1px solid ${T.border}`, paddingTop: '0.75rem' }}>
+                      <strong style={{ display: 'block', fontSize: '1.3rem', fontWeight: '700', color: T.primary }}>{val}</strong>
+                      <span style={{ fontSize: '0.78rem', color: T.faint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* Pricing */}
-      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '4rem 2rem' }}>
-        <h2 style={{ textAlign: 'center', fontSize: '1.75rem', fontWeight: '800', marginBottom: '0.75rem', color: '#fff' }}>{t('landing.plans.title')}</h2>
-        <p style={{ textAlign: 'center', color: '#666', marginBottom: '3rem', fontSize: '0.95rem' }}>{t('landing.plans.subtitle')}</p>
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {PLANS.map(p => (
-            <div key={p.name} style={{ background: '#141414', border: p.popular ? `1px solid ${p.color}` : '1px solid #1f1f1f', borderRadius: '16px', padding: '2rem', flex: '1', minWidth: '240px', maxWidth: '320px', position: 'relative', overflow: 'hidden', boxShadow: p.popular ? `0 0 40px ${p.color}22` : 'none' }}>
-              {p.popular && <div style={{ position: 'absolute', top: '1rem', right: '1rem', background: `${p.color}22`, color: p.color, fontSize: '0.65rem', fontWeight: '800', letterSpacing: '0.1em', padding: '0.25rem 0.6rem', borderRadius: '10px', border: `1px solid ${p.color}44` }}>★ {t('landing.plans.popular')}</div>}
-              <div style={{ color: p.color, fontWeight: '800', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{p.name}</div>
-              <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#fff', marginBottom: '0.25rem' }}>{p.price}</div>
-              <div style={{ color: '#555', fontSize: '0.8rem', marginBottom: '1.5rem' }}>{t('landing.plans.per_year')}</div>
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {p.features.map(f => (
-                  <li key={f} style={{ color: '#888', fontSize: '0.875rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: p.color, flexShrink: 0, marginTop: '0.1rem' }}>✓</span>{f}
-                  </li>
+            {/* Hero card */}
+            <aside style={{ background: `linear-gradient(180deg, ${T.surface}, ${T.offset})`, border: `1px solid ${T.border}`, borderRadius: '18px', padding: '1.75rem', boxShadow: '0 8px 32px rgba(40,37,29,0.07)' }}>
+              <p style={{ ...S.p, marginBottom: '1rem', fontSize: '0.9rem' }}>
+                {lang === 'fr'
+                  ? 'Opéré par B&E Consult FZCO, MyDD est conçu pour améliorer la lisibilité d\'un dossier commercial en environnement cross-border.'
+                  : 'Operated by B&E Consult FZCO, MyDD is designed to improve the readability of a commercial file in cross-border environments.'}
+              </p>
+              <div style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: '10px', padding: '1rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: T.text }}>{C.deliverables.title}</strong>
+                <ul style={{ margin: '0.65rem 0 0', paddingLeft: '1.1rem', color: T.muted, fontSize: '0.875rem', lineHeight: '1.8' }}>
+                  {C.deliverables.items.map((item, i) => <li key={i}>{item}</li>)}
+                </ul>
+              </div>
+              {/* Certification badges */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+                {['Bronze', 'Silver', 'Gold'].map(l => (
+                  <span key={l} style={{ padding: '0.3rem 0.75rem', background: T.teal10, border: `1px solid ${T.teal20}`, borderRadius: '999px', fontSize: '0.72rem', fontWeight: '600', color: T.primary, letterSpacing: '0.05em' }}>
+                    {l}
+                  </span>
                 ))}
-              </ul>
-              <Link to="/register" style={{ ...G.btn, width: '100%', textAlign: 'center', boxSizing: 'border-box', background: p.popular ? `linear-gradient(135deg,${p.color},#9A7B2E)` : 'transparent', color: p.popular ? '#111' : p.color, border: p.popular ? 'none' : `1px solid ${p.color}44` }}>
-                {t('landing.cta_start')}
-              </Link>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        {/* ── Problem ── */}
+        <section id="problem" style={S.section}>
+          <div style={{ ...S.container, display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem' }}>
+            <div><h2 style={S.h2}>{C.problem.h2}</h2></div>
+            <div>
+              <p style={{ ...S.p, fontSize: '1rem' }}>{C.problem.p}</p>
+              <p style={{ ...S.p, fontSize: '1rem' }}>{C.solution.p}</p>
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+          {/* Audience cards */}
+          <div style={{ ...S.container, marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+            {C.audiences.map((a, i) => (
+              <article key={i} style={S.card}>
+                <h3 style={S.h3}>{a.title}</h3>
+                <p style={{ ...S.p, fontSize: '0.875rem', margin: 0 }}>{a.desc}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-      {/* CTA Banner */}
-      <section style={{ maxWidth: '900px', margin: '2rem auto 4rem', padding: '0 2rem' }}>
-        <div style={{ background: 'linear-gradient(135deg,rgba(201,168,76,0.12),rgba(154,123,46,0.06))', border: '1px solid rgba(201,168,76,0.25)', borderRadius: '16px', padding: '3rem', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: '800', color: '#fff', marginBottom: '1rem' }}>{t('landing.cta_banner.title')}</h2>
-          <p style={{ color: '#888', marginBottom: '2rem', fontSize: '0.95rem', lineHeight: 1.6 }}>{t('landing.cta_banner.subtitle')}</p>
-          <Link to="/register" style={{ ...G.btn, fontSize: '1rem', padding: '0.9rem 2.5rem' }}>{t('landing.cta_start')}</Link>
-        </div>
-      </section>
+        {/* ── Process ── */}
+        <section id="process" style={{ ...S.section, background: T.surface }}>
+          <div style={S.container}>
+            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem', marginBottom: '2rem' }}>
+              <h2 style={S.h2}>{C.process.h2}</h2>
+              <p style={{ ...S.p, alignSelf: 'end' }}>{C.process.sub}</p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+              {C.process.steps.map((step, i) => (
+                <div key={i} style={{ padding: '1.4rem', borderTop: `2px solid ${T.primary}`, background: T.surface2, borderRadius: '14px' }}>
+                  <small style={{ color: T.faint, textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: '0.72rem' }}>{step.n}</small>
+                  <h3 style={{ ...S.h3, marginTop: '0.5rem' }}>{step.title}</h3>
+                  <p style={{ ...S.p, fontSize: '0.875rem', margin: 0 }}>{step.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid #1a1a1a', padding: '2rem', textAlign: 'center' }}>
-        <div style={{ color: '#333', fontSize: '0.8rem' }}>
-          © {new Date().getFullYear()} B&amp;E Consult FZCO · Dubai Silicon Oasis, UAE ·{' '}
-          <Link to="/login" style={{ color: '#444', textDecoration: 'none' }}>Sign in</Link>
-          {' · '}
-          <Link to="/register" style={{ color: '#444', textDecoration: 'none' }}>Register</Link>
-          {' · '}
-          <Link to="/terms" style={{ color: '#444', textDecoration: 'none' }}>CGU</Link>
-          {' · '}
-          <Link to="/privacy" style={{ color: '#444', textDecoration: 'none' }}>Privacy Policy</Link>
+        {/* ── Levels ── */}
+        <section id="levels" style={S.section}>
+          <div style={S.container}>
+            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem', marginBottom: '2rem' }}>
+              <h2 style={S.h2}>{C.levels.h2}</h2>
+              <p style={{ ...S.p, alignSelf: 'end', fontSize: '0.92rem' }}>{C.levels.sub}</p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+              {C.levels.tiers.map((tier, i) => (
+                <article key={i} style={{ ...S.card, display: 'flex', flexDirection: 'column', gap: '1rem', ...(tier.featured ? { background: `linear-gradient(180deg, ${T.teal10}, ${T.surface})`, borderColor: T.teal30 } : {}) }}>
+                  <div>
+                    <div style={{ ...S.eyebrow, marginBottom: '0.3rem' }}>{tier.label}</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: '700', color: T.text }}>{tier.level}</div>
+                  </div>
+                  <p style={{ ...S.p, fontSize: '0.875rem', margin: 0 }}>{tier.sub}</p>
+                  <ul style={{ paddingLeft: '1.1rem', margin: 0, color: T.muted, fontSize: '0.875rem', lineHeight: '1.85' }}>
+                    {tier.items.map((item, j) => <li key={j}>{item}</li>)}
+                  </ul>
+                  {tier.featured && (
+                    <Link to="/register" style={{ ...S.btnPrimary, marginTop: 'auto', justifyContent: 'center' }}>
+                      {lang === 'fr' ? 'Commencer' : 'Get started'}
+                    </Link>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Buyers + Companies ── */}
+        <section id="buyers" style={{ ...S.section, background: T.surface }}>
+          <div style={{ ...S.container, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            {/* Buyers */}
+            <article style={S.card}>
+              <div style={S.eyebrow}>{C.buyers.eyebrow}</div>
+              <h2 style={{ ...S.h2, fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)' }}>{C.buyers.h2}</h2>
+              <p style={{ ...S.p, fontSize: '0.92rem' }}>{C.buyers.p}</p>
+              <CheckList items={C.buyers.items} />
+              <div style={{ marginTop: '1.5rem' }}>
+                <Link to="/registry" style={S.btnPrimary}>{C.nav.registry} →</Link>
+              </div>
+            </article>
+
+            {/* Companies */}
+            <article id="companies" style={S.card}>
+              <div style={S.eyebrow}>{C.companies.eyebrow}</div>
+              <h2 style={{ ...S.h2, fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)' }}>{C.companies.h2}</h2>
+              <p style={{ ...S.p, fontSize: '0.92rem' }}>{C.companies.p}</p>
+              <CheckList items={C.companies.items} />
+              <div style={{ marginTop: '1.5rem' }}>
+                <Link to="/register" style={S.btnPrimary}>{lang === 'fr' ? 'Se certifier' : 'Get certified'} →</Link>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        {/* ── PAC ── */}
+        <section id="pac" style={S.section}>
+          <div style={S.container}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'start' }}>
+              <div>
+                <div style={S.eyebrow}>{C.pac.eyebrow}</div>
+                <h2 style={S.h2}>{C.pac.h2}</h2>
+                <p style={{ ...S.p, fontSize: '0.95rem' }}>{C.pac.p}</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1.25rem' }}>
+                  {C.pac.levels.map((l, i) => (
+                    <span key={i} style={{ padding: '0.3rem 0.85rem', background: T.teal10, border: `1px solid ${T.teal20}`, borderRadius: '999px', fontSize: '0.8rem', fontWeight: '600', color: T.primary }}>
+                      {l}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ marginTop: '1.5rem' }}>
+                  <Link to="/agents" style={S.btnPrimary}>{lang === 'fr' ? 'Voir les experts PAC' : 'Browse PAC experts'} →</Link>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {C.pac.path.map((step, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '10px' }}>
+                    <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: T.teal10, border: `1px solid ${T.teal20}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: '700', color: T.primary, flexShrink: 0 }}>{i + 1}</span>
+                    <span style={{ fontSize: '0.9rem', color: T.text }}>{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Legal framework ── */}
+        <section id="legal" style={{ ...S.section, background: T.surface }}>
+          <div style={S.container}>
+            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem' }}>
+              <h2 style={S.h2}>{C.legal.h2}</h2>
+              <div>
+                <p style={{ ...S.p, fontSize: '0.95rem' }}>{C.legal.p}</p>
+                <div style={S.notice}>
+                  <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.4rem', color: T.text }}>
+                    {lang === 'fr' ? 'Important' : 'Important'}
+                  </strong>
+                  <p style={{ ...S.p, fontSize: '0.875rem', margin: 0 }}>{C.legal.notice}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── CTA band ── */}
+        <section id="cta" style={S.section}>
+          <div style={S.container}>
+            <div style={{ padding: '3rem', borderRadius: '20px', background: `linear-gradient(150deg, ${T.primary}, #0c4e54)`, color: T.inverse, display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '2rem', alignItems: 'end' }}>
+              <div>
+                <h2 style={{ fontFamily: "'Georgia', serif", fontSize: 'clamp(1.4rem, 2.5vw, 2rem)', fontWeight: '700', lineHeight: '1.15', letterSpacing: '-0.025em', margin: '0 0 0.75rem', color: T.inverse }}>
+                  {C.cta.h2}
+                </h2>
+                <p style={{ color: 'rgba(249,248,244,0.75)', fontSize: '0.95rem', lineHeight: '1.65', margin: 0 }}>{C.cta.p}</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-start' }}>
+                <a href="mailto:legal@mydd.work" style={{ ...S.btnSecondary, background: 'white', color: '#0f3638', borderColor: 'white' }}>
+                  legal@mydd.work
+                </a>
+                <a href="#top" style={{ ...S.btnSecondary, color: T.inverse, borderColor: 'rgba(255,255,255,0.3)' }}>
+                  {lang === 'fr' ? 'Retour en haut ↑' : 'Back to top ↑'}
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      {/* ── Footer ── */}
+      <footer style={{ padding: '2rem 0 4rem', borderTop: `1px solid ${T.border}` }}>
+        <div style={{ ...S.container, display: 'grid', gridTemplateColumns: '1fr auto', gap: '2rem', alignItems: 'start' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+              <Logo size={28} />
+              <strong style={{ fontSize: '0.95rem' }}>MyDD</strong>
+            </div>
+            <div style={{ color: T.muted, fontSize: '0.8rem', lineHeight: '1.6' }}>
+              B&amp;E Consult FZCO — Dubai, UAE<br />
+              <a href="mailto:legal@mydd.work" style={{ color: T.muted, textDecoration: 'none' }}>legal@mydd.work</a>
+            </div>
+            <div style={{ marginTop: '0.75rem', fontSize: '0.72rem', color: T.faint }}>
+              © {new Date().getFullYear()} B&amp;E Consult FZCO. MyDD® PAC Network® are registered trademarks.{' '}
+              <Link to="/legal" style={{ color: T.faint }}>Legal &amp; Disclaimer</Link>
+            </div>
+          </div>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+            {C.footer.pages.map((page, i) => (
+              <Link key={i} to={C.footer.links[i]} style={{ fontSize: '0.85rem', color: T.muted, textDecoration: 'none' }}>
+                {page}
+              </Link>
+            ))}
+          </nav>
         </div>
       </footer>
+
+      {/* Structured data — IP + SEO */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'MyDD by B&E Consult FZCO',
+        url: 'https://mydd.work',
+        logo: 'https://mydd.work/favicon.svg',
+        description: 'Private commercial verification platform. Bronze · Silver · Gold certification levels.',
+        foundingDate: '2024',
+        legalName: 'B&E Consult FZCO',
+        address: { '@type': 'PostalAddress', addressLocality: 'Dubai', addressCountry: 'AE' },
+        contactPoint: { '@type': 'ContactPoint', email: 'legal@mydd.work', contactType: 'customer service' },
+        sameAs: ['https://mydd.work/registry', 'https://mydd.work/agents'],
+        copyrightHolder: { '@type': 'Organization', name: 'B&E Consult FZCO' },
+        copyrightYear: new Date().getFullYear(),
+      })}} />
+
     </div>
   )
 }

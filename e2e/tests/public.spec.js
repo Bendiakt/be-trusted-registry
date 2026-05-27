@@ -16,9 +16,11 @@ test.describe('Public — landing page', () => {
     await stubApi(page)
     await page.goto('/')
 
-    // Landing page should include the brand name
+    // Target the visible brand name in the header logo — skip the hidden
+    // honeypot span (aria-hidden="true") that also contains "MyDD".
+    // The header logo renders a <div> with text "MyDD" (not aria-hidden).
     await expect(
-      page.getByText(/MyDD/i).first()
+      page.locator('header').getByText(/MyDD/i).first()
     ).toBeVisible({ timeout: 6000 })
   })
 
@@ -26,7 +28,8 @@ test.describe('Public — landing page', () => {
     await stubApi(page)
     await page.goto('/')
 
-    const registryLink = page.getByRole('link', { name: /registry|suppliers|annuaire/i }).first()
+    // Nav link text is "Registre" (FR) / "Registry" (EN); match by href is more robust.
+    const registryLink = page.locator('a[href="/registry"]').first()
     await expect(registryLink).toBeVisible({ timeout: 5000 })
   })
 })

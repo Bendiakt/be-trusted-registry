@@ -271,6 +271,7 @@ app.use('/api/registry',       registryRouter)
 app.use('/api/verify',         verifyRouter)
 app.use('/api/keys',           require('./routes/apiKeys'))
 app.use('/api/webhooks',       require('./routes/webhooks'))
+app.use('/api/translate',      require('./routes/translate'))
 app.use('/',                   prometheusRouter)   // GET /metrics + GET /metrics/json
 app.use('/',                   sitemapRouter)      // GET /sitemap.xml + GET /robots.txt
 app.use('/',                   require('./routes/health'))  // health probes + /status page
