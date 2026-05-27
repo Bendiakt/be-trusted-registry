@@ -16,7 +16,8 @@ const { sendCertGranted,
         sendPacKycDecision,
         sendFounderWelcome,
         sendS2Promoted,
-        sendS3Promoted }         = require('../lib/mailer')
+        sendS3Promoted,
+        sendDisputeResolved }    = require('../lib/mailer')
 const { dispatchWebhook }        = require('../lib/webhookDispatch')
 const { isBlockedCompany }       = require('../lib/blocklist')
 const { validate, schemas }      = require('../lib/validators')
@@ -1353,6 +1354,30 @@ router.patch('/disputes/:id/resolve', auth, requireAdmin, adminWriteLimiter, asy
     }
 
     logAudit(req.user.id, AUDIT.ADMIN_DISPUTE_RESOLVED, 'mission_disputes', req.ip, { disputeId, resolution })
+
+    // Email company with decision (non-blocking)
+    const d = rows[0]
+    query(`
+      SELECT u.email, u.name, c.name AS company_name, m.id AS mission_id
+        FROM mission_disputes md
+        JOIN companies c ON c.id = md.company_id
+        JOIN users u     ON u.id = c.user_id
+        JOIN missions m  ON m.id = md.mission_id
+       WHERE md.id = $1
+    `, [disputeId]).then(({ rows: info }) => {
+      if (info[0]) {
+        sendDisputeResolved({
+          email:       info[0].email,
+          name:        info[0].name,
+          companyName: info[0].company_name,
+          missionId:   info[0].mission_id,
+          disputeId,
+          resolution,
+          notes:       d.resolution_note || null,
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+
     res.json({ dispute: rows[0] })
   } catch (err) {
     console.error(JSON.stringify({ event: 'admin_dispute_resolve_error', message: err.message }))

@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "账单",
       "developer": "开发者",
-      "audits": "🔍 审计"
+      "audits": "🔍 审计",
+      "notifications": "通知"
     },
     "billing_title": "付款历史",
     "billing_subtitle": "您的认证和 Stripe 交易记录",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ 申诉",
       "rate_agent": "⭐ 评价代理",
       "pending_dispute": "⏳ 申诉处理中"
+    },
+    "notifications": {
+      "title": "通知",
+      "empty": "暂无通知",
+      "empty_sub": "任务更新、付款确认和提醒将在此显示。",
+      "mark_all_read": "全部标为已读",
+      "unread_count": "{{count}} 条未读",
+      "refresh": "刷新",
+      "loading": "加载中…",
+      "error": "加载通知失败",
+      "mark_read": "标为已读",
+      "all_caught_up": "您已全部阅读！"
     }
   },
   "dev": {

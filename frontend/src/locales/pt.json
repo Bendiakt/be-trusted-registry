@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "Faturamento",
       "developer": "Desenvolvedor",
-      "audits": "🔍 Auditorias"
+      "audits": "🔍 Auditorias",
+      "notifications": "Notificações"
     },
     "billing_title": "Histórico de pagamentos",
     "billing_subtitle": "Suas certificações e transações do Stripe",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ Contestar",
       "rate_agent": "⭐ Avaliar o agente",
       "pending_dispute": "⏳ Contestação pendente"
+    },
+    "notifications": {
+      "title": "Notificações",
+      "empty": "Nenhuma notificação ainda",
+      "empty_sub": "Atualizações de missão, confirmações de pagamento e alertas aparecerão aqui.",
+      "mark_all_read": "Marcar tudo como lido",
+      "unread_count": "{{count}} não lido(s)",
+      "refresh": "Atualizar",
+      "loading": "Carregando…",
+      "error": "Falha ao carregar notificações",
+      "mark_read": "Marcar como lido",
+      "all_caught_up": "Tudo em dia!"
     }
   },
   "dev": {

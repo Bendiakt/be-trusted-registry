@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "Billing",
       "developer": "Developer",
-      "audits": "🔍 Audits"
+      "audits": "🔍 Audits",
+      "notifications": "Notifications"
     },
     "billing_title": "Payment History",
     "billing_subtitle": "Your certification payments and Stripe transactions",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ Contest",
       "rate_agent": "⭐ Rate Agent",
       "pending_dispute": "⏳ Contest pending"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "empty": "No notifications yet",
+      "empty_sub": "Mission updates, payment confirmations and alerts will appear here.",
+      "mark_all_read": "Mark all as read",
+      "unread_count": "{{count}} unread",
+      "refresh": "Refresh",
+      "loading": "Loading…",
+      "error": "Failed to load notifications",
+      "mark_read": "Mark as read",
+      "all_caught_up": "You're all caught up!"
     }
   },
   "dev": {

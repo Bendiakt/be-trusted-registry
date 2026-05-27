@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "الفواتير",
       "developer": "المطور",
-      "audits": "🔍 التدقيقات"
+      "audits": "🔍 التدقيقات",
+      "notifications": "الإشعارات"
     },
     "billing_title": "سجل المدفوعات",
     "billing_subtitle": "شهاداتك ومعاملات Stripe",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ اعتراض",
       "rate_agent": "⭐ تقييم الوكيل",
       "pending_dispute": "⏳ الاعتراض قيد المعالجة"
+    },
+    "notifications": {
+      "title": "الإشعارات",
+      "empty": "لا توجد إشعارات بعد",
+      "empty_sub": "ستظهر هنا تحديثات المهام وتأكيدات الدفع والتنبيهات.",
+      "mark_all_read": "تحديد الكل كمقروء",
+      "unread_count": "{{count}} غير مقروء",
+      "refresh": "تحديث",
+      "loading": "جارٍ التحميل…",
+      "error": "فشل تحميل الإشعارات",
+      "mark_read": "تحديد كمقروء",
+      "all_caught_up": "أنت على اطلاع بكل شيء!"
     }
   },
   "dev": {
