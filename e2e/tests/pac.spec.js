@@ -236,9 +236,9 @@ test.describe('PAC Portal — earnings tab', () => {
     await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 6000 })
     // Beta Ltd mission (pending)
     await expect(page.getByText('Beta Ltd').first()).toBeVisible({ timeout: 4000 })
-    // Paid badge
-    await expect(page.getByText(/✓.*Payé|Payé/i).first()).toBeVisible({ timeout: 4000 })
-    // Pending badge
-    await expect(page.getByText(/En attente/i).first()).toBeVisible({ timeout: 4000 })
+    // Paid badge — EN: "✓ Paid", FR: "✓ Payé" (i18n locale-aware)
+    await expect(page.getByText(/✓.*(Paid|Payé)/i).first()).toBeVisible({ timeout: 4000 })
+    // Pending badge — EN: "⏳ Pending", FR: "En attente"
+    await expect(page.getByText(/Pending|En attente/i).first()).toBeVisible({ timeout: 4000 })
   })
 })

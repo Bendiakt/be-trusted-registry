@@ -118,7 +118,9 @@
       "metrics": "Metrics",
       "documents": "Documents",
       "billing": "Billing",
-      "developer": "Developer"
+      "developer": "Developer",
+      "audits": "🔍 Audits",
+      "notifications": "Notifications"
     },
     "billing_title": "Payment History",
     "billing_subtitle": "Your certification payments and Stripe transactions",
@@ -228,6 +230,28 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "My B&E Audits",
+      "empty": "Your PAC audit missions will appear here once assigned by the B&E team.",
+      "pay_fee": "💳 Pay ${{amount}}",
+      "fee_paid": "✓ Paid ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ Contest",
+      "rate_agent": "⭐ Rate Agent",
+      "pending_dispute": "⏳ Contest pending"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "empty": "No notifications yet",
+      "empty_sub": "Mission updates, payment confirmations and alerts will appear here.",
+      "mark_all_read": "Mark all as read",
+      "unread_count": "{{count}} unread",
+      "refresh": "Refresh",
+      "loading": "Loading…",
+      "error": "Failed to load notifications",
+      "mark_read": "Mark as read",
+      "all_caught_up": "You're all caught up!"
     }
   },
   "dev": {
@@ -258,7 +282,9 @@
     "portal": "PAC Agent Portal",
     "tabs": {
       "missions": "Available Missions",
-      "profile": "My Profile"
+      "profile": "My Profile",
+      "earnings": "💰 Earnings",
+      "progression": "🎯 Progression"
     },
     "missions": {
       "status_title": "Your Status",
@@ -302,6 +328,23 @@
       "save": "SAVE PROFILE",
       "saved": "Profile saved successfully",
       "error": "Error saving profile"
+    },
+    "earnings": {
+      "loading": "Loading…",
+      "total_earned": "Total Earned",
+      "pending": "Pending",
+      "commission_rate": "Commission Rate",
+      "total_missions": "Total Missions",
+      "paid_missions": "mission(s) paid",
+      "completed_missions": "mission(s) completed",
+      "assigned": "assigned or completed",
+      "paid_badge": "✓ Paid",
+      "pending_badge": "⏳ Pending",
+      "no_missions": "No missions assigned yet.",
+      "detail_title": "Mission Breakdown",
+      "entries": "entry(ies)",
+      "commission_note": "How are your commissions calculated?",
+      "commission_desc": "Each mission has a fixed fee. Your commission ({{pct}}% as agent {{tier}}) is calculated once the client company confirms payment via Stripe. Payouts are processed by B&E Consult FZCO on your monthly cycle."
     }
   },
   "verify": {
@@ -378,7 +421,8 @@
       "users": "Users",
       "companies": "Companies",
       "missions": "Missions",
-      "audit": "Audit Log"
+      "audit": "Audit Log",
+      "disputes": "Disputes"
     },
     "stats": {
       "total_users": "Total Users",
@@ -430,7 +474,20 @@
     "saving": "Saving…",
     "saved": "Saved",
     "no_data": "No records found.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "Mission Disputes",
+      "empty": "No open disputes.",
+      "reason": "Reason",
+      "status": "Status",
+      "open": "Open",
+      "resolved": "Resolved",
+      "resolve": "Resolve",
+      "upheld": "Upheld",
+      "dismissed": "Dismissed",
+      "second_audit": "Second Audit",
+      "resolution": "Resolution"
+    }
   },
   "not_found": {
     "title": "Page not found",
@@ -439,7 +496,8 @@
   },
   "cert_print": {
     "print_pdf": "Print / Save PDF",
-    "copy_link": "Copy Verification Link"
+    "copy_link": "Copy Verification Link",
+    "download_pdf": "Download PDF"
   },
   "metrics": {
     "title": "Business Metrics",
@@ -532,6 +590,60 @@
       "perk1": "PAC agent physical site inspection",
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
+    }
+  },
+  "agents": {
+    "directory": {
+      "badge": "Certified PAC Network",
+      "title_line1": "B&E Auditors",
+      "title_line2": "certified & verified",
+      "subtitle": "Every PAC expert is selected, trained and certified by B&E Consulting. On-site audit, supplier due diligence, ESG compliance — three certification tiers for all your needs.",
+      "stat_agents": "Active Experts",
+      "stat_tiers": "Certification Tiers",
+      "stat_kyc": "KYC Verified",
+      "search_placeholder": "Search by name, location, expertise…",
+      "search_btn": "Search",
+      "filter_tier_label": "Tier:",
+      "filter_reset": "✕ Reset",
+      "error_load": "Unable to load the directory.",
+      "empty": "No experts found for this search.",
+      "card_verified": "✔ Verified",
+      "card_view": "View profile →",
+      "card_missions": "Missions",
+      "card_ontime": "On-time",
+      "prev": "← Previous",
+      "next": "Next →"
+    },
+    "profile": {
+      "back": "← All experts",
+      "kyc_verified": "✔ KYC Verified",
+      "member_since": "Member since",
+      "promoted_since_s3": "S3 since",
+      "error_load": "Unable to load the profile.",
+      "stat_missions": "Missions",
+      "stat_l2": "L2+ Missions",
+      "stat_ontime": "On-time",
+      "stat_client": "Client Rating",
+      "stat_admin": "B&E Rating",
+      "history_title": "Mission History",
+      "history_count": "{{n}} last missions",
+      "col_type": "Type",
+      "col_zone": "Zone",
+      "col_tier": "Tier",
+      "col_outcome": "Outcome",
+      "col_client": "Client Rating",
+      "col_admin": "B&E Rating",
+      "col_delay": "Delay",
+      "col_date": "Date",
+      "ontime_yes": "✓ On-time",
+      "ontime_late": "Late",
+      "outcome_pass": "Compliant",
+      "outcome_fail": "Non-compliant",
+      "outcome_cond": "Conditional",
+      "cta_title": "Need a certified audit?",
+      "cta_desc": "Get an L3 certification with an expert like {{name}}.",
+      "cta_agents": "← All experts",
+      "cta_register": "Start certification"
     }
   }
 }

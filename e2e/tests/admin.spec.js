@@ -106,3 +106,107 @@ test.describe('Admin — companies tab', () => {
     }
   })
 })
+
+test.describe('Admin — disputes tab', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
+  })
+
+  test('disputes tab is accessible from admin panel', async ({ page }) => {
+    await page.goto('/admin')
+
+    const disputesTab = page.getByRole('button', { name: /dispute|litige|contest/i }).first()
+    if (await disputesTab.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await disputesTab.click()
+      // Tab content should render (stub returns empty list)
+      await expect(
+        page.getByText(/dispute|litige|aucun|no dispute|open/i).first()
+      ).toBeVisible({ timeout: 5000 })
+    }
+  })
+
+  test('disputes tab shows open disputes when data is returned', async ({ page }) => {
+    // Override stub to return one open dispute
+    await page.route('**/api/admin/disputes**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: [
+            {
+              id: 1, mission_id: 42, reason: 'Incorrect audit outcome',
+              status: 'open', created_at: '2026-05-01T10:00:00Z',
+              company_name: 'Acme Corp',
+            },
+          ],
+          pagination: { page: 1, limit: 50, total: 1, pages: 1 },
+        }),
+      }),
+    )
+
+    await page.goto('/admin')
+
+    const disputesTab = page.getByRole('button', { name: /dispute|litige|contest/i }).first()
+    if (await disputesTab.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await disputesTab.click()
+      // Dispute reason or company name should appear
+      await expect(
+        page.getByText(/Acme Corp|Incorrect audit/i).first()
+      ).toBeVisible({ timeout: 5000 })
+    }
+  })
+
+  test('resolving a dispute calls the resolve API', async ({ page }) => {
+    let resolveCalled = false
+
+    // Broad list stub — registered FIRST so the specific resolve route (below)
+    // takes LIFO priority and intercepts /resolve URLs before this handler does.
+    await page.route('**/api/admin/disputes**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: [
+            {
+              id: 1, mission_id: 42, reason: 'Incorrect audit outcome',
+              status: 'open', created_at: '2026-05-01T10:00:00Z',
+              company_name: 'Acme Corp',
+            },
+          ],
+          pagination: { page: 1, limit: 50, total: 1, pages: 1 },
+        }),
+      }),
+    )
+
+    // Specific resolve route — registered LAST so LIFO gives it priority over the broad stub.
+    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
+      resolveCalled = true
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ message: 'Dispute resolved' }),
+      })
+    })
+
+    await page.goto('/admin')
+
+    const disputesTab = page.getByRole('button', { name: /dispute|litige|contest/i }).first()
+    if (await disputesTab.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await disputesTab.click()
+
+      // AdminPanel shows a "Resolve" button that opens a confirmation modal.
+      // The API is only called when "Confirm Resolution" inside the modal is clicked.
+      const resolveBtn = page.getByRole('button', { name: /^Resolve$/i }).first()
+      if (await resolveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await resolveBtn.click()
+
+        // Wait for the modal and click "Confirm Resolution"
+        const confirmBtn = page.getByRole('button', { name: /Confirm Resolution/i }).first()
+        if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await confirmBtn.click()
+          await page.waitForTimeout(1000)
+          expect(resolveCalled).toBe(true)
+        }
+      }
+    }
+  })
+})

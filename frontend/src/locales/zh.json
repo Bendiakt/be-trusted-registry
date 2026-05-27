@@ -116,8 +116,11 @@
       "register": "注册公司",
       "pricing": "价格与升级",
       "metrics": "数据指标",
-      "documents": "Documents","billing": "账单",
-      "developer": "开发者"
+      "documents": "Documents",
+      "billing": "账单",
+      "developer": "开发者",
+      "audits": "🔍 审计",
+      "notifications": "通知"
     },
     "billing_title": "付款历史",
     "billing_subtitle": "您的认证和 Stripe 交易记录",
@@ -227,6 +230,28 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "我的 B&E 审计",
+      "empty": "一旦 B&E 团队分配 PAC 审计任务，将显示在此处。",
+      "pay_fee": "💳 支付 ${{amount}}",
+      "fee_paid": "✓ 已付款 ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ 申诉",
+      "rate_agent": "⭐ 评价代理",
+      "pending_dispute": "⏳ 申诉处理中"
+    },
+    "notifications": {
+      "title": "通知",
+      "empty": "暂无通知",
+      "empty_sub": "任务更新、付款确认和提醒将在此显示。",
+      "mark_all_read": "全部标为已读",
+      "unread_count": "{{count}} 条未读",
+      "refresh": "刷新",
+      "loading": "加载中…",
+      "error": "加载通知失败",
+      "mark_read": "标为已读",
+      "all_caught_up": "您已全部阅读！"
     }
   },
   "dev": {
@@ -257,7 +282,9 @@
     "portal": "PAC 专员门户",
     "tabs": {
       "missions": "可接任务",
-      "profile": "我的资料"
+      "profile": "我的资料",
+      "earnings": "💰 收益",
+      "progression": "🎯 进度"
     },
     "missions": {
       "status_title": "我的状态",
@@ -301,6 +328,23 @@
       "save": "保存资料",
       "saved": "资料保存成功",
       "error": "保存失败"
+    },
+    "earnings": {
+      "loading": "加载中…",
+      "total_earned": "累计收益",
+      "pending": "待处理",
+      "commission_rate": "佣金比例",
+      "total_missions": "任务总数",
+      "paid_missions": "个任务已付款",
+      "completed_missions": "个任务已完成",
+      "assigned": "已分配或已完成",
+      "paid_badge": "✓ 已付款",
+      "pending_badge": "⏳ 待处理",
+      "no_missions": "暂无分配任务。",
+      "detail_title": "任务明细",
+      "entries": "条记录",
+      "commission_note": "您的佣金如何计算？",
+      "commission_desc": "每个任务均有固定费用。当客户公司通过 Stripe 确认付款后，您的佣金（作为 {{tier}} 级代理，佣金比例为 {{pct}}%）将自动计算。款项由 B&E Consult FZCO 按您的月度周期处理。"
     }
   },
   "verify": {
@@ -377,7 +421,8 @@
       "users": "用户",
       "companies": "企业",
       "missions": "任务",
-      "audit": "审计日志"
+      "audit": "审计日志",
+      "disputes": "争议"
     },
     "stats": {
       "total_users": "总用户数",
@@ -429,7 +474,20 @@
     "saving": "保存中…",
     "saved": "已保存",
     "no_data": "暂无记录。",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "任务争议",
+      "empty": "暂无未解决争议。",
+      "reason": "原因",
+      "status": "状态",
+      "open": "未解决",
+      "resolved": "已解决",
+      "resolve": "解决",
+      "upheld": "支持",
+      "dismissed": "驳回",
+      "second_audit": "二次审计",
+      "resolution": "决定"
+    }
   },
   "metrics": {
     "title": "业务指标",
@@ -479,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "打印 / 保存为 PDF",
-    "copy_link": "复制验证链接"
+    "copy_link": "复制验证链接",
+    "download_pdf": "下载 PDF"
   },
   "cookie": {
     "title": "我们使用Cookie",
@@ -531,6 +590,60 @@
       "perk1": "PAC agent physical site inspection",
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
+    }
+  },
+  "agents": {
+    "directory": {
+      "badge": "PAC认证网络",
+      "title_line1": "B&E审计员",
+      "title_line2": "认证且经过验证",
+      "subtitle": "每位PAC专家均由B&E Consulting挑选、培训和认证。现场审计、供应商尽职调查、ESG合规——三个认证级别满足您的所有需求。",
+      "stat_agents": "活跃专家",
+      "stat_tiers": "认证级别",
+      "stat_kyc": "KYC已验证",
+      "search_placeholder": "按姓名、地点或专业领域搜索…",
+      "search_btn": "搜索",
+      "filter_tier_label": "级别：",
+      "filter_reset": "✕ 重置",
+      "error_load": "无法加载目录。",
+      "empty": "未找到符合此搜索的专家。",
+      "card_verified": "✔ 已验证",
+      "card_view": "查看档案 →",
+      "card_missions": "任务",
+      "card_ontime": "准时",
+      "prev": "← 上一页",
+      "next": "下一页 →"
+    },
+    "profile": {
+      "back": "← 所有专家",
+      "kyc_verified": "✔ KYC已验证",
+      "member_since": "成员自",
+      "promoted_since_s3": "S3自",
+      "error_load": "无法加载档案。",
+      "stat_missions": "任务",
+      "stat_l2": "L2+任务",
+      "stat_ontime": "准时",
+      "stat_client": "客户评分",
+      "stat_admin": "B&E评分",
+      "history_title": "任务历史",
+      "history_count": "最近{{n}}次任务",
+      "col_type": "类型",
+      "col_zone": "区域",
+      "col_tier": "级别",
+      "col_outcome": "结果",
+      "col_client": "客户评分",
+      "col_admin": "B&E评分",
+      "col_delay": "延迟",
+      "col_date": "日期",
+      "ontime_yes": "✓ 准时",
+      "ontime_late": "延迟",
+      "outcome_pass": "合规",
+      "outcome_fail": "不合规",
+      "outcome_cond": "有条件",
+      "cta_title": "需要认证审计吗？",
+      "cta_desc": "与{{name}}这样的专家一起获得L3认证。",
+      "cta_agents": "← 所有专家",
+      "cta_register": "开始认证"
     }
   }
 }

@@ -13,8 +13,9 @@ export default function CertPrint() {
   const { id }  = useParams()
   const { t }   = useTranslation()
   const navigate = useNavigate()
-  const [data, setData]   = useState(null)   // flat verify response
-  const [error, setError] = useState('')
+  const [data, setData]         = useState(null)   // flat verify response
+  const [error, setError]       = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     api.get(`/api/verify/${id}`)
@@ -66,10 +67,29 @@ export default function CertPrint() {
         <button onClick={() => navigate(`/verify/${id}`)} style={{ background: 'transparent', color: '#888', border: 'none', cursor: 'pointer', fontSize: '0.85rem', padding: 0 }}>
           ← {t('verify.subtitle')}
         </button>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={async () => {
+              setDownloading(true)
+              try {
+                const res = await api.get(`/api/verify/${id}/pdf`, { responseType: 'blob' })
+                const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `certificate-${String(id).padStart(6, '0')}.pdf`
+                a.click()
+                URL.revokeObjectURL(url)
+              } catch { /* silent */ }
+              finally { setDownloading(false) }
+            }}
+            disabled={downloading}
+            style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', border: 'none', padding: '0.55rem 1.25rem', borderRadius: '7px', cursor: downloading ? 'wait' : 'pointer', fontWeight: '700', fontSize: '0.85rem', opacity: downloading ? 0.7 : 1 }}
+          >
+            {downloading ? '…' : t('cert_print.download_pdf')}
+          </button>
           <button
             onClick={() => window.print()}
-            style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', border: 'none', padding: '0.55rem 1.25rem', borderRadius: '7px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem' }}
+            style={{ background: 'transparent', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.35)', padding: '0.5rem 1rem', borderRadius: '7px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem' }}
           >
             {t('cert_print.print_pdf')}
           </button>

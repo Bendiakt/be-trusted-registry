@@ -162,12 +162,12 @@ export default function PACPortal() {
   const TABS = [
     { id: 'missions',    label: t('pac.tabs.missions') },
     { id: 'profile',     label: t('pac.tabs.profile') },
-    { id: 'earnings',    label: '💰 Revenus' },
+    { id: 'earnings',    label: t('pac.tabs.earnings') },
     ...(pacTier === 'S2' || pacTier === 'S3'
       ? [{ id: 'supervision', label: pacTier === 'S3' ? 'Mentoring S3' : 'Supervision S2' }]
       : []),
     ...(pacTier === 'S1' || pacTier === 'S2'
-      ? [{ id: 'progression', label: '🎯 Progression' }]
+      ? [{ id: 'progression', label: t('pac.tabs.progression') }]
       : []),
   ]
 
@@ -414,35 +414,35 @@ export default function PACPortal() {
         {tab === 'earnings' && (
           <div style={{ padding: '0 2rem 2rem' }}>
             {!earnings ? (
-              <div style={{ color: '#555', fontSize: '0.85rem', padding: '2rem 0', textAlign: 'center' }}>Chargement…</div>
+              <div style={{ color: '#555', fontSize: '0.85rem', padding: '2rem 0', textAlign: 'center' }}>{t('pac.earnings.loading')}</div>
             ) : (
               <>
                 {/* ── Summary stats ─────────────────────────────────────────── */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '1rem', marginBottom: '2rem' }}>
                   {[
                     {
-                      label: 'Total perçu',
+                      label: t('pac.earnings.total_earned'),
                       value: `$${earnings.summary.totalEarnedUsd.toFixed(2)}`,
                       color: '#2ecc71',
-                      sub: `${earnings.summary.paidCount} mission(s) payée(s)`,
+                      sub: `${earnings.summary.paidCount} ${t('pac.earnings.paid_missions')}`,
                     },
                     {
-                      label: 'En attente',
+                      label: t('pac.earnings.pending'),
                       value: `$${earnings.summary.pendingUsd.toFixed(2)}`,
                       color: '#f39c12',
-                      sub: `${earnings.summary.completedCount - earnings.summary.paidCount} mission(s) complétée(s)`,
+                      sub: `${earnings.summary.completedCount - earnings.summary.paidCount} ${t('pac.earnings.completed_missions')}`,
                     },
                     {
-                      label: 'Taux de commission',
+                      label: t('pac.earnings.commission_rate'),
                       value: `${earnings.summary.commissionPct}%`,
                       color: earnings.summary.pacTier === 'S3' ? '#e056fd' : earnings.summary.pacTier === 'S2' ? '#C9A84C' : '#4a90e2',
                       sub: `Tier ${earnings.summary.pacTier}`,
                     },
                     {
-                      label: 'Missions totales',
+                      label: t('pac.earnings.total_missions'),
                       value: earnings.summary.completedCount,
                       color: '#aaa',
-                      sub: 'assignées ou complétées',
+                      sub: t('pac.earnings.assigned'),
                     },
                   ].map(stat => (
                     <div key={stat.label} style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.25rem 1.5rem' }}>
@@ -456,13 +456,13 @@ export default function PACPortal() {
                 {/* ── Mission breakdown table ────────────────────────────────── */}
                 <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', overflow: 'hidden' }}>
                   <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ color: '#fff', fontWeight: '700', fontSize: '0.9rem' }}>Détail des missions</div>
-                    <div style={{ color: '#555', fontSize: '0.75rem' }}>{earnings.missions.length} entrée(s)</div>
+                    <div style={{ color: '#fff', fontWeight: '700', fontSize: '0.9rem' }}>{t('pac.earnings.detail_title')}</div>
+                    <div style={{ color: '#555', fontSize: '0.75rem' }}>{earnings.missions.length} {t('pac.earnings.entries')}</div>
                   </div>
 
                   {earnings.missions.length === 0 ? (
                     <div style={{ padding: '2rem', color: '#555', textAlign: 'center', fontSize: '0.85rem' }}>
-                      Aucune mission assignée pour le moment.
+                      {t('pac.earnings.no_missions')}
                     </div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
@@ -494,11 +494,11 @@ export default function PACPortal() {
                                 <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
                                   {isPaid ? (
                                     <span style={{ background: 'rgba(46,204,113,0.1)', color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
-                                      ✓ Payé {new Date(m.paymentConfirmedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                                      {t('pac.earnings.paid_badge')} {new Date(m.paymentConfirmedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
                                     </span>
                                   ) : isComplete ? (
                                     <span style={{ background: 'rgba(243,156,18,0.1)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
-                                      ⏳ En attente
+                                      {t('pac.earnings.pending_badge')}
                                     </span>
                                   ) : (
                                     <span style={{ color: '#444', fontSize: '0.68rem' }}>—</span>
@@ -524,8 +524,8 @@ export default function PACPortal() {
 
                 {/* ── Payout note ───────────────────────────────────────────── */}
                 <div style={{ marginTop: '1.25rem', padding: '1rem 1.25rem', background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: '8px', color: '#666', fontSize: '0.78rem', lineHeight: '1.6' }}>
-                  💡 <strong style={{ color: '#C9A84C' }}>Comment sont calculées vos commissions ?</strong><br />
-                  Chaque mission a un honoraire fixe. Votre commission ({earnings.summary.commissionPct}% en tant qu'agent {earnings.summary.pacTier}) est calculée dès que l'entreprise cliente confirme le paiement de la mission via Stripe. Les virements sont effectués par B&E Consult FZCO selon votre cycle mensuel.
+                  💡 <strong style={{ color: '#C9A84C' }}>{t('pac.earnings.commission_note')}</strong><br />
+                  {t('pac.earnings.commission_desc', { pct: earnings.summary.commissionPct, tier: earnings.summary.pacTier })}
                 </div>
               </>
             )}

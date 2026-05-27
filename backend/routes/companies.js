@@ -12,6 +12,7 @@ const { AUDIT }              = require('../lib/auditActions')
 const { checkFraud }         = require('../lib/fraudDetection')
 const { computeTrustScore }  = require('../lib/trustScore')
 const { validate, schemas }  = require('../lib/validators')
+const { sendDisputeSubmitted } = require('../lib/mailer')
 
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
@@ -502,6 +503,20 @@ router.patch('/missions/:id/dispute', auth, companyWriteLimiter, async (req, res
     )
 
     logAudit(req.user.id, AUDIT.COMPANY_DISPUTE_OPENED, 'mission_disputes', req.ip, { missionId, companyId, disputeId: rows[0].id })
+
+    // Notify admin via email (non-blocking)
+    query(`SELECT email FROM users WHERE role = 'admin' LIMIT 1`).then(({ rows: admins }) => {
+      if (admins[0]) {
+        sendDisputeSubmitted({
+          adminEmail: admins[0].email,
+          companyName: req.user.name || `Company #${companyId}`,
+          reason,
+          missionId,
+          disputeId: rows[0].id,
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+
     res.status(201).json({ message: 'Dispute opened', dispute: rows[0] })
   } catch (err) {
     console.error(JSON.stringify({ event: 'company_dispute_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))

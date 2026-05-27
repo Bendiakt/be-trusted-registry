@@ -116,8 +116,11 @@
       "register": "Registrar empresa",
       "pricing": "Precios y mejoras",
       "metrics": "Métricas",
-      "documents": "Documents","billing": "Facturación",
-      "developer": "Desarrollador"
+      "documents": "Documents",
+      "billing": "Facturación",
+      "developer": "Desarrollador",
+      "audits": "🔍 Auditorías",
+      "notifications": "Notificaciones"
     },
     "billing_title": "Historial de pagos",
     "billing_subtitle": "Sus certificaciones y transacciones de Stripe",
@@ -227,6 +230,28 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "Mis auditorías B&E",
+      "empty": "Sus misiones de auditoría PAC aparecerán aquí una vez asignadas por el equipo B&E.",
+      "pay_fee": "💳 Pagar ${{amount}}",
+      "fee_paid": "✓ Pagado ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ Disputar",
+      "rate_agent": "⭐ Valorar al agente",
+      "pending_dispute": "⏳ Disputa en curso"
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "empty": "Sin notificaciones aún",
+      "empty_sub": "Las actualizaciones de misión, confirmaciones de pago y alertas aparecerán aquí.",
+      "mark_all_read": "Marcar todo como leído",
+      "unread_count": "{{count}} sin leer",
+      "refresh": "Actualizar",
+      "loading": "Cargando…",
+      "error": "Error al cargar notificaciones",
+      "mark_read": "Marcar como leído",
+      "all_caught_up": "¡Todo al día!"
     }
   },
   "dev": {
@@ -257,7 +282,9 @@
     "portal": "Portal Agente PAC",
     "tabs": {
       "missions": "Misiones disponibles",
-      "profile": "Mi perfil"
+      "profile": "Mi perfil",
+      "earnings": "💰 Ingresos",
+      "progression": "🎯 Progresión"
     },
     "missions": {
       "status_title": "Tu estado",
@@ -301,6 +328,23 @@
       "save": "GUARDAR PERFIL",
       "saved": "Perfil guardado correctamente",
       "error": "Error al guardar el perfil"
+    },
+    "earnings": {
+      "loading": "Cargando…",
+      "total_earned": "Total ganado",
+      "pending": "Pendiente",
+      "commission_rate": "Tasa de comisión",
+      "total_missions": "Misiones totales",
+      "paid_missions": "misión(es) pagada(s)",
+      "completed_missions": "misión(es) completada(s)",
+      "assigned": "asignadas o completadas",
+      "paid_badge": "✓ Pagado",
+      "pending_badge": "⏳ Pendiente",
+      "no_missions": "No hay misiones asignadas por el momento.",
+      "detail_title": "Detalle de misiones",
+      "entries": "entrada(s)",
+      "commission_note": "¿Cómo se calculan sus comisiones?",
+      "commission_desc": "Cada misión tiene un honorario fijo. Su comisión ({{pct}}% como agente {{tier}}) se calcula cuando la empresa cliente confirma el pago a través de Stripe. Los pagos son procesados por B&E Consult FZCO en su ciclo mensual."
     }
   },
   "verify": {
@@ -377,7 +421,8 @@
       "users": "Usuarios",
       "companies": "Empresas",
       "missions": "Misiones",
-      "audit": "Registro de auditoría"
+      "audit": "Registro de auditoría",
+      "disputes": "Disputas"
     },
     "stats": {
       "total_users": "Usuarios totales",
@@ -429,7 +474,20 @@
     "saving": "Guardando…",
     "saved": "Guardado",
     "no_data": "No se encontraron registros.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "Disputas de misiones",
+      "empty": "No hay disputas abiertas.",
+      "reason": "Motivo",
+      "status": "Estado",
+      "open": "Abierto",
+      "resolved": "Resuelto",
+      "resolve": "Resolver",
+      "upheld": "Confirmado",
+      "dismissed": "Desestimado",
+      "second_audit": "Segunda auditoría",
+      "resolution": "Resolución"
+    }
   },
   "metrics": {
     "title": "Métricas de negocio",
@@ -479,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "Imprimir / Guardar PDF",
-    "copy_link": "Copiar enlace de verificación"
+    "copy_link": "Copiar enlace de verificación",
+    "download_pdf": "Descargar PDF"
   },
   "cookie": {
     "title": "Usamos cookies",
@@ -531,6 +590,60 @@
       "perk1": "PAC agent physical site inspection",
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
+    }
+  },
+  "agents": {
+    "directory": {
+      "badge": "Red PAC Certificada",
+      "title_line1": "Auditores B&E",
+      "title_line2": "certificados y verificados",
+      "subtitle": "Cada experto PAC es seleccionado, formado y certificado por B&E Consulting. Auditoría en sitio, diligencia debida de proveedores, cumplimiento ESG — tres niveles de certificación para todas sus necesidades.",
+      "stat_agents": "Expertos activos",
+      "stat_tiers": "Niveles de certificación",
+      "stat_kyc": "KYC verificado",
+      "search_placeholder": "Buscar por nombre, ubicación, experiencia…",
+      "search_btn": "Buscar",
+      "filter_tier_label": "Nivel:",
+      "filter_reset": "✕ Restablecer",
+      "error_load": "No se pudo cargar el directorio.",
+      "empty": "No se encontraron expertos para esta búsqueda.",
+      "card_verified": "✔ Verificado",
+      "card_view": "Ver perfil →",
+      "card_missions": "Misiones",
+      "card_ontime": "A tiempo",
+      "prev": "← Anterior",
+      "next": "Siguiente →"
+    },
+    "profile": {
+      "back": "← Todos los expertos",
+      "kyc_verified": "✔ KYC Verificado",
+      "member_since": "Miembro desde",
+      "promoted_since_s3": "S3 desde",
+      "error_load": "No se pudo cargar el perfil.",
+      "stat_missions": "Misiones",
+      "stat_l2": "Misiones L2+",
+      "stat_ontime": "A tiempo",
+      "stat_client": "Calificación cliente",
+      "stat_admin": "Calificación B&E",
+      "history_title": "Historial de misiones",
+      "history_count": "{{n}} últimas misiones",
+      "col_type": "Tipo",
+      "col_zone": "Zona",
+      "col_tier": "Nivel",
+      "col_outcome": "Resultado",
+      "col_client": "Cal. cliente",
+      "col_admin": "Cal. B&E",
+      "col_delay": "Plazo",
+      "col_date": "Fecha",
+      "ontime_yes": "✓ A tiempo",
+      "ontime_late": "Retraso",
+      "outcome_pass": "Conforme",
+      "outcome_fail": "No conforme",
+      "outcome_cond": "Condicional",
+      "cta_title": "¿Necesita una auditoría certificada?",
+      "cta_desc": "Obtenga una certificación L3 con un experto como {{name}}.",
+      "cta_agents": "← Todos los expertos",
+      "cta_register": "Iniciar certificación"
     }
   }
 }
