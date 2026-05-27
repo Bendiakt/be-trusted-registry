@@ -160,6 +160,18 @@ test.describe('Admin — disputes tab', () => {
   test('resolving a dispute calls the resolve API', async ({ page }) => {
     let resolveCalled = false
 
+    // Register the specific resolve route FIRST — Playwright matches routes in
+    // registration order and the broad '**/api/admin/disputes**' below would
+    // otherwise intercept the resolve request before this handler runs.
+    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
+      resolveCalled = true
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ message: 'Dispute resolved' }),
+      })
+    })
+
+    // Broad list stub — registered AFTER the resolve route so it doesn't shadow it
     await page.route('**/api/admin/disputes**', (route) =>
       route.fulfill({
         status: 200, contentType: 'application/json',
@@ -176,26 +188,25 @@ test.describe('Admin — disputes tab', () => {
       }),
     )
 
-    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
-      resolveCalled = true
-      await route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify({ message: 'Dispute resolved' }),
-      })
-    })
-
     await page.goto('/admin')
 
     const disputesTab = page.getByRole('button', { name: /dispute|litige|contest/i }).first()
     if (await disputesTab.isVisible({ timeout: 4000 }).catch(() => false)) {
       await disputesTab.click()
 
-      // Click the resolve/dismiss button for the open dispute
-      const resolveBtn = page.getByRole('button', { name: /resolve|dismiss|upheld|close|valider|rejeter/i }).first()
+      // AdminPanel shows a "Resolve" button that opens a confirmation modal.
+      // The API is only called when "Confirm Resolution" inside the modal is clicked.
+      const resolveBtn = page.getByRole('button', { name: /^Resolve$/i }).first()
       if (await resolveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await resolveBtn.click()
-        await page.waitForTimeout(1000)
-        expect(resolveCalled).toBe(true)
+
+        // Wait for the modal and click "Confirm Resolution"
+        const confirmBtn = page.getByRole('button', { name: /Confirm Resolution/i }).first()
+        if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await confirmBtn.click()
+          await page.waitForTimeout(1000)
+          expect(resolveCalled).toBe(true)
+        }
       }
     }
   })
