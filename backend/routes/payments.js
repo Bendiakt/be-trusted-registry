@@ -172,7 +172,49 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
       const resolvedCompanyId = companyId ? parseInt(companyId, 10) : null
       const resolvedUserId = userId ? parseInt(userId, 10) : null
-      const { subscriptionType: sesSubType, pacProfileId, nextTier, fromTier } = session.metadata || {}
+      const { subscriptionType: sesSubType, pacProfileId, nextTier, fromTier, missionId: metaMissionId } = session.metadata || {}
+
+      // ── Mission fee payment ───────────────────────────────────────────────────
+      if (sesSubType === 'mission_fee' && metaMissionId) {
+        const missionId = parseInt(metaMissionId, 10)
+
+        // Mark payment record completed
+        await query(
+          `UPDATE payments SET status = 'completed', stripe_payment_intent_id = $1, updated_at = NOW()
+             WHERE stripe_session_id = $2`,
+          [session.payment_intent ? String(session.payment_intent) : null, session.id]
+        )
+
+        // Confirm payment on mission + compute commission
+        const mResult = await query(
+          `UPDATE missions
+              SET payment_confirmed_at  = NOW(),
+                  commission_amount_cents = ROUND(fee_usd * COALESCE(
+                    (SELECT commission_rate FROM pac_profiles WHERE user_id = assigned_to LIMIT 1), 0.10
+                  ) * 100)::INTEGER
+            WHERE id = $1 AND payment_confirmed_at IS NULL
+            RETURNING id, fee_usd, company_id, assigned_to, commission_amount_cents`,
+          [missionId]
+        )
+        const m = mResult.rows[0]
+        console.log(JSON.stringify({
+          event: 'mission.fee.confirmed', missionId, sessionId: session.id,
+          feeUsd: m?.fee_usd, commissionCents: m?.commission_amount_cents,
+        }))
+
+        // Notify admin
+        if (m) {
+          query(`
+            INSERT INTO notifications (user_id, type, title, body)
+            SELECT id, 'info', $1, $2 FROM users WHERE role = 'admin' LIMIT 3
+          `, [
+            `Mission Fee Received: #${missionId}`,
+            `Mission #${missionId} fee of $${m.fee_usd} paid and confirmed.`,
+          ]).catch(() => {})
+        }
+
+        return res.json({ received: true })
+      }
 
       // ── PAC membership upgrade ────────────────────────────────────────────────
       if (sesSubType === 'pac_membership' && pacProfileId && nextTier) {
@@ -1254,6 +1296,90 @@ router.get('/history', auth, async (req, res) => {
   } catch (err) {
     console.error(JSON.stringify({ event: 'payments.history.error', userId: req.user?.id, err: err.message }))
     res.status(500).json({ error: 'Failed to load payment history' })
+  }
+})
+
+// ── POST /api/payments/mission-checkout ──────────────────────────────────────
+// Creates a Stripe one-time Checkout session for a PAC mission fee.
+// The company must own the mission. On success the webhook sets payment_confirmed_at.
+router.post('/mission-checkout', auth, validate(schemas.missionCheckout), async (req, res) => {
+  try {
+    const { missionId } = req.body
+
+    // Only company role can pay mission fees
+    if (req.user.role !== 'company') {
+      return res.status(403).json({ error: 'Only company accounts can pay mission fees' })
+    }
+
+    const companyResult = await query(
+      'SELECT id, name FROM companies WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    )
+    const company = companyResult.rows[0]
+    if (!company) return res.status(400).json({ error: 'No company profile found' })
+
+    // Verify the mission belongs to this company and is payable
+    const missionResult = await query(
+      `SELECT id, title, fee_usd, payment_confirmed_at, status
+         FROM missions
+        WHERE id = $1 AND company_id = $2
+        LIMIT 1`,
+      [missionId, company.id]
+    )
+    const mission = missionResult.rows[0]
+    if (!mission) return res.status(404).json({ error: 'Mission not found' })
+    if (mission.payment_confirmed_at) {
+      return res.status(409).json({ error: 'Mission fee already paid' })
+    }
+
+    const feeUsd    = mission.fee_usd || 500
+    const amountCents = feeUsd * 100
+    const missionLabel = mission.title || `Mission #${mission.id}`
+
+    const session = await getStripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency:     'usd',
+          product_data: {
+            name:        `MyDD Audit Fee — ${missionLabel}`,
+            description: `On-site audit mission for ${company.name}`,
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&mission=${mission.id}`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
+      metadata: {
+        subscriptionType: 'mission_fee',
+        missionId:        String(mission.id),
+        companyId:        String(company.id),
+        userId:           String(req.user.id),
+      },
+      customer_email: req.user.email || undefined,
+    })
+
+    await query(
+      `INSERT INTO payments (user_id, company_id, mission_id, stripe_session_id, amount_cents, currency, plan_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'usd', 'mission_fee', 'pending')
+       ON CONFLICT (stripe_session_id) DO NOTHING`,
+      [req.user.id, company.id, mission.id, session.id, amountCents]
+    )
+
+    console.log(JSON.stringify({
+      event: 'mission.checkout.created', missionId: mission.id,
+      companyId: company.id, feeUsd, sessionId: session.id,
+    }))
+
+    res.json({ url: session.url, missionId: mission.id, feeUsd })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'payments.mission_checkout.error', userId: req.user?.id, err: err.message }))
+    if (err.message === 'Missing STRIPE_SECRET_KEY') {
+      return res.status(500).json({ error: 'Server payment configuration is incomplete' })
+    }
+    res.status(500).json({ error: 'Failed to create mission checkout session' })
   }
 })
 

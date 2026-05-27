@@ -395,9 +395,10 @@ export default function Dashboard() {
     fetchProfile()
     const params = new URLSearchParams(window.location.search)
     if (params.get('payment') === 'success') {
-      setTab('overview')
+      setTab(params.get('mission') ? 'missions' : 'overview')
       window.history.replaceState({}, '', '/dashboard')
       fetchProfile()
+      fetchCompanyMissions()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1329,11 +1330,25 @@ function MissionCard({ m, sc, oc, G }) {
   const [disputeSaving, setDisputeSaving] = useState(false)
   const [disputeError, setDisputeError]   = useState('')
   const [disputeSubmitted, setDisputeSubmitted] = useState(false)
+  // Mission fee payment
+  const [feeLoading, setFeeLoading]   = useState(false)
+  const [feePaid, setFeePaid]         = useState(!!m.paymentConfirmedAt)
 
   const TIER_COLOR = { S1: '#4a90e2', S2: '#C9A84C', S3: '#e056fd' }
   const tc = TIER_COLOR[m.tierRequired] || '#555'
   const canRate = m.status === 'completed' && localScore === null
   const canDispute = m.status === 'completed' && m.outcome === 'fail' && !disputeSubmitted
+
+  async function handlePayFee() {
+    setFeeLoading(true)
+    try {
+      const res = await api.post('/api/payments/mission-checkout', { missionId: m.id })
+      window.location.href = res.data.url
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Erreur lors du paiement')
+      setFeeLoading(false)
+    }
+  }
 
   const submitDispute = async () => {
     if (disputeReason.trim().length < 20) return
@@ -1441,7 +1456,19 @@ function MissionCard({ m, sc, oc, G }) {
                 </span>
               )}
               {m.feeUsd && (
-                <span style={{ color: '#C9A84C', fontSize: '0.75rem', fontWeight: '700' }}>${m.feeUsd}</span>
+                feePaid ? (
+                  <span style={{ color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(46,204,113,0.08)' }}>
+                    ✓ Payé ${m.feeUsd}
+                  </span>
+                ) : (
+                  <button
+                    onClick={handlePayFee}
+                    disabled={feeLoading}
+                    style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.35)', color: '#C9A84C', fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', cursor: feeLoading ? 'not-allowed' : 'pointer', opacity: feeLoading ? 0.6 : 1 }}
+                  >
+                    {feeLoading ? '…' : `💳 Payer $${m.feeUsd}`}
+                  </button>
+                )
               )}
             </div>
             {/* Dates */}
