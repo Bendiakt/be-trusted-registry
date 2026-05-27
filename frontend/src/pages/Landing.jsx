@@ -196,7 +196,7 @@ const T = {
   bg:      '#f7f6f2',
   surface: '#f9f8f5',
   surface2:'#fbfbf9',
-  offset:  '#f0ede8',
+  offset:  '#f3f0ec',
   border:  'rgba(40,37,29,0.1)',
   text:    '#28251d',
   muted:   '#6e6a63',
@@ -427,7 +427,7 @@ export default function Landing() {
 
   // ── Styles ──────────────────────────────────────────────────────────────────
   const S = {
-    page: { minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'Inter', 'General Sans', system-ui, sans-serif", overflowX: 'hidden' },
+    page: { minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'General Sans', 'Inter', system-ui, sans-serif", overflowX: 'hidden' },
     header: { position: 'sticky', top: 0, zIndex: 50, background: `color-mix(in srgb, ${T.bg} 88%, transparent)`, backdropFilter: 'blur(12px)', borderBottom: `1px solid ${T.border}` },
     headerInner: { maxWidth: '1040px', margin: '0 auto', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', height: '64px' },
     brand: { display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', color: T.text },
