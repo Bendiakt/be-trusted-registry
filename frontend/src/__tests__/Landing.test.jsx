@@ -1,37 +1,30 @@
 /**
- * Tests for the Landing page.
+ * Tests for the Landing page (rewritten for the new non-i18next version).
  *
- * The page fires a `fetch('/api/registry?limit=1')` on mount to load the
- * certified-company count stat. Everything else is static / i18n-driven.
- *
- * Covers:
- *  - Hero section renders i18n keys
- *  - Nav links: registry, login, register
- *  - Certified count shows "…" while fetch is pending and updates when resolved
- *  - Pricing plan names (Bronze / Silver / Gold) are rendered
- *  - Features section heading renders
- *  - How-it-works steps section present
+ * The page:
+ *  - Renders real bilingual content (FR default) from the COPY constant
+ *  - Fires `fetch('/api/registry?limit=1')` on mount to load certifiedCount
+ *  - Shows the cert count stat block only once certCount is non-null
+ *  - Has no /login link (nav only has /registry, /register)
+ *  - Bronze / Silver / Gold each appear twice (badge pill + level card heading)
  */
 import { render, screen, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 
 vi.mock('react-router-dom', () => ({
-  Link: ({ children, to }) => <a href={to}>{children}</a>,
+  Link: ({ children, to, style, 'aria-label': ariaLabel }) => (
+    <a href={to} style={style} aria-label={ariaLabel}>{children}</a>
+  ),
 }))
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key) => key }),
-}))
-
-vi.mock('../components/LanguageSwitcher', () => ({
-  default: () => <div data-testid="language-switcher" />,
-}))
+// No i18next mock needed — Landing no longer uses useTranslation
 
 import Landing from '../pages/Landing'
 
 // Helper: mock the global fetch used by Landing to preload certifiedCount
 function mockFetch(total) {
   global.fetch = vi.fn().mockResolvedValueOnce({
+    ok: true,
     json: () => Promise.resolve({ pagination: { total } }),
   })
 }
@@ -45,19 +38,22 @@ describe('Landing', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders hero badge label', async () => {
+  it('renders hero h1 heading', async () => {
     mockFetch(42)
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    // landing.hero.badge is in a standalone <span>
-    expect(screen.getByText('landing.hero.badge')).toBeInTheDocument()
+    expect(
+      screen.getByText('Vérification commerciale structurée pour le commerce international')
+    ).toBeInTheDocument()
   })
 
-  it('renders hero subtitle', async () => {
+  it('renders hero eyebrow label', async () => {
     mockFetch(42)
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    expect(screen.getByText('landing.hero.subtitle')).toBeInTheDocument()
+    expect(
+      screen.getByText('Plateforme privée de vérification commerciale')
+    ).toBeInTheDocument()
   })
 
   it('shows certified count after fetch resolves', async () => {
@@ -68,19 +64,20 @@ describe('Landing', () => {
     })
   })
 
-  it('shows "…" for certified count while fetch is pending', () => {
-    // Never resolve
+  it('hides certified count stat block while fetch is pending', () => {
+    // Never resolve — certCount stays null → stat block not rendered
     global.fetch = vi.fn().mockReturnValueOnce(new Promise(() => {}))
     render(<Landing />)
-    expect(screen.getByText('…')).toBeInTheDocument()
+    // Stat block is conditionally rendered only when certCount !== null
+    expect(screen.queryByText('Entreprises vérifiées')).not.toBeInTheDocument()
   })
 
-  it('shows "…" when fetch errors', async () => {
+  it('hides certified count stat block when fetch errors', async () => {
     mockFetchError()
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    // Falls back to null → renders "…"
-    expect(screen.getByText('…')).toBeInTheDocument()
+    // Error path: certCount stays null → stat block absent
+    expect(screen.queryByText('Entreprises vérifiées')).not.toBeInTheDocument()
   })
 
   it('has a nav link to /registry', async () => {
@@ -90,33 +87,36 @@ describe('Landing', () => {
     expect(document.querySelector('a[href="/registry"]')).toBeInTheDocument()
   })
 
-  it('has a nav link to /login', async () => {
+  it('does NOT have a nav link to /login (auth lives at /register)', async () => {
     mockFetch(0)
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    expect(document.querySelector('a[href="/login"]')).toBeInTheDocument()
+    expect(document.querySelector('a[href="/login"]')).not.toBeInTheDocument()
   })
 
-  it('has a nav link to /register', async () => {
+  it('has a link to /register', async () => {
     mockFetch(0)
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     expect(document.querySelector('a[href="/register"]')).toBeInTheDocument()
   })
 
-  it('renders all three pricing plan names', async () => {
+  it('renders all three level names (Bronze / Silver / Gold appear at least once each)', async () => {
     mockFetch(0)
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    expect(screen.getByText('Bronze')).toBeInTheDocument()
-    expect(screen.getByText('Silver')).toBeInTheDocument()
-    expect(screen.getByText('Gold')).toBeInTheDocument()
+    // Each label appears twice (badge pill + level card heading) — use getAllByText
+    expect(screen.getAllByText('Bronze').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Silver').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Gold').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders features section title key', async () => {
+  it('renders the process section heading', async () => {
     mockFetch(0)
     render(<Landing />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    expect(screen.getByText('landing.features.title')).toBeInTheDocument()
+    expect(
+      screen.getByText('Un processus simple, des livrables plus lisibles.')
+    ).toBeInTheDocument()
   })
 })
