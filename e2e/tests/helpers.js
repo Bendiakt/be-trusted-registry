@@ -183,6 +183,47 @@ async function stubApi(page) {
       body: JSON.stringify({ plan: 'level2', nextBillingDate: '2026-06-01', status: 'active' }),
     }),
   )
+  // Mission fee checkout — returns a safe redirect URL (stays in test runner)
+  await page.route('**/api/payments/mission-checkout', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ url: '/login?stripe-mission-redirect=1' }),
+    }),
+  )
+
+  // Company missions (audits tab) — one unpaid + one paid mission
+  await page.route('**/api/companies/missions**', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        missions: [
+          {
+            id: 42, company_name: 'Acme Corp', location: 'Paris, FR',
+            type: 'site_inspection', status: 'assigned', outcome: null,
+            feeUsd: 500, paymentConfirmedAt: null,
+            createdAt: '2026-04-01T00:00:00Z', completedAt: null,
+          },
+          {
+            id: 43, company_name: 'Acme Corp', location: 'Lyon, FR',
+            type: 'document_check', status: 'completed', outcome: 'pass',
+            feeUsd: 300, paymentConfirmedAt: '2026-05-10T00:00:00Z',
+            createdAt: '2026-04-10T00:00:00Z', completedAt: '2026-05-09T00:00:00Z',
+          },
+        ],
+      }),
+    }),
+  )
+
+  // Admin disputes — empty by default
+  await page.route('**/api/admin/disputes**', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        pagination: { page: 1, limit: 50, total: 0, pages: 1 },
+      }),
+    }),
+  )
 
 }
 
