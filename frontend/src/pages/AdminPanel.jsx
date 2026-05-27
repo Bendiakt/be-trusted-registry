@@ -59,6 +59,13 @@ export default function AdminPanel() {
   const [clientScoreSaving, setClientScoreSaving]   = useState(false)
   // Mission filter bar
   const [missionFilter, setMissionFilter] = useState({ status: '', q: '', unassigned: false, tier_required: '' })
+  // Disputes state
+  const [disputes, setDisputes]           = useState([])
+  const [disputeFilter, setDisputeFilter] = useState('open')   // open | under_review | resolved | ''
+  const [disputePag, setDisputePag]       = useState({})
+  const [resolveModal, setResolveModal]   = useState(null)     // { id, mission_title, company_name }
+  const [resolveForm, setResolveForm]     = useState({ resolution: 'upheld', resolution_note: '' })
+  const [resolveSaving, setResolveSaving] = useState(false)
 
   useEffect(() => {
     const user = getSession()
@@ -72,6 +79,7 @@ export default function AdminPanel() {
     if (tab === 'missions')  fetchMissions(1)
     if (tab === 'audit')     fetchAuditLog(1)
     if (tab === 'pac')       fetchPacAgents()
+    if (tab === 'disputes')  fetchDisputes(1, disputeFilter)
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -127,6 +135,28 @@ export default function AdminPanel() {
       setAuditPage(page)
     } catch { /* silent */ }
   }, [])
+
+  const fetchDisputes = useCallback(async (page = 1, status = '') => {
+    try {
+      const qs = new URLSearchParams({ page, limit: 50 })
+      if (status) qs.set('status', status)
+      const res = await api.get(`/api/admin/disputes?${qs}`)
+      setDisputes(res.data.data || [])
+      setDisputePag(res.data.pagination || {})
+    } catch { /* silent */ }
+  }, [])
+
+  const resolveDispute = async () => {
+    if (!resolveModal) return
+    setResolveSaving(true)
+    try {
+      await api.patch(`/api/admin/disputes/${resolveModal.id}/resolve`, resolveForm)
+      setResolveModal(null)
+      setResolveForm({ resolution: 'upheld', resolution_note: '' })
+      fetchDisputes(1, disputeFilter)
+    } catch { /* silent */ }
+    finally { setResolveSaving(false) }
+  }
 
   const setCompanyLevel = async (companyId, level) => {
     setSaving(s => ({ ...s, [companyId]: true }))
@@ -396,6 +426,7 @@ export default function AdminPanel() {
     { id: 'companies', label: t('admin.tabs.companies') },
     { id: 'missions',  label: t('admin.tabs.missions') },
     { id: 'pac',       label: 'PAC Network' },
+    { id: 'disputes',  label: 'Disputes' },
     { id: 'audit',     label: t('admin.tabs.audit') },
   ]
 
@@ -1284,6 +1315,109 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {/* ── Disputes Tab ──────────────────────────────────────────────── */}
+        {tab === 'disputes' && (
+          <div style={G.card}>
+            {/* Header + filter */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem' }}>
+                Mission Disputes
+                {disputePag.total != null && (
+                  <span style={{ marginLeft: '0.6rem', background: '#1f1f1f', color: '#888', fontSize: '0.72rem', padding: '0.15rem 0.6rem', borderRadius: '999px' }}>
+                    {disputePag.total}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {[{ v: 'open', label: 'Open' }, { v: 'under_review', label: 'Under Review' }, { v: 'resolved', label: 'Resolved' }, { v: '', label: 'All' }].map(({ v, label }) => (
+                  <button key={v} onClick={() => { setDisputeFilter(v); fetchDisputes(1, v) }} style={{
+                    padding: '0.35rem 0.85rem', borderRadius: '999px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: '600',
+                    background: disputeFilter === v ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1a1a1a',
+                    color: disputeFilter === v ? '#111' : '#666',
+                    outline: disputeFilter === v ? 'none' : '1px solid #222',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {disputes.length === 0 ? (
+              <div style={{ color: '#444', textAlign: 'center', padding: '3rem', fontSize: '0.85rem' }}>
+                {disputeFilter === 'open' ? 'No open disputes 🎉' : 'No disputes found.'}
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['#', 'Mission', 'Company', 'Reason', 'Status', 'Opened', 'Resolved by', 'Actions'].map(h => (
+                        <th key={h} style={G.th}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disputes.map(d => {
+                      const statusColor = d.status === 'open' ? '#e74c3c' : d.status === 'under_review' ? '#f39c12' : '#2ecc71'
+                      const resColor = d.resolution === 'upheld' ? '#e74c3c' : d.resolution === 'dismissed' ? '#888' : '#3498db'
+                      return (
+                        <tr key={d.id} style={{ borderBottom: '1px solid #1c1c1c' }}>
+                          <td style={{ ...G.td, color: '#555', fontFamily: 'monospace', fontSize: '0.72rem' }}>#{d.id}</td>
+                          <td style={G.td}>
+                            <div style={{ fontWeight: '600', color: '#eee', fontSize: '0.82rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {d.mission_title || `Mission #${d.mission_id}`}
+                            </div>
+                          </td>
+                          <td style={G.td}>
+                            <div style={{ color: '#ccc', fontSize: '0.8rem' }}>{d.company_name || '—'}</div>
+                            <div style={{ color: '#555', fontSize: '0.7rem' }}>{d.company_email}</div>
+                          </td>
+                          <td style={{ ...G.td, maxWidth: '220px' }}>
+                            <div style={{ color: '#aaa', fontSize: '0.78rem', whiteSpace: 'pre-wrap', lineClamp: 3, overflow: 'hidden' }}>
+                              {d.reason?.slice(0, 120)}{d.reason?.length > 120 ? '…' : ''}
+                            </div>
+                          </td>
+                          <td style={G.td}>
+                            <span style={{ background: `${statusColor}22`, color: statusColor, padding: '0.2rem 0.55rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                              {d.status.replace('_', ' ')}
+                            </span>
+                            {d.resolution && (
+                              <div style={{ marginTop: '0.25rem' }}>
+                                <span style={{ background: `${resColor}22`, color: resColor, padding: '0.15rem 0.45rem', borderRadius: '999px', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase' }}>
+                                  {d.resolution.replace('_', ' ')}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ ...G.td, color: '#555', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                            {new Date(d.created_at).toLocaleDateString()}
+                          </td>
+                          <td style={G.td}>
+                            {d.resolver_email
+                              ? <div style={{ color: '#888', fontSize: '0.72rem' }}>{d.resolver_email}</div>
+                              : <span style={{ color: '#333' }}>—</span>}
+                          </td>
+                          <td style={G.td}>
+                            {d.status !== 'resolved' ? (
+                              <button
+                                onClick={() => { setResolveModal(d); setResolveForm({ resolution: 'upheld', resolution_note: '' }) }}
+                                style={{ ...G.btn, padding: '0.35rem 0.9rem', fontSize: '0.75rem' }}
+                              >
+                                Resolve
+                              </button>
+                            ) : (
+                              <span style={{ color: '#333', fontSize: '0.72rem' }}>Done</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <PaginationBar pag={disputePag} onPage={p => fetchDisputes(p, disputeFilter)} G={G} />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Audit Log Tab ─────────────────────────────────────────────── */}
         {tab === 'audit' && (
           <div style={G.card}>
@@ -1351,6 +1485,58 @@ export default function AdminPanel() {
           </div>
         )}
       </main>
+
+      {/* ── Resolve Dispute Modal ─────────────────────────────────────── */}
+      {resolveModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '2rem', maxWidth: '480px', width: '100%' }}>
+            <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '0.3rem', color: '#C9A84C' }}>Resolve Dispute #{resolveModal.id}</div>
+            <div style={{ color: '#888', fontSize: '0.82rem', marginBottom: '1.5rem' }}>
+              {resolveModal.mission_title} · <span style={{ color: '#ccc' }}>{resolveModal.company_name}</span>
+            </div>
+
+            {/* Resolution choice */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Decision</div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {[
+                  { v: 'upheld',       label: 'Upheld',        color: '#e74c3c', hint: 'Client complaint is valid' },
+                  { v: 'dismissed',    label: 'Dismissed',     color: '#888',    hint: 'Complaint unfounded' },
+                  { v: 'second_audit', label: 'Second Audit',  color: '#3498db', hint: 'Re-open mission' },
+                ].map(({ v, label, color, hint }) => (
+                  <button key={v} onClick={() => setResolveForm(f => ({ ...f, resolution: v }))} title={hint} style={{
+                    flex: 1, padding: '0.55rem 0.5rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                    fontWeight: '700', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em',
+                    background: resolveForm.resolution === v ? `${color}22` : '#111',
+                    color: resolveForm.resolution === v ? color : '#444',
+                    outline: resolveForm.resolution === v ? `1px solid ${color}` : '1px solid #222',
+                    transition: 'all 0.15s',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Resolution note <span style={{ color: '#333', fontWeight: '400', textTransform: 'none' }}>(optional)</span></div>
+              <textarea
+                value={resolveForm.resolution_note}
+                onChange={e => setResolveForm(f => ({ ...f, resolution_note: e.target.value }))}
+                placeholder="Explain the decision…"
+                rows={3}
+                style={{ ...G.inp, width: '100%', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setResolveModal(null)} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Cancel</button>
+              <button onClick={resolveDispute} disabled={resolveSaving} style={{ ...G.btn, padding: '0.5rem 1.4rem' }}>
+                {resolveSaving ? '…' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── KYC Review Modal ───────────────────────────────────────────── */}
       {kycModal && (
