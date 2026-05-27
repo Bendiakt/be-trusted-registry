@@ -1320,7 +1320,7 @@ router.get('/disputes', auth, requireAdmin, adminReadLimiter, async (req, res) =
 })
 
 // ── PATCH /api/admin/disputes/:id/resolve — admin resolves a dispute ─────────
-router.patch('/disputes/:id/resolve', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+router.patch('/disputes/:id/resolve', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
   try {
     const disputeId = parseInt(req.params.id, 10)
     if (Number.isNaN(disputeId)) return res.status(400).json({ error: 'Invalid dispute id' })
