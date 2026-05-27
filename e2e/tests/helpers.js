@@ -1,6 +1,45 @@
-/**
- * helpers.js — shared utilities for MyDD Playwright E2E tests.
- */
+// helpers.js — shared utilities for MyDD Playwright E2E tests.
+//
+// ── TESTING RULES (read before writing a new spec) ───────────────────────────
+//
+// RULE 1 — ROUTE ORDERING (LIFO: last registered wins)
+//   Playwright gives priority to the LAST registered route that matches a URL.
+//   Register broad globs FIRST so that specific routes registered LATER take
+//   precedence. Registering the specific route first means the broad route
+//   (registered afterwards) shadows it.
+//
+//   CORRECT — broad first, specific last (LIFO makes specific win):
+//     await page.route(broad,    listHandler)
+//     await page.route(specific, resolveHandler)  // <-- wins because registered last
+//
+//   WRONG — specific first, broad last (broad shadows specific):
+//     await page.route(specific, resolveHandler)
+//     await page.route(broad,    listHandler)     // <-- wins and intercepts resolve too
+//
+//   When stubApi() (beforeEach) already registers a broad stub, add your
+//   specific override AFTER stubApi() so it has higher LIFO priority.
+//
+// RULE 2 — MULTI-STEP MODAL FLOWS
+//   Buttons that open modals do NOT call the API. The API fires only when the
+//   confirm button inside the modal is clicked. Assert only after all steps.
+//
+//   CORRECT:
+//     await resolveBtn.click()    // opens modal — no API call yet
+//     await confirmBtn.click()    // fires PATCH /api/.../resolve
+//     expect(resolveCalled).toBe(true)
+//
+//   WRONG — confirm step missing, API is never called:
+//     await resolveBtn.click()
+//     expect(resolveCalled).toBe(true)  // always false
+//
+// RULE 3 — I18N BADGE TEXT
+//   The app renders in the browser default locale (EN). Hardcoded French
+//   strings fail when the locale resolves to English.
+//
+//   CORRECT — locale-aware regex:  /Paid|Paye/i   /Pending|En attente/i
+//   WRONG   — French-only:         /Paye/i         /En attente/i
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
 /** sessionStorage key used by frontend/src/lib/session.js */
 const SESSION_KEY = 'mydd_user'
@@ -27,8 +66,9 @@ async function seedSession(page, user) {
  * @param {import('@playwright/test').Page} page
  */
 async function stubApi(page) {
-  // Catch-all FIRST — Playwright matches routes LIFO (last-registered wins),
-  // so registering the catch-all first lets every specific stub below override it.
+  // Catch-all registered FIRST so that every specific stub below (registered later)
+  // takes precedence via Playwright's LIFO matching (last-registered wins).
+  // Any /api/* URL not matched by a specific stub returns 404 "not mocked".
   await page.route('**/api/**', (route) =>
     route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) }),
   )

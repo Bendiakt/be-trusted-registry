@@ -160,6 +160,8 @@ test.describe('Admin — disputes tab', () => {
   test('resolving a dispute calls the resolve API', async ({ page }) => {
     let resolveCalled = false
 
+    // Broad list stub — registered FIRST so the specific resolve route (below)
+    // takes LIFO priority and intercepts /resolve URLs before this handler does.
     await page.route('**/api/admin/disputes**', (route) =>
       route.fulfill({
         status: 200, contentType: 'application/json',
@@ -176,7 +178,8 @@ test.describe('Admin — disputes tab', () => {
       }),
     )
 
-    await page.route('**/api/admin/disputes/**/resolve', async (route) => {
+    // Specific resolve route — registered LAST so LIFO gives it priority over the broad stub.
+    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
       resolveCalled = true
       await route.fulfill({
         status: 200, contentType: 'application/json',
@@ -190,12 +193,19 @@ test.describe('Admin — disputes tab', () => {
     if (await disputesTab.isVisible({ timeout: 4000 }).catch(() => false)) {
       await disputesTab.click()
 
-      // Click the resolve/dismiss button for the open dispute
-      const resolveBtn = page.getByRole('button', { name: /resolve|dismiss|upheld|close|valider|rejeter/i }).first()
+      // AdminPanel shows a "Resolve" button that opens a confirmation modal.
+      // The API is only called when "Confirm Resolution" inside the modal is clicked.
+      const resolveBtn = page.getByRole('button', { name: /^Resolve$/i }).first()
       if (await resolveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await resolveBtn.click()
-        await page.waitForTimeout(1000)
-        expect(resolveCalled).toBe(true)
+
+        // Wait for the modal and click "Confirm Resolution"
+        const confirmBtn = page.getByRole('button', { name: /Confirm Resolution/i }).first()
+        if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await confirmBtn.click()
+          await page.waitForTimeout(1000)
+          expect(resolveCalled).toBe(true)
+        }
       }
     }
   })

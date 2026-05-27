@@ -552,9 +552,10 @@ export default function Dashboard() {
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
           <TabBtn id="documents"  label={t('dashboard.tabs.documents')} />
           <TabBtn id="billing"    label={t('dashboard.tabs.billing', 'Billing')} />
-          <TabBtn id="missions"   label="🔍 Audits" onClick={fetchCompanyMissions} />
-          <TabBtn id="developer"  label={t('dashboard.tabs.developer', 'Developer')} />
-          <TabBtn id="metrics"    label={t('dashboard.tabs.metrics')} />
+          <TabBtn id="missions"   label={t('dashboard.tabs.audits')} onClick={fetchCompanyMissions} />
+          <TabBtn id="developer"      label={t('dashboard.tabs.developer', 'Developer')} />
+          <TabBtn id="notifications" label={t('dashboard.tabs.notifications', 'Notifications')} />
+          <TabBtn id="metrics"       label={t('dashboard.tabs.metrics')} />
         </div>
 
         {/* ── Overview ─────────────────────────────────────────────────────── */}
@@ -739,6 +740,11 @@ export default function Dashboard() {
           <DeveloperTab G={G} t={t} />
         )}
 
+        {/* ── Notifications ─────────────────────────────────────────────── */}
+        {tab === 'notifications' && (
+          <NotificationsPanel G={G} t={t} />
+        )}
+
         {/* ── Metrics ──────────────────────────────────────────────────────── */}
         {tab === 'metrics' && (
           <div style={G.card}>
@@ -750,7 +756,7 @@ export default function Dashboard() {
         {tab === 'missions' && (
           <div>
             <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
-              Mes audits B&E
+              {t('dashboard.audits.title')}
             </div>
 
             {companyMissions.length === 0 && (
@@ -758,7 +764,7 @@ export default function Dashboard() {
                 <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔍</div>
                 <div style={{ color: '#C9A84C', fontWeight: '700', marginBottom: '0.5rem' }}>Aucun audit en cours</div>
                 <div style={{ color: '#555', fontSize: '0.875rem' }}>
-                  Vos missions d'audit PAC apparaîtront ici une fois assignées par l'équipe B&E.
+                  {t('dashboard.audits.empty')}
                 </div>
               </div>
             )}
@@ -1317,6 +1323,7 @@ function RegisterCompanyForm({ company, onSaved, onError }) {
 
 // ── MissionCard — company audit view ─────────────────────────────────────────
 function MissionCard({ m, sc, oc, G }) {
+  const { t } = useTranslation()
   const [open, setOpen]             = useState(false)
   const [rateModal, setRateModal]   = useState(false)
   const [hoverStar, setHoverStar]   = useState(0)
@@ -1458,7 +1465,7 @@ function MissionCard({ m, sc, oc, G }) {
               {m.feeUsd && (
                 feePaid ? (
                   <span style={{ color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(46,204,113,0.08)' }}>
-                    ✓ Payé ${m.feeUsd}
+                    {t('dashboard.audits.fee_paid', { amount: m.feeUsd })}
                   </span>
                 ) : (
                   <button
@@ -1466,7 +1473,7 @@ function MissionCard({ m, sc, oc, G }) {
                     disabled={feeLoading}
                     style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.35)', color: '#C9A84C', fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', cursor: feeLoading ? 'not-allowed' : 'pointer', opacity: feeLoading ? 0.6 : 1 }}
                   >
-                    {feeLoading ? '…' : `💳 Payer $${m.feeUsd}`}
+                    {feeLoading ? '…' : t('dashboard.audits.pay_fee', { amount: m.feeUsd })}
                   </button>
                 )
               )}
@@ -1627,5 +1634,191 @@ function MissionCard({ m, sc, oc, G }) {
         </div>
       )}
     </>
+  )
+}
+
+// ── NotificationsPanel ────────────────────────────────────────────────────────
+function NotificationsPanel({ G, t }) {
+  const [notifs, setNotifs]       = useState(null)   // null = loading
+  const [unread, setUnread]       = useState(0)
+  const [err, setErr]             = useState('')
+  const [markingId, setMarkingId] = useState(null)
+  const [markingAll, setMarkingAll] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  // Fetch notifications
+  useEffect(() => {
+    let cancelled = false
+    setErr('')
+    api.get('/api/notifications')
+      .then(r => {
+        if (cancelled) return
+        setNotifs(r.data.notifications || [])
+        setUnread(r.data.unread || 0)
+      })
+      .catch(() => {
+        if (!cancelled) setErr(t('dashboard.notifications.error'))
+      })
+    return () => { cancelled = true }
+  }, [refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const markOne = async (id) => {
+    setMarkingId(id)
+    try {
+      await api.patch(`/api/notifications/${id}/read`)
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+      setUnread(prev => Math.max(0, prev - 1))
+    } catch { /* silent */ }
+    finally { setMarkingId(null) }
+  }
+
+  const markAll = async () => {
+    setMarkingAll(true)
+    try {
+      await api.patch('/api/notifications/read-all')
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })))
+      setUnread(0)
+    } catch { /* silent */ }
+    finally { setMarkingAll(false) }
+  }
+
+  // Relative time helper
+  const relTime = (iso) => {
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins  = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days  = Math.floor(diff / 86400000)
+    if (mins  <  1) return '< 1 min'
+    if (mins  < 60) return `${mins} min`
+    if (hours < 24) return `${hours}h`
+    return `${days}d`
+  }
+
+  // Icon per type
+  const typeIcon = (type = '') => {
+    if (type.includes('payment'))  return '💳'
+    if (type.includes('mission'))  return '🔍'
+    if (type.includes('dispute'))  return '⚠️'
+    if (type.includes('cert'))     return '🏆'
+    return '🔔'
+  }
+
+  // Styles
+  const S = {
+    wrap:    { maxWidth: '640px' },
+    header:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' },
+    title:   { fontWeight: '800', fontSize: '1.1rem', color: '#eee' },
+    badge:   { background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.3)', color: '#C9A84C', borderRadius: '10px', padding: '0.15rem 0.55rem', fontSize: '0.72rem', fontWeight: '700', marginLeft: '0.5rem' },
+    actions: { display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' },
+    iconBtn: { background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#888', borderRadius: '8px', padding: '0.35rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' },
+    row:     { display: 'flex', gap: '0.85rem', alignItems: 'flex-start', padding: '0.9rem 1rem', borderRadius: '10px', marginBottom: '0.5rem', border: '1px solid #252525', transition: 'background 0.15s' },
+    icon:    { fontSize: '1.2rem', flexShrink: 0, marginTop: '0.05rem' },
+    body:    { flex: 1, minWidth: 0 },
+    ntitle:  { color: '#eee', fontWeight: '600', fontSize: '0.875rem', lineHeight: 1.35 },
+    nbody:   { color: '#777', fontSize: '0.78rem', marginTop: '0.2rem', lineHeight: 1.4 },
+    meta:    { display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', flexWrap: 'wrap' },
+    time:    { color: '#444', fontSize: '0.7rem' },
+    markBtn: { background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '0.2rem 0.55rem', fontSize: '0.68rem', cursor: 'pointer' },
+    empty:   { textAlign: 'center', padding: '3rem 1rem', color: '#555' },
+  }
+
+  return (
+    <div style={S.wrap}>
+      {/* Header */}
+      <div style={S.header}>
+        <div>
+          <span style={S.title}>{t('dashboard.notifications.title')}</span>
+          {unread > 0 && (
+            <span style={S.badge}>{t('dashboard.notifications.unread_count', { count: unread })}</span>
+          )}
+        </div>
+        <div style={S.actions}>
+          <button
+            style={S.iconBtn}
+            onClick={() => setRefreshKey(k => k + 1)}
+            disabled={notifs === null}
+          >
+            ↺ {t('dashboard.notifications.refresh')}
+          </button>
+          {unread > 0 && (
+            <button
+              style={{ ...S.iconBtn, color: '#C9A84C', borderColor: 'rgba(201,168,76,0.3)' }}
+              onClick={markAll}
+              disabled={markingAll}
+            >
+              {markingAll ? '…' : t('dashboard.notifications.mark_all_read')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Loading */}
+      {notifs === null && !err && (
+        <div style={{ color: '#555', padding: '2rem 0', textAlign: 'center' }}>
+          {t('dashboard.notifications.loading')}
+        </div>
+      )}
+
+      {/* Error */}
+      {err && (
+        <div style={{ padding: '0.75rem 1rem', background: 'rgba(231,76,60,0.07)', border: '1px solid rgba(231,76,60,0.2)', borderRadius: '8px', color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '1rem' }}>
+          {err}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {notifs !== null && notifs.length === 0 && !err && (
+        <div style={S.empty}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔔</div>
+          <div style={{ fontWeight: '700', color: '#666', marginBottom: '0.4rem' }}>{t('dashboard.notifications.empty')}</div>
+          <div style={{ fontSize: '0.82rem', color: '#444', maxWidth: '320px', margin: '0 auto', lineHeight: 1.5 }}>
+            {t('dashboard.notifications.empty_sub')}
+          </div>
+        </div>
+      )}
+
+      {/* All caught up */}
+      {notifs !== null && notifs.length > 0 && unread === 0 && (
+        <div style={{ padding: '0.55rem 1rem', background: 'rgba(46,204,113,0.05)', border: '1px solid rgba(46,204,113,0.15)', borderRadius: '8px', color: '#2ecc71', fontSize: '0.8rem', fontWeight: '600', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          ✓ {t('dashboard.notifications.all_caught_up')}
+        </div>
+      )}
+
+      {/* Notification list */}
+      {notifs !== null && notifs.map(n => (
+        <div
+          key={n.id}
+          style={{
+            ...S.row,
+            background: n.read ? 'transparent' : 'rgba(201,168,76,0.04)',
+            borderColor: n.read ? '#252525' : 'rgba(201,168,76,0.15)',
+          }}
+        >
+          <div style={S.icon}>{typeIcon(n.type)}</div>
+          <div style={S.body}>
+            <div style={{ ...S.ntitle, color: n.read ? '#888' : '#eee' }}>{n.title}</div>
+            {n.body && <div style={S.nbody}>{n.body}</div>}
+            <div style={S.meta}>
+              <span style={S.time}>{relTime(n.createdAt)}</span>
+              {!n.read && (
+                <button
+                  style={S.markBtn}
+                  onClick={() => markOne(n.id)}
+                  disabled={markingId === n.id}
+                >
+                  {markingId === n.id ? '…' : t('dashboard.notifications.mark_read')}
+                </button>
+              )}
+              {n.link && (
+                <a href={n.link} style={{ color: '#C9A84C', fontSize: '0.7rem', textDecoration: 'none', fontWeight: '600' }}>→ View</a>
+              )}
+            </div>
+          </div>
+          {!n.read && (
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C9A84C', flexShrink: 0, marginTop: '0.4rem' }} />
+          )}
+        </div>
+      ))}
+    </div>
   )
 }

@@ -177,11 +177,12 @@ describe('PACPortal — portal UI', () => {
 describe('PACPortal — earnings tab', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
+  // Note: t() mock returns the key as-is, so assertions use i18n keys after migration.
   it('renders Earnings tab button', async () => {
     mockPACSession()
     render(<PACPortal />)
     await waitFor(() => {
-      expect(screen.getByText('💰 Revenus')).toBeInTheDocument()
+      expect(screen.getByText('pac.tabs.earnings')).toBeInTheDocument()
     })
   })
 
@@ -196,12 +197,12 @@ describe('PACPortal — earnings tab', () => {
   it('earnings tab shows total earned stat', async () => {
     mockPACSession()
     render(<PACPortal />)
-    // Switch to earnings tab
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    // Switch to earnings tab (label is now the i18n key since t() mock returns key)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
-      // "Total perçu" label must be present in the stat card
-      expect(screen.getByText('Total perçu')).toBeInTheDocument()
+      // i18n key for the label
+      expect(screen.getByText('pac.earnings.total_earned')).toBeInTheDocument()
       // $50.00 appears at least once (stat card + commission column)
       expect(screen.getAllByText('$50.00').length).toBeGreaterThanOrEqual(1)
     })
@@ -210,8 +211,8 @@ describe('PACPortal — earnings tab', () => {
   it('earnings tab shows pending amount stat', async () => {
     mockPACSession()
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
       // Pending = $75.00
       expect(screen.getByText('$75.00')).toBeInTheDocument()
@@ -221,8 +222,8 @@ describe('PACPortal — earnings tab', () => {
   it('earnings tab shows commission percentage', async () => {
     mockPACSession()
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
       // commissionPct = 10 → "10%"
       expect(screen.getByText('10%')).toBeInTheDocument()
@@ -232,10 +233,10 @@ describe('PACPortal — earnings tab', () => {
   it('earnings tab shows PAC tier', async () => {
     mockPACSession()
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
-      // pacTier = S1 → "Tier S1"
+      // pacTier = S1 → "Tier S1" (only "Tier " is hardcoded, S1 is data)
       expect(screen.getByText('Tier S1')).toBeInTheDocument()
     })
   })
@@ -243,8 +244,8 @@ describe('PACPortal — earnings tab', () => {
   it('earnings tab shows mission company names in breakdown table', async () => {
     mockPACSession()
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
       expect(screen.getByText('Acme Corp')).toBeInTheDocument()
       expect(screen.getByText('Beta Ltd')).toBeInTheDocument()
@@ -254,22 +255,23 @@ describe('PACPortal — earnings tab', () => {
   it('paid mission shows paid badge in earnings table', async () => {
     mockPACSession()
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
-      // Acme Corp has paymentConfirmedAt set → badge starts with "✓ Payé" followed by date
-      expect(screen.getByText(/✓ Payé/)).toBeInTheDocument()
+      // Acme Corp has paymentConfirmedAt set → badge uses t('pac.earnings.paid_badge') + date
+      // t() mock returns key, so text starts with "pac.earnings.paid_badge"
+      expect(screen.getByText(/pac\.earnings\.paid_badge/)).toBeInTheDocument()
     })
   })
 
   it('unpaid mission shows pending badge in earnings table', async () => {
     mockPACSession()
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
     await waitFor(() => {
-      // Beta Ltd has no paymentConfirmedAt → shows pending indicator
-      expect(screen.getByText('⏳ En attente')).toBeInTheDocument()
+      // Beta Ltd has no paymentConfirmedAt → shows t('pac.earnings.pending_badge')
+      expect(screen.getByText('pac.earnings.pending_badge')).toBeInTheDocument()
     })
   })
 
@@ -284,11 +286,11 @@ describe('PACPortal — earnings tab', () => {
       return Promise.resolve({ data: [] })
     })
     render(<PACPortal />)
-    await waitFor(() => screen.getByText('💰 Revenus'))
-    fireEvent.click(screen.getByText('💰 Revenus'))
-    // Loading placeholder text visible when earnings state is null
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    // t() mock returns key → loading text is 'pac.earnings.loading'
     await waitFor(() => {
-      expect(screen.getByText('Chargement…')).toBeInTheDocument()
+      expect(screen.getByText('pac.earnings.loading')).toBeInTheDocument()
     })
   })
 })

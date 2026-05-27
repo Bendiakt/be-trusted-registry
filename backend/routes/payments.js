@@ -6,7 +6,8 @@ const { auth } = require('../lib/authUtils')
 const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
 const { sendPaymentConfirmation, sendPacMembershipConfirmation, sendPacKycDecision,
-        sendLicenseSuspended, sendLicenseReinstated } = require('../lib/mailer')
+        sendLicenseSuspended, sendLicenseReinstated,
+        sendMissionFeeReceipt, sendMissionCommissionEarned } = require('../lib/mailer')
 const { dispatchWebhook } = require('../lib/webhookDispatch')
 const { isBlockedCompany } = require('../lib/blocklist')
 
@@ -202,7 +203,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           feeUsd: m?.fee_usd, commissionCents: m?.commission_amount_cents,
         }))
 
-        // Notify admin
+        // Notify admin via DB notification
         if (m) {
           query(`
             INSERT INTO notifications (user_id, type, title, body)
@@ -211,6 +212,42 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             `Mission Fee Received: #${missionId}`,
             `Mission #${missionId} fee of $${m.fee_usd} paid and confirmed.`,
           ]).catch(() => {})
+
+          // Email company: payment receipt
+          query(
+            `SELECT u.email, u.name, c.name AS company_name
+               FROM companies c JOIN users u ON u.id = c.user_id
+              WHERE c.id = $1`,
+            [m.company_id]
+          ).then(({ rows }) => {
+            if (rows[0]) {
+              sendMissionFeeReceipt({
+                email:       rows[0].email,
+                name:        rows[0].name,
+                companyName: rows[0].company_name,
+                feeUsd:      m.fee_usd,
+                missionId,
+              }).catch(() => {})
+            }
+          }).catch(() => {})
+
+          // Email PAC agent: commission earned
+          if (m.assigned_to) {
+            query(
+              `SELECT u.email, u.name FROM users u WHERE u.id = $1`,
+              [m.assigned_to]
+            ).then(({ rows }) => {
+              if (rows[0]) {
+                sendMissionCommissionEarned({
+                  email:         rows[0].email,
+                  name:          rows[0].name,
+                  companyName:   session.metadata?.companyName || null,
+                  commissionUsd: ((m.commission_amount_cents || 0) / 100).toFixed(2),
+                  missionId,
+                }).catch(() => {})
+              }
+            }).catch(() => {})
+          }
         }
 
         return res.json({ received: true })

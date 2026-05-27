@@ -151,9 +151,9 @@ test.describe('Payments — mission fee checkout', () => {
     const auditsTab = page.getByRole('button', { name: /audit/i }).first()
     if (await auditsTab.isVisible()) await auditsTab.click()
 
-    // Mission id=43 has paymentConfirmedAt set → shows "✓ Payé $300"
+    // Mission id=43 has paymentConfirmedAt set → shows "✓ Paid $300" (EN) / "✓ Payé $300" (FR)
     await expect(
-      page.getByText(/✓ Payé|payé/i).first()
+      page.getByText(/✓ pa[iy]/i).first()
     ).toBeVisible({ timeout: 5000 })
   })
 })
