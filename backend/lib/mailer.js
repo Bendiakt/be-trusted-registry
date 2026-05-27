@@ -1162,4 +1162,81 @@ const sendLicenseReinstated = async ({ email, full_name, tier }) => {
   }
 }
 
-module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome, sendS2Eligible, sendS2Promoted, sendS3Eligible, sendS3Promoted, sendLicenseRenewalReminder, sendLicenseSuspended, sendLicenseReinstated }
+/**
+ * sendMissionFeeConfirmed — sent to the company (and separately the PAC) when the
+ * mission fee Stripe payment is confirmed by the webhook.
+ *
+ * @param {{ email: string, recipientName: string, companyName: string,
+ *            missionId: number, feeUsd: number, role: 'company'|'pac' }} opts
+ */
+const sendMissionFeeConfirmed = async ({ email, recipientName, companyName, missionId, feeUsd, role = 'company' }) => {
+  if (!email) return
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log(JSON.stringify({ event: 'mission_fee_confirmed.email.queued', mode: 'log_only', email, missionId, feeUsd, role }))
+    return
+  }
+
+  const isCompany = role === 'company'
+  const heading   = isCompany ? 'Mission Fee Payment Confirmed' : 'Mission Fee Received — Ready to Proceed'
+  const bodyText  = isCompany
+    ? `Your payment of <strong>$${feeUsd} USD</strong> for Mission #${missionId} (<strong>${companyName}</strong>) has been received and confirmed. Your assigned agent can now begin the audit.`
+    : `The client has paid the mission fee of <strong>$${feeUsd} USD</strong> for Mission #${missionId} (<strong>${companyName}</strong>). You may now proceed with the site inspection.`
+  const ctaLabel  = isCompany ? 'View Audit Status' : 'View Mission Details'
+  const ctaHref   = isCompany
+    ? `${process.env.FRONTEND_URL || 'https://mydd.work'}/dashboard`
+    : `${process.env.FRONTEND_URL || 'https://mydd.work'}/pac`
+
+  try {
+    await sendViaResend({
+      from: FROM_ADDRESS,
+      to:   email,
+      subject: `${heading} — Mission #${missionId}`,
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5;padding:40px 16px;margin:0">
+  <table style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden">
+    <tr><td style="background:#01696f;padding:24px 32px">
+      <p style="margin:0;font-size:1.2rem;font-weight:700;color:#fff">MyDD — Mission Payment</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="font-size:1.3rem;margin:0 0 16px;color:#f5f5f5">${heading}</h1>
+      <p style="color:#aaa;line-height:1.6;margin:0 0 24px">
+        Hi${recipientName ? ` ${recipientName}` : ''},<br><br>
+        ${bodyText}
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.9rem;margin-bottom:24px">
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Mission #</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">#${missionId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa;border-bottom:1px solid #222">Company</td>
+          <td style="padding:8px 0;text-align:right;color:#f5f5f5;border-bottom:1px solid #222">${companyName}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#aaa">Amount</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:#01696f">$${feeUsd} USD</td>
+        </tr>
+      </table>
+      <a href="${ctaHref}"
+         style="display:inline-block;background:#01696f;color:#fff;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none">
+        ${ctaLabel}
+      </a>
+    </td></tr>
+    <tr><td style="padding:16px 32px;background:#0d0d0d;font-size:0.75rem;color:#555;text-align:center">
+      B&amp;E Consult FZCO &bull; Dubai, UAE &bull; <a href="${process.env.FRONTEND_URL || 'https://mydd.work'}/privacy" style="color:#555">Privacy</a>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    })
+    console.log(JSON.stringify({ event: 'mission_fee_confirmed.email.sent', email, missionId, feeUsd, role }))
+  } catch (err) {
+    console.error('[mailer] sendMissionFeeConfirmed failed:', err.message)
+  }
+}
+
+module.exports = { sendPaymentConfirmation, sendWelcome, sendPasswordReset, sendMissionAssigned, sendMissionCompleted, sendCertGranted, sendEmailVerification, sendRenewalReminder, sendCertExpired, sendOnboardingD1, sendOnboardingD3, sendSupervisionTaskReminder, sendPacMembershipConfirmation, sendPacKycDecision, sendFounderWelcome, sendS2Eligible, sendS2Promoted, sendS3Eligible, sendS3Promoted, sendLicenseRenewalReminder, sendLicenseSuspended, sendLicenseReinstated, sendMissionFeeConfirmed }

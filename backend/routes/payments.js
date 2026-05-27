@@ -6,7 +6,7 @@ const { auth } = require('../lib/authUtils')
 const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
 const { sendPaymentConfirmation, sendPacMembershipConfirmation, sendPacKycDecision,
-        sendLicenseSuspended, sendLicenseReinstated } = require('../lib/mailer')
+        sendLicenseSuspended, sendLicenseReinstated, sendMissionFeeConfirmed } = require('../lib/mailer')
 const { dispatchWebhook } = require('../lib/webhookDispatch')
 const { isBlockedCompany } = require('../lib/blocklist')
 
@@ -202,7 +202,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           feeUsd: m?.fee_usd, commissionCents: m?.commission_amount_cents,
         }))
 
-        // Notify admin
+        // Notify admin + send confirmation emails to company + PAC
         if (m) {
           query(`
             INSERT INTO notifications (user_id, type, title, body)
@@ -211,6 +211,34 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             `Mission Fee Received: #${missionId}`,
             `Mission #${missionId} fee of $${m.fee_usd} paid and confirmed.`,
           ]).catch(() => {})
+
+          // Email to company user
+          query(
+            `SELECT u.email, u.name FROM companies c JOIN users u ON u.id = c.user_id WHERE c.id = $1 LIMIT 1`,
+            [m.company_id]
+          ).then(({ rows }) => {
+            if (rows[0]) {
+              sendMissionFeeConfirmed({
+                email: rows[0].email, recipientName: rows[0].name,
+                companyName: '', missionId, feeUsd: m.fee_usd, role: 'company',
+              }).catch(() => {})
+            }
+          }).catch(() => {})
+
+          // Email to assigned PAC agent (if any)
+          if (m.assigned_to) {
+            query(
+              `SELECT u.email, pp.full_name FROM pac_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.user_id = $1 LIMIT 1`,
+              [m.assigned_to]
+            ).then(({ rows }) => {
+              if (rows[0]) {
+                sendMissionFeeConfirmed({
+                  email: rows[0].email, recipientName: rows[0].full_name,
+                  companyName: '', missionId, feeUsd: m.fee_usd, role: 'pac',
+                }).catch(() => {})
+              }
+            }).catch(() => {})
+          }
         }
 
         return res.json({ received: true })

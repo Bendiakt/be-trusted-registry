@@ -1487,22 +1487,49 @@ function MissionCard({ m, sc, oc, G }) {
           </div>
         )}
 
-        {/* Report expand */}
-        {m.reportText && (
-          <>
-            <div style={{ borderTop: '1px solid #252525' }}>
-              <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '0.6rem 1.5rem', cursor: 'pointer', color: '#555', fontSize: '0.75rem', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                {open ? '▲' : '▼'} Rapport d'audit
-              </button>
-            </div>
-            {open && (
-              <div style={{ borderTop: '1px solid #222', padding: '1rem 1.5rem', background: 'rgba(46,204,113,0.02)' }}>
-                <div style={{ color: '#444', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Rapport</div>
-                <div style={{ color: '#888', fontSize: '0.82rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{m.reportText}</div>
+        {/* Report expand — supports v2 structured JSON or legacy plain text */}
+        {m.reportText && (() => {
+          const SECTION_LABELS = {
+            executive_summary:     'Résumé exécutif',
+            identity_verification: 'Vérification légale',
+            physical_inspection:   'Inspection physique',
+            management_assessment: 'Équipe dirigeante',
+            documentation_review:  'Documents reçus',
+            risk_indicators:       'Indicateurs de risque',
+            recommendation:        'Recommandation',
+          }
+          let parsed = null
+          try {
+            const p = JSON.parse(m.reportText)
+            if (p?.v === 2 && p.sections && typeof p.sections === 'object') parsed = p.sections
+          } catch { /* legacy */ }
+
+          return (
+            <>
+              <div style={{ borderTop: '1px solid #252525' }}>
+                <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '0.6rem 1.5rem', cursor: 'pointer', color: '#555', fontSize: '0.75rem', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  {open ? '▲' : '▼'} Rapport d'audit
+                </button>
               </div>
-            )}
-          </>
-        )}
+              {open && (
+                <div style={{ borderTop: '1px solid #222', padding: '1rem 1.5rem', background: 'rgba(46,204,113,0.02)' }}>
+                  <div style={{ color: '#444', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.8rem' }}>Rapport d'audit</div>
+                  {parsed
+                    ? Object.entries(parsed).map(([key, val]) => val?.trim() ? (
+                        <div key={key} style={{ marginBottom: '0.9rem', paddingLeft: '0.7rem', borderLeft: `2px solid ${key === 'risk_indicators' ? '#e74c3c' : '#2ecc71'}` }}>
+                          <div style={{ color: '#666', fontSize: '0.6rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.25rem' }}>
+                            {SECTION_LABELS[key] || key}
+                          </div>
+                          <div style={{ color: '#bbb', fontSize: '0.8rem', lineHeight: '1.55', whiteSpace: 'pre-wrap' }}>{val}</div>
+                        </div>
+                      ) : null)
+                    : <div style={{ color: '#888', fontSize: '0.82rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{m.reportText}</div>
+                  }
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       {/* ── Rating modal ────────────────────────────────────────────────────── */}
