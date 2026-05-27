@@ -176,7 +176,7 @@ test.describe('Admin — disputes tab', () => {
       }),
     )
 
-    await page.route('**/api/admin/disputes/**/resolve', async (route) => {
+    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
       resolveCalled = true
       await route.fulfill({
         status: 200, contentType: 'application/json',

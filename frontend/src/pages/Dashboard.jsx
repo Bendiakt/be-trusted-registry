@@ -1317,6 +1317,7 @@ function RegisterCompanyForm({ company, onSaved, onError }) {
 
 // ── MissionCard — company audit view ─────────────────────────────────────────
 function MissionCard({ m, sc, oc, G }) {
+  const { t } = useTranslation()
   const [open, setOpen]             = useState(false)
   const [rateModal, setRateModal]   = useState(false)
   const [hoverStar, setHoverStar]   = useState(0)
@@ -1458,7 +1459,7 @@ function MissionCard({ m, sc, oc, G }) {
               {m.feeUsd && (
                 feePaid ? (
                   <span style={{ color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(46,204,113,0.08)' }}>
-                    ✓ Payé ${m.feeUsd}
+                    {t('dashboard.audits.fee_paid', { amount: m.feeUsd })}
                   </span>
                 ) : (
                   <button
@@ -1466,7 +1467,7 @@ function MissionCard({ m, sc, oc, G }) {
                     disabled={feeLoading}
                     style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.35)', color: '#C9A84C', fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', cursor: feeLoading ? 'not-allowed' : 'pointer', opacity: feeLoading ? 0.6 : 1 }}
                   >
-                    {feeLoading ? '…' : `💳 Payer $${m.feeUsd}`}
+                    {feeLoading ? '…' : t('dashboard.audits.pay_fee', { amount: m.feeUsd })}
                   </button>
                 )
               )}
