@@ -86,27 +86,47 @@ export default function PACPortal() {
     } catch { setMsg({ text: t('pac.missions.error_accept'), type: 'error' }) }
   }
 
+  // ── Structured report sections ────────────────────────────────────────────
+  const REPORT_SECTIONS = [
+    { key: 'executive_summary',      label: 'Executive Summary',            required: true,  rows: 4, hint: 'Brief overall conclusion of the audit visit.' },
+    { key: 'identity_verification',  label: 'Identity & Legal Verification', required: true,  rows: 3, hint: 'Existence légale, documents officiels, concordance.' },
+    { key: 'physical_inspection',    label: 'Physical Inspection',           required: false, rows: 3, hint: 'Premises, equipment, operational activity observed on site.' },
+    { key: 'management_assessment',  label: 'Management & Team',             required: false, rows: 3, hint: 'Key contacts, responsiveness, organizational structure.' },
+    { key: 'documentation_review',   label: 'Documentation Review',          required: false, rows: 3, hint: 'Documents received, completeness, anomalies.' },
+    { key: 'risk_indicators',        label: 'Risk Indicators',               required: false, rows: 2, hint: 'Any flags or concerns noted. Write "None" if all clear.' },
+    { key: 'recommendation',         label: 'Recommendation & Next Steps',   required: false, rows: 2, hint: 'Suggested actions for the client or platform.' },
+  ]
+  const EMPTY_SECTIONS = Object.fromEntries(REPORT_SECTIONS.map(s => [s.key, '']))
+
   const toggleReportForm = (id) => {
     setReportForms(prev => ({
       ...prev,
       [id]: prev[id]?.open
         ? { ...prev[id], open: false }
-        : { open: true, text: '', outcome: 'pass', submitting: false },
+        : { open: true, sections: { ...EMPTY_SECTIONS }, outcome: 'pass', submitting: false },
     }))
   }
 
   const submitReport = async (mission) => {
     const form = reportForms[mission.id]
-    if (!form?.text?.trim()) return
+    const summary = form?.sections?.executive_summary?.trim() || ''
+    if (!summary) return
     setReportForms(prev => ({ ...prev, [mission.id]: { ...prev[mission.id], submitting: true } }))
+    // Serialize structured sections as JSON v2
+    const report_text = JSON.stringify({
+      v: 2,
+      sections: Object.fromEntries(
+        Object.entries(form.sections).filter(([, v]) => v.trim())
+      ),
+    })
     try {
       await api.post(`/api/pac/missions/${mission.id}/complete`, {
-        report_text: form.text,
-        outcome:     form.outcome,
+        report_text,
+        outcome: form.outcome,
       })
       setMsg({ text: t('pac.missions.mission_completed'), type: 'success' })
       setMissions(prev => prev.map(m => m.id === mission.id
-        ? { ...m, status: 'completed', reportText: form.text, outcome: form.outcome }
+        ? { ...m, status: 'completed', reportText: report_text, outcome: form.outcome }
         : m
       ))
       setReportForms(prev => ({ ...prev, [mission.id]: { open: false } }))
@@ -311,19 +331,36 @@ export default function PACPortal() {
                             </div>
                           </div>
 
+                          {/* ── Structured report sections ─── */}
                           <div style={{ marginBottom: '1rem' }}>
-                            <label style={lbl}>{t('pac.missions.report_text')}</label>
-                            <textarea rows={4} placeholder={t('pac.missions.report_text_placeholder')}
-                              style={{ ...inp, resize: 'vertical' }}
-                              value={rf.text || ''}
-                              onChange={e => setReportForms(prev => ({ ...prev, [m.id]: { ...prev[m.id], text: e.target.value } }))}
-                            />
+                            <div style={{ color: '#C9A84C', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                              Audit Report — Structured Template
+                            </div>
+                            {REPORT_SECTIONS.map(sec => (
+                              <div key={sec.key} style={{ marginBottom: '0.9rem' }}>
+                                <label style={{ ...lbl, display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                                  {sec.label}
+                                  {sec.required && <span style={{ color: '#e74c3c', fontSize: '0.65rem' }}>*</span>}
+                                  <span style={{ color: '#333', fontSize: '0.68rem', fontWeight: '400', marginLeft: '0.25rem' }}>— {sec.hint}</span>
+                                </label>
+                                <textarea
+                                  rows={sec.rows}
+                                  placeholder={sec.required ? `${sec.label} (required)` : `${sec.label} (optional)`}
+                                  style={{ ...inp, resize: 'vertical' }}
+                                  value={rf.sections?.[sec.key] || ''}
+                                  onChange={e => setReportForms(prev => ({
+                                    ...prev,
+                                    [m.id]: { ...prev[m.id], sections: { ...prev[m.id].sections, [sec.key]: e.target.value } },
+                                  }))}
+                                />
+                              </div>
+                            ))}
                           </div>
 
                           <button
                             onClick={() => submitReport(m)}
-                            disabled={rf.submitting || !rf.text?.trim()}
-                            style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.7rem 1.75rem', borderRadius: '8px', border: 'none', fontWeight: '700', cursor: rf.submitting || !rf.text?.trim() ? 'default' : 'pointer', fontSize: '0.875rem', opacity: rf.submitting || !rf.text?.trim() ? 0.6 : 1 }}>
+                            disabled={rf.submitting || !rf.sections?.executive_summary?.trim()}
+                            style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.7rem 1.75rem', borderRadius: '8px', border: 'none', fontWeight: '700', cursor: rf.submitting || !rf.sections?.executive_summary?.trim() ? 'default' : 'pointer', fontSize: '0.875rem', opacity: rf.submitting || !rf.sections?.executive_summary?.trim() ? 0.6 : 1 }}>
                             {rf.submitting ? '…' : t('pac.missions.submit_report_btn')}
                           </button>
                         </div>

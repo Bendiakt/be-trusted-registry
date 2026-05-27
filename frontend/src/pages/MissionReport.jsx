@@ -59,6 +59,25 @@ export default function MissionReport() {
   const oc = OUTCOME_CONFIG[mission.outcome] || null
   const now = new Date()
 
+  // ── Parse structured report (v2 JSON) vs legacy plain text ────────────────
+  const SECTION_LABELS = {
+    executive_summary:     'Executive Summary',
+    identity_verification: 'Identity & Legal Verification',
+    physical_inspection:   'Physical Inspection',
+    management_assessment: 'Management & Team',
+    documentation_review:  'Documentation Review',
+    risk_indicators:       'Risk Indicators',
+    recommendation:        'Recommendation & Next Steps',
+  }
+  const parsedReport = (() => {
+    if (!mission.reportText) return null
+    try {
+      const p = JSON.parse(mission.reportText)
+      if (p?.v === 2 && p.sections && typeof p.sections === 'object') return p.sections
+    } catch { /* legacy plain text */ }
+    return null
+  })()
+
   return (
     <>
       <style>{`
@@ -196,8 +215,34 @@ export default function MissionReport() {
               </div>
             )}
 
-            {/* Report text */}
-            {mission.reportText && (
+            {/* Report findings — structured (v2) or legacy plain text */}
+            {parsedReport ? (
+              // ── Structured report ────────────────────────────────────────
+              <div style={{ marginBottom: '2.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: '#aaa', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '1.25rem', fontFamily: 'Inter,sans-serif' }}>
+                  Audit Findings
+                </div>
+                {Object.entries(SECTION_LABELS).map(([key, label]) => {
+                  const content = parsedReport[key]
+                  if (!content) return null
+                  const isRisk = key === 'risk_indicators'
+                  return (
+                    <div key={key} style={{ marginBottom: '1.5rem', pageBreakInside: 'avoid' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', fontFamily: 'Inter,sans-serif' }}>
+                        {isRisk && <span style={{ fontSize: '0.75rem' }}>⚑</span>}
+                        <div style={{ fontSize: '0.6rem', color: isRisk ? '#e74c3c' : '#bbb', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: '700' }}>
+                          {label}
+                        </div>
+                      </div>
+                      <div style={{ color: '#333', fontSize: '0.88rem', lineHeight: 1.75, whiteSpace: 'pre-wrap', borderLeft: `2px solid ${isRisk ? '#e74c3c33' : '#eee'}`, paddingLeft: '0.85rem' }}>
+                        {content}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : mission.reportText ? (
+              // ── Legacy plain text (backward compat) ──────────────────────
               <div style={{ marginBottom: '2.5rem' }}>
                 <div style={{ fontSize: '0.65rem', color: '#aaa', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.6rem', fontFamily: 'Inter,sans-serif' }}>
                   Audit Findings
@@ -206,7 +251,7 @@ export default function MissionReport() {
                   {mission.reportText}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Signature area */}
             <div style={{ borderTop: '1px solid #eee', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem', fontFamily: 'Inter,sans-serif' }}>
