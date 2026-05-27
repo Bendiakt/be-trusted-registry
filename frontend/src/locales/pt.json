@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "Faturamento",
       "developer": "Desenvolvedor",
-      "audits": "🔍 Auditorias"
+      "audits": "🔍 Auditorias",
+      "notifications": "Notificações"
     },
     "billing_title": "Histórico de pagamentos",
     "billing_subtitle": "Suas certificações e transações do Stripe",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ Contestar",
       "rate_agent": "⭐ Avaliar o agente",
       "pending_dispute": "⏳ Contestação pendente"
+    },
+    "notifications": {
+      "title": "Notificações",
+      "empty": "Nenhuma notificação ainda",
+      "empty_sub": "Atualizações de missão, confirmações de pagamento e alertas aparecerão aqui.",
+      "mark_all_read": "Marcar tudo como lido",
+      "unread_count": "{{count}} não lido(s)",
+      "refresh": "Atualizar",
+      "loading": "Carregando…",
+      "error": "Falha ao carregar notificações",
+      "mark_read": "Marcar como lido",
+      "all_caught_up": "Tudo em dia!"
     }
   },
   "dev": {
@@ -524,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "Imprimir / Salvar PDF",
-    "copy_link": "Copiar link de verificação"
+    "copy_link": "Copiar link de verificação",
+    "download_pdf": "Baixar PDF"
   },
   "cookie": {
     "title": "Usamos cookies",
@@ -576,6 +590,60 @@
       "perk1": "PAC agent physical site inspection",
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
+    }
+  },
+  "agents": {
+    "directory": {
+      "badge": "Rede PAC Certificada",
+      "title_line1": "Auditores B&E",
+      "title_line2": "certificados e verificados",
+      "subtitle": "Cada especialista PAC é selecionado, treinado e certificado pela B&E Consulting. Auditoria no local, due diligence de fornecedores, conformidade ESG — três níveis de certificação para todas as suas necessidades.",
+      "stat_agents": "Especialistas ativos",
+      "stat_tiers": "Níveis de certificação",
+      "stat_kyc": "KYC verificado",
+      "search_placeholder": "Pesquisar por nome, localização, especialização…",
+      "search_btn": "Pesquisar",
+      "filter_tier_label": "Nível:",
+      "filter_reset": "✕ Redefinir",
+      "error_load": "Não foi possível carregar o diretório.",
+      "empty": "Nenhum especialista encontrado para esta pesquisa.",
+      "card_verified": "✔ Verificado",
+      "card_view": "Ver perfil →",
+      "card_missions": "Missões",
+      "card_ontime": "No prazo",
+      "prev": "← Anterior",
+      "next": "Próximo →"
+    },
+    "profile": {
+      "back": "← Todos os especialistas",
+      "kyc_verified": "✔ KYC Verificado",
+      "member_since": "Membro desde",
+      "promoted_since_s3": "S3 desde",
+      "error_load": "Não foi possível carregar o perfil.",
+      "stat_missions": "Missões",
+      "stat_l2": "Missões L2+",
+      "stat_ontime": "No prazo",
+      "stat_client": "Avaliação cliente",
+      "stat_admin": "Avaliação B&E",
+      "history_title": "Histórico de missões",
+      "history_count": "{{n}} últimas missões",
+      "col_type": "Tipo",
+      "col_zone": "Zona",
+      "col_tier": "Nível",
+      "col_outcome": "Resultado",
+      "col_client": "Aval. cliente",
+      "col_admin": "Aval. B&E",
+      "col_delay": "Prazo",
+      "col_date": "Data",
+      "ontime_yes": "✓ No prazo",
+      "ontime_late": "Atraso",
+      "outcome_pass": "Conforme",
+      "outcome_fail": "Não conforme",
+      "outcome_cond": "Condicional",
+      "cta_title": "Precisa de uma auditoria certificada?",
+      "cta_desc": "Obtenha uma certificação L3 com um especialista como {{name}}.",
+      "cta_agents": "← Todos os especialistas",
+      "cta_register": "Iniciar certificação"
     }
   }
 }

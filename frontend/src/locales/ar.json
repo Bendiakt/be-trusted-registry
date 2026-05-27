@@ -119,7 +119,8 @@
       "documents": "Documents",
       "billing": "الفواتير",
       "developer": "المطور",
-      "audits": "🔍 التدقيقات"
+      "audits": "🔍 التدقيقات",
+      "notifications": "الإشعارات"
     },
     "billing_title": "سجل المدفوعات",
     "billing_subtitle": "شهاداتك ومعاملات Stripe",
@@ -239,6 +240,18 @@
       "dispute": "⚠️ اعتراض",
       "rate_agent": "⭐ تقييم الوكيل",
       "pending_dispute": "⏳ الاعتراض قيد المعالجة"
+    },
+    "notifications": {
+      "title": "الإشعارات",
+      "empty": "لا توجد إشعارات بعد",
+      "empty_sub": "ستظهر هنا تحديثات المهام وتأكيدات الدفع والتنبيهات.",
+      "mark_all_read": "تحديد الكل كمقروء",
+      "unread_count": "{{count}} غير مقروء",
+      "refresh": "تحديث",
+      "loading": "جارٍ التحميل…",
+      "error": "فشل تحميل الإشعارات",
+      "mark_read": "تحديد كمقروء",
+      "all_caught_up": "أنت على اطلاع بكل شيء!"
     }
   },
   "dev": {
@@ -524,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "طباعة / حفظ كـ PDF",
-    "copy_link": "نسخ رابط التحقق"
+    "copy_link": "نسخ رابط التحقق",
+    "download_pdf": "تنزيل PDF"
   },
   "cookie": {
     "title": "نستخدم ملفات تعريف الارتباط",
@@ -576,6 +590,60 @@
       "perk1": "PAC agent physical site inspection",
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
+    }
+  },
+  "agents": {
+    "directory": {
+      "badge": "شبكة PAC المعتمدة",
+      "title_line1": "مدققو B&E",
+      "title_line2": "معتمدون وموثوقون",
+      "subtitle": "كل خبير PAC يتم اختياره وتدريبه واعتماده من قبل B&E Consulting. التدقيق الميداني، العناية الواجبة للموردين، الامتثال البيئي والاجتماعي — ثلاثة مستويات اعتماد لجميع احتياجاتك.",
+      "stat_agents": "خبراء نشطون",
+      "stat_tiers": "مستويات الاعتماد",
+      "stat_kyc": "KYC موثق",
+      "search_placeholder": "البحث بالاسم أو الموقع أو الخبرة…",
+      "search_btn": "بحث",
+      "filter_tier_label": "المستوى:",
+      "filter_reset": "✕ إعادة تعيين",
+      "error_load": "تعذر تحميل الدليل.",
+      "empty": "لم يتم العثور على خبراء لهذا البحث.",
+      "card_verified": "✔ موثق",
+      "card_view": "عرض الملف →",
+      "card_missions": "المهام",
+      "card_ontime": "في الوقت",
+      "prev": "→ السابق",
+      "next": "التالي ←"
+    },
+    "profile": {
+      "back": "→ جميع الخبراء",
+      "kyc_verified": "✔ KYC موثق",
+      "member_since": "عضو منذ",
+      "promoted_since_s3": "S3 منذ",
+      "error_load": "تعذر تحميل الملف الشخصي.",
+      "stat_missions": "المهام",
+      "stat_l2": "مهام L2+",
+      "stat_ontime": "في الوقت",
+      "stat_client": "تقييم العميل",
+      "stat_admin": "تقييم B&E",
+      "history_title": "سجل المهام",
+      "history_count": "آخر {{n}} مهمة",
+      "col_type": "النوع",
+      "col_zone": "المنطقة",
+      "col_tier": "المستوى",
+      "col_outcome": "النتيجة",
+      "col_client": "تق. العميل",
+      "col_admin": "تق. B&E",
+      "col_delay": "المهلة",
+      "col_date": "التاريخ",
+      "ontime_yes": "✓ في الوقت",
+      "ontime_late": "متأخر",
+      "outcome_pass": "مطابق",
+      "outcome_fail": "غير مطابق",
+      "outcome_cond": "مشروط",
+      "cta_title": "هل تحتاج إلى تدقيق معتمد؟",
+      "cta_desc": "احصل على شهادة L3 مع خبير مثل {{name}}.",
+      "cta_agents": "→ جميع الخبراء",
+      "cta_register": "بدء التوثيق"
     }
   }
 }
