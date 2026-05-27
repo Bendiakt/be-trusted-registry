@@ -537,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "打印 / 保存为 PDF",
-    "copy_link": "复制验证链接"
+    "copy_link": "复制验证链接",
+    "download_pdf": "下载 PDF"
   },
   "cookie": {
     "title": "我们使用Cookie",

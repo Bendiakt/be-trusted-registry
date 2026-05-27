@@ -537,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "طباعة / حفظ كـ PDF",
-    "copy_link": "نسخ رابط التحقق"
+    "copy_link": "نسخ رابط التحقق",
+    "download_pdf": "تنزيل PDF"
   },
   "cookie": {
     "title": "نستخدم ملفات تعريف الارتباط",
