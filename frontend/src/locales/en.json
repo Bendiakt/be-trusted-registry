@@ -496,7 +496,8 @@
   },
   "cert_print": {
     "print_pdf": "Print / Save PDF",
-    "copy_link": "Copy Verification Link"
+    "copy_link": "Copy Verification Link",
+    "download_pdf": "Download PDF"
   },
   "metrics": {
     "title": "Business Metrics",

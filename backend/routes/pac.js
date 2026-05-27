@@ -113,6 +113,15 @@ router.get('/missions/:id/pdf', auth, pacReadLimiter, async (req, res) => {
     const row = result.rows[0]
     const m   = { ...mapMissionRow(row), pacAgentName: row.pac_agent_name || row.pac_full_name || null, pacLocation: row.pac_location || null }
 
+    // Extra data for v2 PDF: rating + dispute count
+    const [ratingRes, disputeRes] = await Promise.all([
+      query(`SELECT score FROM mission_ratings WHERE mission_id = $1 LIMIT 1`, [missionId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*) AS cnt FROM mission_disputes WHERE mission_id = $1`, [missionId]).catch(() => ({ rows: [{ cnt: 0 }] })),
+    ])
+    const clientRating   = ratingRes.rows[0]?.score ?? null
+    const disputeCount   = parseInt(disputeRes.rows[0]?.cnt || 0, 10)
+    const commissionUsd  = m.commission_amount_cents ? (m.commission_amount_cents / 100).toFixed(2) : null
+
     let PDFDocument
     try { PDFDocument = require('pdfkit') } catch {
       return res.status(503).json({ error: 'PDF generation unavailable — run npm install in backend' })
@@ -172,12 +181,15 @@ router.get('/missions/:id/pdf', auth, pacReadLimiter, async (req, res) => {
     }
 
     const tableRows = [
-      ['Mission ID',    `#${String(m.id).padStart(5, '0')}`],
-      ['Type',          m.type ? m.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'],
-      ['Status',        (m.status || '').toUpperCase()],
+      ['Mission ID',     `#${String(m.id).padStart(5, '0')}`],
+      ['Type',           m.type ? m.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'],
+      ['Status',         (m.status || '').toUpperCase()],
       ['Assigned Agent', m.pacAgentName || '—'],
-      ['Completed On',  m.completedAt ? new Date(m.completedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'],
-      ['Fee',           m.fee ? `$${m.fee} USD` : '—'],
+      ['Completed On',   m.completedAt ? new Date(m.completedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'],
+      ['Fee',            m.feeUsd ? `$${m.feeUsd} USD` : (m.fee ? `$${m.fee} USD` : '—')],
+      ['Commission',     commissionUsd ? `$${commissionUsd} USD` : '—'],
+      ['Client Rating',  clientRating !== null ? `${clientRating} / 5` : '—'],
+      ['Disputes',       disputeCount > 0 ? String(disputeCount) : 'None'],
     ]
     const colW = (W - M * 2) / 2
     doc.roundedRect(M, y, W - M * 2, tableRows.length * 22, 4).fill('#f9f9f9')

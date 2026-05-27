@@ -537,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "Imprimir / Salvar PDF",
-    "copy_link": "Copiar link de verificação"
+    "copy_link": "Copiar link de verificação",
+    "download_pdf": "Baixar PDF"
   },
   "cookie": {
     "title": "Usamos cookies",
