@@ -249,15 +249,15 @@ describe('Dashboard — missions (audits) tab', () => {
     mockWithMissions([])
     render(<Dashboard />)
     await waitFor(() => {
-      expect(screen.getByText('dashboard.tabs.audits')).toBeInTheDocument()
+      expect(screen.getByText('🔍 Audits')).toBeInTheDocument()
     })
   })
 
   it('clicking Audits tab calls GET /api/companies/missions', async () => {
     mockWithMissions([])
     render(<Dashboard />)
-    await waitFor(() => screen.getByText('dashboard.tabs.audits'))
-    fireEvent.click(screen.getByText('dashboard.tabs.audits'))
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/api/companies/missions'))
     })
@@ -266,8 +266,8 @@ describe('Dashboard — missions (audits) tab', () => {
   it('shows pay button for mission with unpaid fee', async () => {
     mockWithMissions([MISSION_UNPAID])
     render(<Dashboard />)
-    await waitFor(() => screen.getByText('dashboard.tabs.audits'))
-    fireEvent.click(screen.getByText('dashboard.tabs.audits'))
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
     await waitFor(() => {
       expect(screen.getByText('💳 Payer $500')).toBeInTheDocument()
     })
@@ -276,8 +276,8 @@ describe('Dashboard — missions (audits) tab', () => {
   it('shows paid badge for mission with confirmed payment', async () => {
     mockWithMissions([MISSION_PAID])
     render(<Dashboard />)
-    await waitFor(() => screen.getByText('dashboard.tabs.audits'))
-    fireEvent.click(screen.getByText('dashboard.tabs.audits'))
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
     await waitFor(() => {
       expect(screen.getByText('✓ Payé $300')).toBeInTheDocument()
     })
@@ -286,8 +286,8 @@ describe('Dashboard — missions (audits) tab', () => {
   it('pay button calls POST /api/payments/mission-checkout with missionId', async () => {
     mockWithMissions([MISSION_UNPAID])
     render(<Dashboard />)
-    await waitFor(() => screen.getByText('dashboard.tabs.audits'))
-    fireEvent.click(screen.getByText('dashboard.tabs.audits'))
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
     await waitFor(() => screen.getByText('💳 Payer $500'))
     fireEvent.click(screen.getByText('💳 Payer $500'))
     await waitFor(() => {
@@ -301,11 +301,10 @@ describe('Dashboard — missions (audits) tab', () => {
   it('shows no-missions message when missions list is empty', async () => {
     mockWithMissions([])
     render(<Dashboard />)
-    await waitFor(() => screen.getByText('dashboard.tabs.audits'))
-    fireEvent.click(screen.getByText('dashboard.tabs.audits'))
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
     await waitFor(() => {
-      // t() mock returns key → empty state text is the i18n key
-      expect(screen.getByText('dashboard.audits.empty')).toBeInTheDocument()
+      expect(screen.getByText(/assignées par l'équipe B&E/)).toBeInTheDocument()
     })
   })
 })
