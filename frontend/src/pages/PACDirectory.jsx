@@ -1,6 +1,7 @@
 'use strict'
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Skeleton from '../components/Skeleton'
@@ -25,6 +26,7 @@ const StarBar = ({ value, max = 5, color }) => {
 }
 
 export default function PACDirectory() {
+  const { t } = useTranslation()
   const [agents, setAgents]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
@@ -62,11 +64,11 @@ export default function PACDirectory() {
       setPagination(res.data.pagination)
       setPage(p)
     } catch {
-      setError('Impossible de charger le répertoire.')
+      setError(t('agents.directory.error_load'))
     } finally {
       setLoading(false)
     }
-  }, [q, tier])
+  }, [q, tier, t])
 
   useEffect(() => { fetchAgents(1) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -85,69 +87,68 @@ export default function PACDirectory() {
     <div style={{ minHeight: '100vh', background: '#0d0d0d', color: '#eee', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* ── Nav ── */}
-      <nav style={{ borderBottom: '1px solid #1a1a1a', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'rgba(13,13,13,0.97)', backdropFilter: 'blur(8px)', zIndex: 50 }}>
+      <nav className="pac-nav" style={{ borderBottom: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'rgba(13,13,13,0.97)', backdropFilter: 'blur(8px)', zIndex: 50 }}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ fontWeight: '900', fontSize: '1.1rem', letterSpacing: '-0.02em', color: '#eee' }}>B&E</span>
           <span style={{ color: '#C9A84C', fontWeight: '700', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>PAC Network</span>
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link to="/registry" style={{ color: '#555', fontSize: '0.82rem', textDecoration: 'none' }}>Certifications</Link>
+        <div className="pac-nav-links">
+          <Link to="/registry" className="pac-nav-secondary" style={{ color: '#555', fontSize: '0.82rem', textDecoration: 'none' }}>Certifications</Link>
           <LanguageSwitcher />
         </div>
       </nav>
 
       {/* ── Hero ── */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '3.5rem 1.5rem 2rem' }}>
+      <div className="pac-page" style={{ maxWidth: '900px', margin: '0 auto' }}>
         <div style={{ marginBottom: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.18)', borderRadius: '20px', padding: '0.25rem 0.75rem' }}>
-          <span style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Réseau PAC Certifié</span>
+          <span style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t('agents.directory.badge')}</span>
         </div>
         <h1 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: '900', lineHeight: 1.15, marginBottom: '1rem', letterSpacing: '-0.03em' }}>
-          Auditeurs B&E<br />
-          <span style={{ color: '#C9A84C' }}>certifiés & vérifiés</span>
+          {t('agents.directory.title_line1')}<br />
+          <span style={{ color: '#C9A84C' }}>{t('agents.directory.title_line2')}</span>
         </h1>
         <p style={{ color: '#666', fontSize: '1rem', lineHeight: 1.7, maxWidth: '580px', marginBottom: '2rem' }}>
-          Chaque expert PAC est sélectionné, formé et certifié par B&E Consulting.
-          Audit terrain, due diligence fournisseur, conformité ESG — trois niveaux de certification pour tous vos besoins.
+          {t('agents.directory.subtitle')}
         </p>
 
         {/* Stats bar */}
         {pagination.total > 0 && (
-          <div style={{ display: 'flex', gap: '2rem', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
+          <div className="pac-stats-bar" style={{ marginBottom: '2.5rem' }}>
             <div>
               <div style={{ color: '#C9A84C', fontSize: '1.6rem', fontWeight: '900' }}>{pagination.total}</div>
-              <div style={{ color: '#444', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Experts actifs</div>
+              <div style={{ color: '#444', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('agents.directory.stat_agents')}</div>
             </div>
-            <div style={{ width: '1px', background: '#1a1a1a' }} />
+            <div className="pac-stat-div" />
             <div>
               <div style={{ color: '#eee', fontSize: '1.6rem', fontWeight: '900' }}>3</div>
-              <div style={{ color: '#444', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Niveaux de certification</div>
+              <div style={{ color: '#444', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('agents.directory.stat_tiers')}</div>
             </div>
-            <div style={{ width: '1px', background: '#1a1a1a' }} />
+            <div className="pac-stat-div" />
             <div>
               <div style={{ color: '#4CAF50', fontSize: '1.6rem', fontWeight: '900' }}>✔</div>
-              <div style={{ color: '#444', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>KYC vérifié</div>
+              <div style={{ color: '#444', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('agents.directory.stat_kyc')}</div>
             </div>
           </div>
         )}
 
         {/* ── Search + Filter ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem' }}>
-          <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem' }}>
+          <form onSubmit={handleSearch} className="pac-search-form">
             <input
               type="text"
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Rechercher par nom, localisation, expertise…"
+              placeholder={t('agents.directory.search_placeholder')}
               style={{ flex: 1, background: '#111', border: '1px solid #222', color: '#eee', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.9rem', outline: 'none' }}
             />
             <button type="submit" style={{ background: '#C9A84C', color: '#000', border: 'none', borderRadius: '8px', padding: '0.75rem 1.25rem', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              Rechercher
+              {t('agents.directory.search_btn')}
             </button>
           </form>
 
           {/* Tier chips */}
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ color: '#444', fontSize: '0.75rem', alignSelf: 'center', marginRight: '0.25rem' }}>Niveau :</span>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: '#444', fontSize: '0.75rem' }}>{t('agents.directory.filter_tier_label')}</span>
             {['S1', 'S2', 'S3'].map(t => {
               const tm = TIER_META[t]
               const active = tier === t
@@ -166,7 +167,7 @@ export default function PACDirectory() {
                 onClick={() => { setQ(''); setTier(''); fetchAgents(1, '', '') }}
                 style={{ background: 'transparent', border: '1px solid #1e1e1e', color: '#333', borderRadius: '20px', padding: '0.3rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer' }}
               >
-                ✕ Reset
+                {t('agents.directory.filter_reset')}
               </button>
             )}
           </div>
@@ -187,11 +188,11 @@ export default function PACDirectory() {
         ) : agents.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#333' }}>
             <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🔍</div>
-            <div style={{ fontSize: '0.9rem' }}>Aucun expert trouvé pour cette recherche.</div>
+            <div style={{ fontSize: '0.9rem' }}>{t('agents.directory.empty')}</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {agents.map(agent => <AgentCard key={agent.id} agent={agent} />)}
+            {agents.map(agent => <AgentCard key={agent.id} agent={agent} t={t} />)}
           </div>
         )}
 
@@ -203,7 +204,7 @@ export default function PACDirectory() {
               disabled={page <= 1}
               style={{ background: '#111', border: '1px solid #222', color: page <= 1 ? '#333' : '#888', borderRadius: '8px', padding: '0.5rem 1rem', cursor: page <= 1 ? 'not-allowed' : 'pointer', fontSize: '0.82rem' }}
             >
-              ← Précédent
+              {t('agents.directory.prev')}
             </button>
             <span style={{ padding: '0.5rem 0.75rem', color: '#555', fontSize: '0.82rem', alignSelf: 'center' }}>
               {page} / {pagination.pages}
@@ -213,7 +214,7 @@ export default function PACDirectory() {
               disabled={page >= pagination.pages}
               style={{ background: '#111', border: '1px solid #222', color: page >= pagination.pages ? '#333' : '#888', borderRadius: '8px', padding: '0.5rem 1rem', cursor: page >= pagination.pages ? 'not-allowed' : 'pointer', fontSize: '0.82rem' }}
             >
-              Suivant →
+              {t('agents.directory.next')}
             </button>
           </div>
         )}
@@ -230,7 +231,7 @@ export default function PACDirectory() {
 }
 
 // ── AgentCard ─────────────────────────────────────────────────────────────────
-function AgentCard({ agent }) {
+function AgentCard({ agent, t }) {
   const tm = TIER_META[agent.tier] || TIER_META.S1
   const onTimePct = agent.missionsCompleted > 0
     ? Math.round((agent.missionsOnTime / agent.missionsCompleted) * 100)
@@ -238,7 +239,9 @@ function AgentCard({ agent }) {
 
   return (
     <Link to={`/agents/${agent.id}`} style={{ textDecoration: 'none', display: 'block' }}>
-    <div style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '14px', padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, background 0.15s', cursor: 'pointer' }}
+    <div
+      className="agent-card-inner"
+      style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '14px', padding: '1.5rem', position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, background 0.15s', cursor: 'pointer' }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = tm.color + '44'; e.currentTarget.style.background = '#141414' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e1e1e'; e.currentTarget.style.background = '#111' }}
     >
@@ -251,14 +254,14 @@ function AgentCard({ agent }) {
       </div>
 
       {/* Main info */}
-      <div style={{ flex: 1, minWidth: '200px' }}>
+      <div style={{ flex: 1, minWidth: '180px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
           <span style={{ fontWeight: '800', fontSize: '1rem', color: '#eee' }}>{agent.name || 'Expert PAC'}</span>
           <span style={{ background: tm.bg, color: tm.color, fontSize: '0.65rem', fontWeight: '800', padding: '0.15rem 0.5rem', borderRadius: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {tm.label}
           </span>
           <span style={{ background: 'rgba(46,204,113,0.08)', color: '#2ecc71', fontSize: '0.62rem', fontWeight: '700', padding: '0.12rem 0.45rem', borderRadius: '4px', letterSpacing: '0.06em' }}>
-            ✔ Vérifié
+            {t('agents.directory.card_verified')}
           </span>
         </div>
 
@@ -287,19 +290,19 @@ function AgentCard({ agent }) {
         </div>
       </div>
 
-      {/* Right: stats */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'flex-end', minWidth: '130px' }}>
+      {/* Right: stats — hidden on very small screens via CSS */}
+      <div className="agent-card-stats">
         {/* Missions count */}
         <div style={{ textAlign: 'right' }}>
           <div style={{ color: tm.color, fontSize: '1.5rem', fontWeight: '900', lineHeight: 1 }}>{agent.missionsCompleted}</div>
-          <div style={{ color: '#333', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Missions</div>
+          <div style={{ color: '#333', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t('agents.directory.card_missions')}</div>
         </div>
 
         {/* On-time rate */}
         {onTimePct !== null && agent.missionsCompleted >= 3 && (
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: onTimePct >= 80 ? '#2ecc71' : onTimePct >= 60 ? '#f39c12' : '#ff6b6b', fontSize: '0.85rem', fontWeight: '800' }}>{onTimePct}%</div>
-            <div style={{ color: '#333', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' }}>On-time</div>
+            <div style={{ color: '#333', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t('agents.directory.card_ontime')}</div>
           </div>
         )}
 
@@ -307,23 +310,10 @@ function AgentCard({ agent }) {
         {agent.avgClientScore != null && (
           <div style={{ textAlign: 'right' }}>
             <StarBar value={agent.avgClientScore} color="#C9A84C" />
-            <div style={{ color: '#333', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.15rem' }}>Client</div>
-          </div>
-        )}
-        {agent.avgAdminScore != null && (
-          <div style={{ textAlign: 'right' }}>
-            <StarBar value={agent.avgAdminScore} color="#e056fd" />
-            <div style={{ color: '#333', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.15rem' }}>B&E</div>
           </div>
         )}
 
-        {/* Promotion date */}
-        {(agent.promotedS3 || agent.promotedS2) && (
-          <div style={{ color: '#2a2a2a', fontSize: '0.65rem' }}>
-            Certifié {new Date(agent.promotedS3 || agent.promotedS2).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}
-          </div>
-        )}
-        <div style={{ color: tm.color, fontSize: '0.68rem', fontWeight: '600', marginTop: '0.5rem', opacity: 0.7 }}>Voir le profil →</div>
+        <div style={{ color: tm.color, fontSize: '0.68rem', fontWeight: '600', marginTop: 'auto', opacity: 0.7, textAlign: 'right' }}>{t('agents.directory.card_view')}</div>
       </div>
     </div>
     </Link>
