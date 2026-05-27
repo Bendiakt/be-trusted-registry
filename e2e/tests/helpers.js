@@ -1,57 +1,45 @@
-/**
- * helpers.js — shared utilities for MyDD Playwright E2E tests.
- *
- * ─── TESTING RULES (read before writing a new spec) ──────────────────────────
- *
- * 1. ROUTE ORDERING — register specific routes BEFORE broad ones.
- *
- *    Playwright matches routes in registration order: the LAST registered route
- *    that matches a URL takes precedence (LIFO). In practice this means that
- *    a broad glob registered AFTER a specific one will shadow the specific one.
- *
- *    ✅ Correct — specific first, broad fallback second:
- *      await page.route('**/api/admin/disputes/*/resolve', resolveHandler)
- *      await page.route('**/api/admin/disputes**', listHandler)
- *
- *    ❌ Wrong — broad registered last shadows the specific:
- *      await page.route('**/api/admin/disputes**', listHandler)
- *      await page.route('**/api/admin/disputes/*/resolve', resolveHandler)
- *
- *    The same rule applies when stubApi() (called in beforeEach) has already
- *    registered a broad route: override it in the test by registering your
- *    specific route AFTER stubApi() — it will then have higher LIFO priority.
- *
- * 2. MULTI-STEP MODAL FLOWS — always complete every step before asserting.
- *
- *    Many actions (dispute resolve, KYC decision, payment confirm) use a
- *    two-step modal pattern: a primary button opens the modal, and a confirm
- *    button inside the modal fires the API call. Assert the API only after
- *    all steps are done.
- *
- *    ✅ Correct:
- *      await page.click('button:has-text("Resolve")')            // opens modal
- *      await page.click('button:has-text("Confirm Resolution")') // fires API
- *      await expect(page.getByText('Resolved')).toBeVisible()
- *
- *    ❌ Wrong — API is never called because the modal step was skipped:
- *      await page.click('button:has-text("Resolve")')
- *      expect(resolveCalled).toBe(true)  // always false
- *
- * 3. I18N BADGE MATCHING — always match both the EN and FR text.
- *
- *    The app runs in the browser's default locale during E2E. Hardcoding a
- *    French string breaks when the locale resolves to English (the default).
- *
- *    ✅ Correct — locale-aware regex:
- *      page.getByText(/✓.*(Paid|Payé)/i)
- *      page.getByText(/Pending|En attente/i)
- *
- *    ❌ Wrong — fails when locale ≠ FR:
- *      page.getByText(/✓.*Payé/i)
- *      page.getByText(/En attente/i)
- *
- * ─────────────────────────────────────────────────────────────────────────────
- */
+// helpers.js — shared utilities for MyDD Playwright E2E tests.
+//
+// ── TESTING RULES (read before writing a new spec) ───────────────────────────
+//
+// RULE 1 — ROUTE ORDERING (LIFO: last registered wins)
+//   Playwright gives priority to the LAST registered route that matches a URL.
+//   Register broad globs FIRST so that specific routes registered LATER take
+//   precedence. Registering the specific route first means the broad route
+//   (registered afterwards) shadows it.
+//
+//   CORRECT — broad first, specific last (LIFO makes specific win):
+//     await page.route(broad,    listHandler)
+//     await page.route(specific, resolveHandler)  // <-- wins because registered last
+//
+//   WRONG — specific first, broad last (broad shadows specific):
+//     await page.route(specific, resolveHandler)
+//     await page.route(broad,    listHandler)     // <-- wins and intercepts resolve too
+//
+//   When stubApi() (beforeEach) already registers a broad stub, add your
+//   specific override AFTER stubApi() so it has higher LIFO priority.
+//
+// RULE 2 — MULTI-STEP MODAL FLOWS
+//   Buttons that open modals do NOT call the API. The API fires only when the
+//   confirm button inside the modal is clicked. Assert only after all steps.
+//
+//   CORRECT:
+//     await resolveBtn.click()    // opens modal — no API call yet
+//     await confirmBtn.click()    // fires PATCH /api/.../resolve
+//     expect(resolveCalled).toBe(true)
+//
+//   WRONG — confirm step missing, API is never called:
+//     await resolveBtn.click()
+//     expect(resolveCalled).toBe(true)  // always false
+//
+// RULE 3 — I18N BADGE TEXT
+//   The app renders in the browser default locale (EN). Hardcoded French
+//   strings fail when the locale resolves to English.
+//
+//   CORRECT — locale-aware regex:  /Paid|Paye/i   /Pending|En attente/i
+//   WRONG   — French-only:         /Paye/i         /En attente/i
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
 /** sessionStorage key used by frontend/src/lib/session.js */
 const SESSION_KEY = 'mydd_user'

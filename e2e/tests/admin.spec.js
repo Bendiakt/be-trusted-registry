@@ -160,18 +160,8 @@ test.describe('Admin — disputes tab', () => {
   test('resolving a dispute calls the resolve API', async ({ page }) => {
     let resolveCalled = false
 
-    // Register the specific resolve route FIRST — Playwright matches routes in
-    // registration order and the broad '**/api/admin/disputes**' below would
-    // otherwise intercept the resolve request before this handler runs.
-    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
-      resolveCalled = true
-      await route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify({ message: 'Dispute resolved' }),
-      })
-    })
-
-    // Broad list stub — registered AFTER the resolve route so it doesn't shadow it
+    // Broad list stub — registered FIRST so the specific resolve route (below)
+    // takes LIFO priority and intercepts /resolve URLs before this handler does.
     await page.route('**/api/admin/disputes**', (route) =>
       route.fulfill({
         status: 200, contentType: 'application/json',
@@ -187,6 +177,15 @@ test.describe('Admin — disputes tab', () => {
         }),
       }),
     )
+
+    // Specific resolve route — registered LAST so LIFO gives it priority over the broad stub.
+    await page.route('**/api/admin/disputes/*/resolve', async (route) => {
+      resolveCalled = true
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ message: 'Dispute resolved' }),
+      })
+    })
 
     await page.goto('/admin')
 
