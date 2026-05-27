@@ -139,6 +139,31 @@ async function stubApi(page) {
     }),
   )
 
+  // PAC earnings
+  await page.route('**/api/pac/earnings', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        summary: {
+          totalEarnedCents: 5000, totalEarnedUsd: 50.00,
+          pendingCents: 7500, pendingUsd: 75.00,
+          commissionRate: 0.10, commissionPct: 10, pacTier: 'S1',
+          completedCount: 3, paidCount: 1,
+        },
+        missions: [
+          { id: 42, companyName: 'Acme Corp', location: 'Paris, FR', type: 'site_inspection',
+            feeUsd: 500, commissionCents: 5000, commissionUsd: 50.00,
+            paymentConfirmedAt: '2026-05-01T10:00:00Z', status: 'completed',
+            outcome: 'pass', completedAt: '2026-04-30T00:00:00Z', createdAt: '2026-04-01T00:00:00Z' },
+          { id: 43, companyName: 'Beta Ltd', location: 'Lyon, FR', type: 'site_inspection',
+            feeUsd: 500, commissionCents: 5000, commissionUsd: 50.00,
+            paymentConfirmedAt: null, status: 'completed',
+            outcome: 'pass', completedAt: '2026-05-10T00:00:00Z', createdAt: '2026-04-15T00:00:00Z' },
+        ],
+      }),
+    }),
+  )
+
   // Payments
   await page.route('**/api/payments/create-checkout-session', (route) =>
     route.fulfill({

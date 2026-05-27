@@ -39,6 +39,7 @@ jobs:
           node --test tests/pac.test.js
           node --test tests/payments.test.js
           node --test tests/disputes.test.js
+          node --test tests/earnings.test.js
 
   test:
     name: Backend lint & health check

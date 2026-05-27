@@ -27,6 +27,7 @@ export default function PACPortal() {
   const [upgrading, setUpgrading]         = useState(false)
   const [upgradeBanner, setUpgradeBanner] = useState(null) // retour Stripe
   const [progress, setProgress]           = useState(null) // GET /api/pac/progress
+  const [earnings, setEarnings]           = useState(null) // GET /api/pac/earnings
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -57,6 +58,8 @@ export default function PACPortal() {
       .then(res => setMissions(res.data)).catch(() => {})
     api.get('/api/pac/progress')
       .then(res => setProgress(res.data)).catch(() => {})
+    api.get('/api/pac/earnings')
+      .then(res => setEarnings(res.data)).catch(() => {})
     api.get('/api/pac/profile')
       .then(res => {
         if (res.data && Object.keys(res.data).length > 0) {
@@ -159,6 +162,7 @@ export default function PACPortal() {
   const TABS = [
     { id: 'missions',    label: t('pac.tabs.missions') },
     { id: 'profile',     label: t('pac.tabs.profile') },
+    { id: 'earnings',    label: '💰 Revenus' },
     ...(pacTier === 'S2' || pacTier === 'S3'
       ? [{ id: 'supervision', label: pacTier === 'S3' ? 'Mentoring S3' : 'Supervision S2' }]
       : []),
@@ -403,6 +407,128 @@ export default function PACPortal() {
                 {t('pac.profile.save')}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* ── Earnings tab ──────────────────────────────────────────────────── */}
+        {tab === 'earnings' && (
+          <div style={{ padding: '0 2rem 2rem' }}>
+            {!earnings ? (
+              <div style={{ color: '#555', fontSize: '0.85rem', padding: '2rem 0', textAlign: 'center' }}>Chargement…</div>
+            ) : (
+              <>
+                {/* ── Summary stats ─────────────────────────────────────────── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                  {[
+                    {
+                      label: 'Total perçu',
+                      value: `$${earnings.summary.totalEarnedUsd.toFixed(2)}`,
+                      color: '#2ecc71',
+                      sub: `${earnings.summary.paidCount} mission(s) payée(s)`,
+                    },
+                    {
+                      label: 'En attente',
+                      value: `$${earnings.summary.pendingUsd.toFixed(2)}`,
+                      color: '#f39c12',
+                      sub: `${earnings.summary.completedCount - earnings.summary.paidCount} mission(s) complétée(s)`,
+                    },
+                    {
+                      label: 'Taux de commission',
+                      value: `${earnings.summary.commissionPct}%`,
+                      color: earnings.summary.pacTier === 'S3' ? '#e056fd' : earnings.summary.pacTier === 'S2' ? '#C9A84C' : '#4a90e2',
+                      sub: `Tier ${earnings.summary.pacTier}`,
+                    },
+                    {
+                      label: 'Missions totales',
+                      value: earnings.summary.completedCount,
+                      color: '#aaa',
+                      sub: 'assignées ou complétées',
+                    },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.25rem 1.5rem' }}>
+                      <div style={{ color: '#555', fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>{stat.label}</div>
+                      <div style={{ color: stat.color, fontSize: '1.6rem', fontWeight: '900', lineHeight: 1.1, marginBottom: '0.3rem' }}>{stat.value}</div>
+                      <div style={{ color: '#444', fontSize: '0.7rem' }}>{stat.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Mission breakdown table ────────────────────────────────── */}
+                <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#fff', fontWeight: '700', fontSize: '0.9rem' }}>Détail des missions</div>
+                    <div style={{ color: '#555', fontSize: '0.75rem' }}>{earnings.missions.length} entrée(s)</div>
+                  </div>
+
+                  {earnings.missions.length === 0 ? (
+                    <div style={{ padding: '2rem', color: '#555', textAlign: 'center', fontSize: '0.85rem' }}>
+                      Aucune mission assignée pour le moment.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #222' }}>
+                            {['#', 'Entreprise', 'Lieu', 'Honoraires', 'Commission', 'Paiement', 'Statut'].map(h => (
+                              <th key={h} style={{ padding: '0.6rem 1rem', textAlign: 'left', color: '#555', fontWeight: '600', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {earnings.missions.map((m, i) => {
+                            const isPaid    = !!m.paymentConfirmedAt
+                            const isComplete = m.status === 'completed'
+                            return (
+                              <tr key={m.id} style={{ borderBottom: '1px solid #1a1a1a', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                                <td style={{ padding: '0.7rem 1rem', color: '#444', fontWeight: '700' }}>#{m.id}</td>
+                                <td style={{ padding: '0.7rem 1rem', color: '#ccc', fontWeight: '600', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {m.companyName || '—'}
+                                </td>
+                                <td style={{ padding: '0.7rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>{m.location || '—'}</td>
+                                <td style={{ padding: '0.7rem 1rem', color: '#C9A84C', fontWeight: '700', whiteSpace: 'nowrap' }}>${m.feeUsd}</td>
+                                <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ color: isPaid ? '#2ecc71' : '#f39c12', fontWeight: '700' }}>
+                                    ${m.commissionUsd.toFixed(2)}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
+                                  {isPaid ? (
+                                    <span style={{ background: 'rgba(46,204,113,0.1)', color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
+                                      ✓ Payé {new Date(m.paymentConfirmedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                                    </span>
+                                  ) : isComplete ? (
+                                    <span style={{ background: 'rgba(243,156,18,0.1)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
+                                      ⏳ En attente
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: '#444', fontSize: '0.68rem' }}>—</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{
+                                    fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px', textTransform: 'uppercase',
+                                    background: m.status === 'completed' ? 'rgba(46,204,113,0.08)' : m.status === 'in_progress' ? 'rgba(74,144,226,0.1)' : 'rgba(255,255,255,0.05)',
+                                    color:      m.status === 'completed' ? '#2ecc71'               : m.status === 'in_progress' ? '#4a90e2'              : '#555',
+                                  }}>
+                                    {m.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Payout note ───────────────────────────────────────────── */}
+                <div style={{ marginTop: '1.25rem', padding: '1rem 1.25rem', background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: '8px', color: '#666', fontSize: '0.78rem', lineHeight: '1.6' }}>
+                  💡 <strong style={{ color: '#C9A84C' }}>Comment sont calculées vos commissions ?</strong><br />
+                  Chaque mission a un honoraire fixe. Votre commission ({earnings.summary.commissionPct}% en tant qu'agent {earnings.summary.pacTier}) est calculée dès que l'entreprise cliente confirme le paiement de la mission via Stripe. Les virements sont effectués par B&E Consult FZCO selon votre cycle mensuel.
+                </div>
+              </>
+            )}
           </div>
         )}
 
