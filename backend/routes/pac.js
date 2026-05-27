@@ -661,4 +661,79 @@ router.get('/directory/:id', pacPublicLimiter, async (req, res) => {
   }
 })
 
+// ── GET /api/pac/earnings ─────────────────────────────────────────────────────
+// Returns the agent's commission earnings per completed mission, plus aggregate
+// totals. Only missions assigned to the requesting PAC user are returned.
+router.get('/earnings', auth, pacReadLimiter, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
+
+    const [missionsResult, profileResult] = await Promise.all([
+      query(
+        `SELECT m.id, m.company_name, m.location, m.type,
+                m.fee_usd, m.commission_amount_cents,
+                m.payment_confirmed_at, m.status, m.outcome,
+                m.completed_at, m.created_at
+           FROM missions m
+          WHERE m.assigned_to = $1
+            AND m.status IN ('completed', 'in_progress', 'assigned')
+          ORDER BY m.created_at DESC
+          LIMIT 200`,
+        [req.user.id]
+      ),
+      query(
+        `SELECT commission_rate, pac_tier FROM pac_profiles WHERE user_id = $1 LIMIT 1`,
+        [req.user.id]
+      ),
+    ])
+
+    const rows           = missionsResult.rows
+    const profile        = profileResult.rows[0] || {}
+    const commissionRate = parseFloat(profile.commission_rate || 0.10)
+
+    // Aggregate totals
+    const totalEarnedCents = rows.reduce((sum, r) => {
+      if (r.payment_confirmed_at && r.commission_amount_cents) return sum + r.commission_amount_cents
+      return sum
+    }, 0)
+    const pendingCents = rows.reduce((sum, r) => {
+      if (!r.payment_confirmed_at && r.status === 'completed' && r.commission_amount_cents) return sum + r.commission_amount_cents
+      return sum
+    }, 0)
+    const completedCount = rows.filter(r => r.status === 'completed').length
+    const paidCount      = rows.filter(r => r.payment_confirmed_at).length
+
+    res.json({
+      summary: {
+        totalEarnedCents,
+        totalEarnedUsd:  +(totalEarnedCents / 100).toFixed(2),
+        pendingCents,
+        pendingUsd:      +(pendingCents / 100).toFixed(2),
+        commissionRate,
+        commissionPct:   Math.round(commissionRate * 100),
+        pacTier:         profile.pac_tier || 'S1',
+        completedCount,
+        paidCount,
+      },
+      missions: rows.map(r => ({
+        id:                   r.id,
+        companyName:          r.company_name || '',
+        location:             r.location     || '',
+        type:                 r.type         || '',
+        feeUsd:               r.fee_usd      || 500,
+        commissionCents:      r.commission_amount_cents || Math.round((r.fee_usd || 500) * commissionRate * 100),
+        commissionUsd:        +((r.commission_amount_cents || Math.round((r.fee_usd || 500) * commissionRate * 100)) / 100).toFixed(2),
+        paymentConfirmedAt:   r.payment_confirmed_at || null,
+        status:               r.status,
+        outcome:              r.outcome      || null,
+        completedAt:          r.completed_at || null,
+        createdAt:            r.created_at,
+      })),
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.earnings.error', reqId: req.reqId, message: err.message }))
+    res.status(500).json({ error: 'Failed to load earnings' })
+  }
+})
+
 module.exports = router
