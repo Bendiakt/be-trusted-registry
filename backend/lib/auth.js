@@ -166,6 +166,33 @@ const requireAdmin = (req, res, next) => {
 }
 
 /**
+ * requireAdminMFA — SOC 2 CC6.1: Admin MFA enforcement.
+ * Combines role check + live DB check that the admin has TOTP enabled.
+ * Must come after auth. Replaces requireAdmin on all admin write routes.
+ * Admins without TOTP configured receive a 403 with code MFA_REQUIRED so
+ * the frontend can redirect them to the TOTP setup screen.
+ */
+const requireAdminMFA = async (req, res, next) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
+  try {
+    const result = await query(
+      'SELECT totp_secret FROM users WHERE id = $1 LIMIT 1',
+      [req.user.id]
+    )
+    if (!result.rows[0]?.totp_secret) {
+      return res.status(403).json({
+        error: 'MFA required. Enable two-factor authentication to access admin functions.',
+        code:  'MFA_REQUIRED',
+      })
+    }
+    return next()
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'requireAdminMFA.error', err: err.message }))
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+}
+
+/**
  * requireRole(...roles) — factory that returns middleware enforcing one or more
  * allowed roles. Must come after auth. Example:
  *   router.get('/stats', auth, requireRole('trader', 'admin'), handler)
@@ -211,6 +238,7 @@ module.exports = {
   // middleware
   auth,
   requireAdmin,
+  requireAdminMFA,
   requireRole,
   // validators
   validatePassword,

@@ -61,4 +61,23 @@ router.get('/robots.txt', (req, res) => {
   res.send(`User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${base}/sitemap.xml\n`)
 })
 
+// GET /.well-known/security.txt — RFC 9116 vulnerability disclosure policy
+// SOC 2 CC7.3 — Provides a standardised contact channel for security researchers.
+router.get('/.well-known/security.txt', (req, res) => {
+  const base = FRONTEND()
+  // Expires 1 year from the last known deploy date; update annually.
+  const expires = new Date('2027-06-01T00:00:00.000Z').toISOString()
+  res.set('Content-Type', 'text/plain; charset=utf-8')
+  res.set('Cache-Control', 'public, max-age=86400')
+  res.send([
+    `Contact: mailto:security@b-econsult.com`,
+    `Expires: ${expires}`,
+    `Preferred-Languages: en, fr`,
+    `Policy: ${base}/legal`,
+    `Canonical: https://api.mydd.work/.well-known/security.txt`,
+    `Hiring: https://mydd.work`,
+    '',
+  ].join('\n'))
+})
+
 module.exports = router
