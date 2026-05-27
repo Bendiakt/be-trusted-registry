@@ -217,3 +217,94 @@ describe('Dashboard — UI', () => {
     })
   })
 })
+
+describe('Dashboard — missions (audits) tab', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  const MISSION_UNPAID = {
+    id: 42, company_name: 'Test Corp', location: 'Paris, FR',
+    type: 'site_inspection', status: 'assigned', outcome: null,
+    feeUsd: 500, paymentConfirmedAt: null, completedAt: null,
+    createdAt: '2026-04-01T00:00:00Z',
+  }
+
+  const MISSION_PAID = {
+    id: 43, company_name: 'Test Corp', location: 'Lyon, FR',
+    type: 'document_check', status: 'completed', outcome: 'pass',
+    feeUsd: 300, paymentConfirmedAt: '2026-05-10T00:00:00Z', completedAt: '2026-05-09T00:00:00Z',
+    createdAt: '2026-04-10T00:00:00Z',
+  }
+
+  function mockWithMissions(missions) {
+    getSession.mockReturnValue(COMPANY_SESSION)
+    api.get.mockImplementation((url) => {
+      if (url === '/api/companies/me') return Promise.resolve(PROFILE_RESPONSE)
+      if (url.startsWith('/api/companies/missions')) return Promise.resolve({ data: { missions } })
+      return Promise.resolve({ data: [] })
+    })
+    api.post.mockResolvedValue({ data: { url: 'https://checkout.stripe.com/test' } })
+  }
+
+  it('renders Audits tab button', async () => {
+    mockWithMissions([])
+    render(<Dashboard />)
+    await waitFor(() => {
+      expect(screen.getByText('🔍 Audits')).toBeInTheDocument()
+    })
+  })
+
+  it('clicking Audits tab calls GET /api/companies/missions', async () => {
+    mockWithMissions([])
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/api/companies/missions'))
+    })
+  })
+
+  it('shows pay button for mission with unpaid fee', async () => {
+    mockWithMissions([MISSION_UNPAID])
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
+    await waitFor(() => {
+      expect(screen.getByText('💳 Payer $500')).toBeInTheDocument()
+    })
+  })
+
+  it('shows paid badge for mission with confirmed payment', async () => {
+    mockWithMissions([MISSION_PAID])
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
+    await waitFor(() => {
+      expect(screen.getByText('✓ Payé $300')).toBeInTheDocument()
+    })
+  })
+
+  it('pay button calls POST /api/payments/mission-checkout with missionId', async () => {
+    mockWithMissions([MISSION_UNPAID])
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
+    await waitFor(() => screen.getByText('💳 Payer $500'))
+    fireEvent.click(screen.getByText('💳 Payer $500'))
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        '/api/payments/mission-checkout',
+        { missionId: 42 },
+      )
+    })
+  })
+
+  it('shows no-missions message when missions list is empty', async () => {
+    mockWithMissions([])
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('🔍 Audits'))
+    fireEvent.click(screen.getByText('🔍 Audits'))
+    await waitFor(() => {
+      expect(screen.getByText(/assignées par l'équipe B&E/)).toBeInTheDocument()
+    })
+  })
+})
