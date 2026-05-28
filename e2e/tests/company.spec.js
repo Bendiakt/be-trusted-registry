@@ -230,8 +230,8 @@ test.describe('Company — onboarding wizard', () => {
   })
 
   test('unauthenticated access to /onboarding redirects to /login', async ({ page }) => {
-    // Clear the session entirely
-    await page.evaluate(() => localStorage.clear())
+    // Session is in sessionStorage (key 'mydd_user'), not localStorage — clear both
+    await page.evaluate(() => { localStorage.clear(); sessionStorage.clear() })
     await page.goto('/onboarding')
 
     await expect(page).toHaveURL(/\/login/, { timeout: 6000 })
