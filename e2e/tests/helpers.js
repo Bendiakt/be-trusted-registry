@@ -39,6 +39,44 @@
 //   CORRECT — locale-aware regex:  /Paid|Paye/i   /Pending|En attente/i
 //   WRONG   — French-only:         /Paye/i         /En attente/i
 //
+// RULE 4 — AMBIGUOUS TEXT → PREFER ROLE SELECTORS
+//   getByText() fails with a strict-mode violation when multiple elements share
+//   the same text (e.g. a heading AND a description containing "API keys").
+//   Use a role selector to be specific.
+//
+//   CORRECT:  page.getByRole('heading', { name: /API keys/i })
+//   WRONG:    page.getByText(/API keys/i)  // may match heading + paragraph
+//
+// RULE 5 — MULTIPLE IDENTICAL BUTTONS → .first() / .last()
+//   When several buttons share the same label (e.g. multiple "✕" close buttons),
+//   Playwright's strict mode raises an error. Disambiguate with .first()/.last()
+//   or scope to a parent container.
+//
+//   CORRECT:  page.getByRole('button', { name: '✕' }).last()   // panel close
+//   WRONG:    page.locator('button').filter({ hasText: '✕' }).click()  // 3 matches
+//
+// RULE 6 — COMPOUND API ROUTES → ONE HANDLER, INSPECT THE URL
+//   When a single URL prefix serves multiple shapes (list vs. :id profile), do
+//   NOT rely on two glob stubs — glob ordering is fragile across Playwright
+//   versions. Instead register one broad route and branch inside the handler:
+//
+//   await page.route('**/api/pac/directory**', (route) => {
+//     if (/\/api\/pac\/directory\/\d+/.test(route.request().url())) {
+//       return route.fulfill({ /* profile shape */ })
+//     }
+//     return route.fulfill({ /* list shape */ })
+//   })
+//
+// RULE 7 — STUB COMPLETENESS: INCLUDE EVERY FIELD THE COMPONENT READS
+//   A missing field causes setFoo(undefined) → foo.length crashes → error boundary.
+//   Before writing a stub, grep the component for every res.data.* access and
+//   include ALL of them, even if they're empty arrays / 0 / false.
+//
+//   Common pitfalls:
+//     missionHistory: []          // PACAgentProfile — not optional
+//     languages: 'FR,EN'          // comma-string, NOT an array
+//     pagination: { total, page, limit, pages }  // most list endpoints
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** sessionStorage key used by frontend/src/lib/session.js */
