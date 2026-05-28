@@ -7,6 +7,8 @@
  *  3. Search in registry filters results
  *  4. Verify page shows company cert info by ID
  *  5. /privacy and /terms pages are reachable
+ *  6. Sector pages — hero, companies, FAQ, other-sector links
+ *  7. Unknown sector → redirect to /registry
  */
 const { test, expect } = require('@playwright/test')
 const { stubApi } = require('./helpers')
@@ -119,5 +121,124 @@ test.describe('Public — legal pages', () => {
 
     await expect(page).toHaveURL(/\/terms/)
     await expect(page.getByText(/terms|conditions|cgu/i).first()).toBeVisible({ timeout: 5000 })
+  })
+})
+
+// ── Sector pages ──────────────────────────────────────────────────────────────
+test.describe('Public — sector pages', () => {
+  // Stub the registry API to return two companies for sector queries
+  async function stubSector(page) {
+    await stubApi(page)
+    await page.route('**/api/registry**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: [
+            { id: 20, name: 'Steel Works Ltd', level: 2, country: 'DE', sector: 'Manufacturing' },
+            { id: 21, name: 'Iron & Co',       level: 1, country: 'FR', sector: 'Manufacturing' },
+          ],
+          pagination: { page: 1, limit: 12, total: 2, pages: 1 },
+        }),
+      }),
+    )
+  }
+
+  test('manufacturing sector page loads with hero heading', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    await expect(page.getByRole('heading', { level: 1 }))
+      .toContainText(/certified manufacturers/i, { timeout: 6000 })
+  })
+
+  test('sector page displays stat pills', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    await expect(page.getByText(/quality audit/i).first()).toBeVisible({ timeout: 6000 })
+  })
+
+  test('sector page shows certified companies from API', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    await expect(page.getByText('Steel Works Ltd')).toBeVisible({ timeout: 6000 })
+    await expect(page.getByText('Iron & Co')).toBeVisible({ timeout: 6000 })
+  })
+
+  test('company card links to /verify/:id', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    const link = page.locator('a[href="/verify/20"]')
+    await expect(link).toBeVisible({ timeout: 6000 })
+  })
+
+  test('sector page renders FAQ questions', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    await expect(page.getByText(/why verify a manufacturer/i)).toBeVisible({ timeout: 6000 })
+  })
+
+  test('other-sector links are shown', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    // Other sectors section should show at least logistics
+    await expect(page.getByRole('link', { name: /Logistics/i }).first()).toBeVisible({ timeout: 6000 })
+  })
+
+  test('breadcrumb contains sector name', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    // Breadcrumb nav contains "Manufacturing"
+    const breadcrumb = page.locator('nav[aria-label="Breadcrumb"]')
+    await expect(breadcrumb).toContainText('Manufacturing', { timeout: 6000 })
+  })
+
+  test('document title is set to sector name', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    // Wait for dynamic title
+    await page.waitForFunction(
+      () => document.title.toLowerCase().includes('manufacturing'),
+      { timeout: 6000 },
+    )
+    expect(await page.title()).toMatch(/manufacturing/i)
+  })
+
+  test('logistics sector page loads', async ({ page }) => {
+    await stubApi(page)
+    await page.route('**/api/registry**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ data: [], pagination: { page: 1, limit: 12, total: 0, pages: 0 } }),
+      }),
+    )
+    await page.goto('/sectors/logistics')
+
+    await expect(page.getByRole('heading', { level: 1 }))
+      .toContainText(/certified logistics/i, { timeout: 6000 })
+  })
+
+  test('unknown sector redirects to /registry', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/sectors/invalid-sector-xyz')
+
+    await expect(page).toHaveURL(/\/registry/, { timeout: 6000 })
+  })
+
+  test('"View all results" link includes sector in query param', async ({ page }) => {
+    await stubSector(page)
+    await page.goto('/sectors/manufacturing')
+
+    const viewAllLink = page.getByRole('link', { name: /view all results/i })
+    await expect(viewAllLink).toBeVisible({ timeout: 6000 })
+    const href = await viewAllLink.getAttribute('href')
+    expect(href).toContain('/registry?sector=')
+    expect(href).toContain('Manufacturing')
   })
 })
