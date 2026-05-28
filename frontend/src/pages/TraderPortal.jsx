@@ -344,7 +344,7 @@ export default function TraderPortal() {
           ))}
 
           <div style={{ marginTop:'1.5rem', display:'flex', gap:'0.75rem', justifyContent:'flex-end' }}>
-            <button onClick={() => { setCompareIds(new Set()); setShowCompare(false) }} style={{ padding:'0.55rem 1.2rem', background:'transparent', color:'#888', border:'1px solid #2a2a2a', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'0.85rem' }}>
+            <button onClick={() => { setCompareMap({}); setShowCompare(false) }} style={{ padding:'0.55rem 1.2rem', background:'transparent', color:'#888', border:'1px solid #2a2a2a', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'0.85rem' }}>
               Clear comparison
             </button>
             <button onClick={() => setShowCompare(false)} style={{ padding:'0.55rem 1.2rem', background:'linear-gradient(135deg,#C9A84C,#9A7B2E)', color:'#111', border:'none', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'0.85rem', fontWeight:'700' }}>
@@ -574,7 +574,7 @@ export default function TraderPortal() {
             ))}
           </div>
           <div style={{ display:'flex', gap:'0.5rem' }}>
-            <button onClick={() => setCompareIds(new Set())} style={{ background:'transparent', border:'1px solid #333', color:'#666', padding:'0.45rem 0.9rem', borderRadius:'6px', cursor:'pointer', fontSize:'0.8rem', fontFamily:'inherit' }}>
+            <button onClick={() => setCompareMap({})} style={{ background:'transparent', border:'1px solid #333', color:'#666', padding:'0.45rem 0.9rem', borderRadius:'6px', cursor:'pointer', fontSize:'0.8rem', fontFamily:'inherit' }}>
               Clear
             </button>
             <button onClick={() => setShowCompare(true)} disabled={compareList.length < 2}
