@@ -127,9 +127,12 @@ test.describe('Company — onboarding wizard', () => {
   test('step 1: progress bar shows Profile / Documents / Level labels', async ({ page }) => {
     await page.goto('/onboarding')
 
-    await expect(page.getByText('Profile')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('Documents')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('Level')).toBeVisible({ timeout: 5000 })
+    // Use the eyebrow step counter as a stable marker (no ambiguity with "profile" in h1)
+    await expect(page.getByText('Step 1 of 3')).toBeVisible({ timeout: 5000 })
+    // Exact match for progress-bar span labels (avoids partial match with h1 "company profile")
+    await expect(page.getByText('Profile', { exact: true })).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Documents', { exact: true })).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Level', { exact: true })).toBeVisible({ timeout: 5000 })
   })
 
   test('step 1: company name input is pre-filled from session', async ({ page }) => {
