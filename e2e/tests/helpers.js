@@ -265,6 +265,91 @@ async function stubApi(page) {
     }),
   )
 
+  // API keys (Developer tab)
+  await page.route('**/api/keys', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        status: 201, contentType: 'application/json',
+        body: JSON.stringify({
+          id: 99, prefix: 'mydd_test', name: 'My CI Key',
+          key: 'mydd_test_abcdef1234567890abcdef1234567890',
+          createdAt: new Date().toISOString(),
+        }),
+      })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 1, prefix: 'mydd_live', name: 'Production', lastUsed: '2026-05-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' },
+          { id: 2, prefix: 'mydd_test', name: 'Staging',    lastUsed: null,                  createdAt: '2026-02-01T00:00:00Z' },
+        ],
+      }),
+    })
+  })
+  await page.route('**/api/keys/**', (route) =>
+    route.fulfill({ status: 204, body: '' }),
+  )
+
+  // Webhooks (Developer tab)
+  await page.route('**/api/webhooks', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        status: 201, contentType: 'application/json',
+        body: JSON.stringify({
+          id: 77, url: 'https://example.com/webhook',
+          events: ['cert.status_changed'], description: '',
+          secret: 'whsec_testsecret1234567890',
+          createdAt: new Date().toISOString(),
+        }),
+      })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 10, url: 'https://hooks.example.com/mydd', events: ['cert.status_changed', 'cert.issued'],
+            description: 'Prod hook', active: true, createdAt: '2026-03-01T00:00:00Z' },
+        ],
+      }),
+    })
+  })
+  // LIFO: register broad DELETE handler FIRST, then specific ping handler LAST
+  // so ping wins over the catch-all for /api/webhooks/:id/ping URLs.
+  await page.route('**/api/webhooks/**', (route) =>
+    route.fulfill({ status: 204, body: '' }),
+  )
+  await page.route('**/api/webhooks/*/ping', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ success: true, statusCode: 200 }),
+    }),
+  )
+
+  // Notifications (Dashboard tab)
+  // NotificationsPanel reads: r.data.notifications + r.data.unread
+  // mark-one: PATCH /api/notifications/:id/read
+  // mark-all: PATCH /api/notifications/read-all
+  await page.route('**/api/notifications**', (route) => {
+    if (route.request().method() === 'PATCH') {
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ updated: 2 }),
+      })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        notifications: [
+          { id: 1, type: 'cert_approved',   title: 'Certification approved',        body: 'Your Level 1 certification was approved.',         read: false, createdAt: '2026-05-20T10:00:00Z' },
+          { id: 2, type: 'mission_assigned', title: 'PAC agent assigned',            body: 'A PAC agent has been assigned to your mission.',    read: false, createdAt: '2026-05-18T09:00:00Z' },
+          { id: 3, type: 'cert_expiring',    title: 'Certification expiring soon',   body: 'Your certification expires in 30 days.',            read: true,  createdAt: '2026-05-10T08:00:00Z' },
+        ],
+        unread: 2,
+      }),
+    })
+  })
+
 }
 
 module.exports = { seedSession, stubApi }
