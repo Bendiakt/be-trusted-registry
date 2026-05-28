@@ -132,6 +132,55 @@ router.get('/me', auth, companyReadLimiter, async (req, res) => {
   }
 })
 
+// ── PATCH /api/companies/me — onboarding profile update ──────────────────────
+// Used by the Onboarding wizard (step 1) to save companyName, sector, country, website.
+// Creates the company row if the user has no company yet (new registration flow).
+router.patch('/me', auth, companyWriteLimiter, validate(schemas.updateCompany), async (req, res) => {
+  try {
+    if (req.user.role !== 'company') return res.status(403).json({ error: 'Only company accounts can update their profile.' })
+
+    const { companyName, country, sector, website } = req.body
+
+    let cleanWebsite = null
+    if (website) {
+      const w = String(website).trim().slice(0, 500)
+      if (w && !/^https?:\/\/.+/i.test(w)) {
+        return res.status(400).json({ error: 'Website must start with http:// or https://' })
+      }
+      cleanWebsite = w || null
+    }
+
+    // Upsert: update if company exists, insert if not
+    const result = await query(
+      `INSERT INTO companies (user_id, name, company_name, industry, sector, country, website, status, certification_level)
+         VALUES ($1, $2, $2, $3, $3, $4, $5, 'pending', 0)
+       ON CONFLICT (user_id) DO UPDATE
+         SET company_name = COALESCE($2, companies.company_name),
+             name         = COALESCE($2, companies.name),
+             sector       = COALESCE($3, companies.sector),
+             industry     = COALESCE($3, companies.industry),
+             country      = COALESCE($4, companies.country),
+             website      = COALESCE($5, companies.website),
+             updated_at   = NOW()
+       RETURNING *`,
+      [req.user.id, companyName || null, sector || null, country || null, cleanWebsite],
+    )
+
+    // Also update the user.name to match company name if provided
+    if (companyName) {
+      await query('UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2', [
+        String(companyName).trim().slice(0, 200),
+        req.user.id,
+      ])
+    }
+
+    res.json({ company: mapCompanyRow(result.rows[0]) })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'patch_me_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to update profile' })
+  }
+})
+
 // ── GET /api/companies/mine — alias ──────────────────────────────────────────
 router.get('/mine', auth, companyReadLimiter, async (req, res) => {
   try {
