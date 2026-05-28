@@ -326,6 +326,62 @@ async function stubApi(page) {
     }),
   )
 
+  // PAC public directory + agent profile (/agents, /agents/:id)
+  // NOTE: PACDirectory.jsx calls agent.languages.split(',') — must be comma-separated string.
+  // Single route handler inspects the URL to differentiate list vs. profile:
+  //   /api/pac/directory            → list (with optional query string)
+  //   /api/pac/directory/<number>   → individual profile
+  await page.route('**/api/pac/directory**', (route) => {
+    const url = route.request().url()
+    if (/\/api\/pac\/directory\/\d+/.test(url)) {
+      // Individual agent profile — missionHistory MUST be an array (not undefined)
+      // because PACAgentProfile.jsx calls setHistory(res.data.missionHistory) and then
+      // renders history.length, which crashes if undefined.
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          agent: { id: 5, name: 'Sophie Diallo', country: 'SN', languages: 'FR,EN', specialties: 'Manufacturing,Agribusiness', missionsCompleted: 32, bio: 'Expert in West African supply chains.', active: true, memberSince: '2025-03-01T00:00:00Z' },
+          missionHistory: [],
+        }),
+      })
+    }
+    // Agent list (may include query string for search/pagination/tier filter)
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        agents: [
+          { id: 5, name: 'Sophie Diallo', country: 'SN', languages: 'FR,EN', specialties: 'Manufacturing,Agribusiness', missionsCompleted: 32, bio: 'Expert in West African supply chains.', active: true },
+          { id: 6, name: 'James Okafor',  country: 'NG', languages: 'EN',    specialties: 'Logistics,Trade Finance',    missionsCompleted: 18, bio: 'Former customs inspector.',              active: true },
+        ],
+        pagination: { total: 2, page: 1, limit: 20, pages: 1 },
+      }),
+    })
+  })
+
+  // Trader — watchlist (for trader.spec.js) + stats
+  await page.route('**/api/trader/watchlist**', (route) => {
+    if (route.request().method() === 'DELETE') {
+      return route.fulfill({ status: 204, body: '' })
+    }
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 10, name: 'Acme Corp', sector: 'Manufacturing', country: 'FR', level: 2 },
+        ],
+      }),
+    })
+  })
+  await page.route('**/api/trader/stats', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ totalVerified: 120, certifiedInSector: 18, avgLevel: 1.8 }),
+    }),
+  )
+
   // Notifications (Dashboard tab)
   // NotificationsPanel reads: r.data.notifications + r.data.unread
   // mark-one: PATCH /api/notifications/:id/read

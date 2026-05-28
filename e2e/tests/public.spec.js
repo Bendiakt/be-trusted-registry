@@ -9,6 +9,8 @@
  *  5. /privacy and /terms pages are reachable
  *  6. Sector pages — hero, companies, FAQ, other-sector links
  *  7. Unknown sector → redirect to /registry
+ *  8. PAC agent directory (/agents) — list of certified inspectors
+ *  9. PAC agent individual profile (/agents/:id)
  */
 const { test, expect } = require('@playwright/test')
 const { stubApi } = require('./helpers')
@@ -240,5 +242,85 @@ test.describe('Public — sector pages', () => {
     const href = await viewAllLink.getAttribute('href')
     expect(href).toContain('/registry?sector=')
     expect(href).toContain('Manufacturing')
+  })
+})
+
+// ── PAC agent directory (/agents) ─────────────────────────────────────────────
+test.describe('Public — PAC agent directory', () => {
+  test('directory page loads and lists agents', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents')
+
+    // Stub returns Sophie Diallo and James Okafor
+    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 6000 })
+    await expect(page.getByText('James Okafor')).toBeVisible({ timeout: 6000 })
+  })
+
+  test('agent bio is displayed on card', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents')
+
+    await expect(page.getByText(/West African supply chains/i)).toBeVisible({ timeout: 6000 })
+  })
+
+  test('agent mission count is shown', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents')
+
+    // Sophie has 32 missions — the count appears as plain text in the card
+    await expect(page.getByText('32').first()).toBeVisible({ timeout: 6000 })
+  })
+
+  test('agent card links to /agents/:id', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents')
+
+    // Sophie Diallo (id 5) should have a card linking to /agents/5
+    const agentLink = page.locator('a[href="/agents/5"]')
+    await expect(agentLink).toBeVisible({ timeout: 6000 })
+  })
+
+  test('page has a heading with "PAC" or "agent" keyword', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents')
+
+    await expect(
+      page.getByRole('heading').filter({ hasText: /PAC|agent|inspector|auditor/i }).first()
+    ).toBeVisible({ timeout: 6000 })
+  })
+})
+
+// ── PAC agent individual profile (/agents/:id) ────────────────────────────────
+test.describe('Public — PAC agent profile', () => {
+  test('profile page shows agent name', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents/5')
+
+    // Stub returns Sophie Diallo
+    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 6000 })
+  })
+
+  test('profile page shows agent bio', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents/5')
+
+    await expect(page.getByText(/West African supply chains/i)).toBeVisible({ timeout: 6000 })
+  })
+
+  test('profile page shows mission count', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents/5')
+
+    // Sophie has 32 missions completed
+    await expect(page.getByText('32').first()).toBeVisible({ timeout: 6000 })
+  })
+
+  test('profile page has a back link to /agents', async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/agents/5')
+
+    // Two links exist (nav + CTA section) — .first() avoids strict mode violation
+    const backLink = page.locator('a[href="/agents"]').first()
+    await expect(backLink).toBeVisible({ timeout: 6000 })
   })
 })
