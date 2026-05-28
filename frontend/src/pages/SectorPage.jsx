@@ -12,6 +12,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 import './landing.css'
 
@@ -157,7 +158,8 @@ const LEVEL_COLOR = { 1: T.goldBronze, 2: T.goldSilver, 3: T.goldGold }
 export default function SectorPage() {
   const { sector }    = useParams()
   const navigate      = useNavigate()
-  const [lang]        = useState(() => (navigator.language || 'en').startsWith('fr') ? 'fr' : 'en')
+  const { t, i18n }  = useTranslation()
+  const lang          = i18n.language?.startsWith('fr') ? 'fr' : 'en'
   const [companies, setCompanies] = useState([])
   const [total, setTotal]         = useState(null)
   const [loading, setLoading]     = useState(true)
@@ -289,10 +291,10 @@ export default function SectorPage() {
           </Link>
           <nav style={{ display:'flex', gap:'1rem', alignItems:'center', flexWrap:'wrap' }}>
             <Link to="/registry" style={{ fontSize:'0.85rem', color: T.muted, textDecoration:'none' }}>
-              {lang === 'fr' ? 'Registre' : 'Registry'}
+              {t('sector.registry_link')}
             </Link>
             <Link to="/register" style={S.btnPrimary}>
-              {lang === 'fr' ? 'Se certifier' : 'Get certified'}
+              {t('sector.get_certified')}
             </Link>
           </nav>
         </div>
@@ -305,7 +307,7 @@ export default function SectorPage() {
             <Link to="/"        style={{ color: T.faint, textDecoration:'none' }}>MyDD</Link>
             <span style={{ margin:'0 0.4rem' }}>›</span>
             <Link to="/registry" style={{ color: T.faint, textDecoration:'none' }}>
-              {lang === 'fr' ? 'Registre' : 'Registry'}
+              {t('sector.registry_link')}
             </Link>
             <span style={{ margin:'0 0.4rem' }}>›</span>
             <span style={{ color: T.muted }}>{C.name}</span>
@@ -326,9 +328,7 @@ export default function SectorPage() {
             </div>
             {total !== null && (
               <p style={{ ...S.p, marginTop:'1rem', fontSize:'0.85rem' }}>
-                {lang === 'fr'
-                  ? `${total} entreprise${total !== 1 ? 's' : ''} certifiée${total !== 1 ? 's' : ''} dans ce secteur`
-                  : `${total} certified compan${total !== 1 ? 'ies' : 'y'} in this sector`}
+                {t('sector.total', { count: total })}
               </p>
             )}
           </div>
@@ -338,7 +338,7 @@ export default function SectorPage() {
         <section style={{ ...S.section, background: T.surface, paddingTop: 'clamp(2.5rem,4vw,4rem)' }}>
           <div style={S.container}>
             <h2 style={S.h2}>
-              {lang === 'fr' ? 'Entreprises certifiées' : 'Certified companies'}
+              {t('sector.certified_companies')}
               {total !== null && <span style={{ fontSize:'0.8rem', fontWeight:'400', color: T.faint, marginLeft:'0.6rem' }}>({total})</span>}
             </h2>
 
@@ -354,13 +354,11 @@ export default function SectorPage() {
               <div style={{ textAlign:'center', padding:'3rem 0', color: T.muted }}>
                 <div style={{ fontSize:'2.5rem', marginBottom:'1rem', opacity:0.3 }}>🏭</div>
                 <p style={{ ...S.p, margin:0 }}>
-                  {lang === 'fr'
-                    ? 'Aucune entreprise certifiée dans ce secteur pour l\'instant.'
-                    : 'No certified companies in this sector yet.'}
+                  {t('sector.no_companies')}
                 </p>
                 <div style={{ marginTop:'1.5rem' }}>
                   <Link to="/register" style={S.btnPrimary}>
-                    {lang === 'fr' ? 'Être le premier →' : 'Be the first →'}
+                    {t('sector.be_first')}
                   </Link>
                 </div>
               </div>
@@ -392,7 +390,7 @@ export default function SectorPage() {
             {!loading && (
               <div style={{ marginTop:'2rem', textAlign:'center' }}>
                 <Link to={`/registry?sector=${encodeURIComponent(C.name)}`} style={S.btnSecondary}>
-                  {lang === 'fr' ? `Voir tous les résultats →` : `View all results →`}
+                  {t('sector.view_all')}
                 </Link>
               </div>
             )}
@@ -403,7 +401,7 @@ export default function SectorPage() {
         <section style={{ ...S.section, paddingBottom: 'clamp(3rem,5vw,5rem)' }}>
           <div style={{ ...S.container, maxWidth:'760px' }}>
             <h2 style={{ ...S.h2, marginBottom:'1.5rem' }}>
-              {lang === 'fr' ? 'Questions fréquentes' : 'Frequently asked questions'}
+              {t('sector.faq_heading')}
             </h2>
             {C.faq.map((f, i) => (
               <details key={i} style={{ borderBottom:`1px solid ${T.border}`, padding:'1rem 0', cursor:'pointer' }}>
@@ -421,19 +419,17 @@ export default function SectorPage() {
         <section style={{ padding:'clamp(2.5rem,5vw,4rem) 0', background: T.surface }}>
           <div style={{ ...S.container, maxWidth:'680px', textAlign:'center' }}>
             <h2 style={{ ...S.h2, fontSize:'clamp(1.3rem,2.5vw,1.75rem)' }}>
-              {lang === 'fr' ? 'Certifiez votre entreprise dès maintenant.' : 'Get your company certified today.'}
+              {t('sector.cta_heading')}
             </h2>
             <p style={{ ...S.p, marginBottom:'1.5rem' }}>
-              {lang === 'fr'
-                ? `Rejoignez les entreprises du secteur ${C.name} déjà vérifiées sur MyDD.`
-                : `Join the ${C.name} companies already verified on MyDD.`}
+              {t('sector.cta_sub', { name: C.name })}
             </p>
             <div style={{ display:'flex', gap:'0.75rem', justifyContent:'center', flexWrap:'wrap' }}>
               <Link to="/register" style={S.btnPrimary}>
-                {lang === 'fr' ? 'Demander une vérification' : 'Request verification'}
+                {t('sector.request_verification')}
               </Link>
               <Link to="/registry" style={S.btnSecondary}>
-                {lang === 'fr' ? 'Voir le registre' : 'Browse registry'}
+                {t('sector.browse_registry')}
               </Link>
             </div>
           </div>
@@ -443,7 +439,7 @@ export default function SectorPage() {
         <section style={{ ...S.section, paddingTop: 'clamp(2rem,4vw,3rem)' }}>
           <div style={S.container}>
             <h2 style={{ ...S.h2, fontSize:'1rem', marginBottom:'1rem', color: T.muted, fontFamily:'inherit', fontWeight:'600', letterSpacing:'0.04em', textTransform:'uppercase' }}>
-              {lang === 'fr' ? 'Autres secteurs' : 'Other sectors'}
+              {t('sector.other_sectors')}
             </h2>
             <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
               {SECTORS_ALL.filter(s => s.slug !== sector).map(s => (
@@ -470,7 +466,7 @@ export default function SectorPage() {
             <Link to="/registry" style={{ fontSize:'0.82rem', color: T.muted, textDecoration:'none' }}>Registry</Link>
             <Link to="/agents"   style={{ fontSize:'0.82rem', color: T.muted, textDecoration:'none' }}>PAC Agents</Link>
             <Link to="/register" style={{ fontSize:'0.82rem', color: T.muted, textDecoration:'none' }}>
-              {lang === 'fr' ? 'Se certifier' : 'Get certified'}
+              {t('sector.get_certified')}
             </Link>
           </div>
         </div>
