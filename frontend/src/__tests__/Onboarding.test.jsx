@@ -29,8 +29,55 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children, to, ...rest }) => <a href={to} {...rest}>{children}</a>,
 }))
 
+const OB_T = {
+  'onboarding.step1_eyebrow': 'Step 1 of 3',
+  'onboarding.step1_heading': 'Set up your company profile',
+  'onboarding.step1_sub': 'This information will appear on your public registry listing and certification documents.',
+  'onboarding.step2_eyebrow': 'Step 2 of 3',
+  'onboarding.step2_heading': 'Prepare your documents',
+  'onboarding.step2_sub': "You'll upload these in your Dashboard.",
+  'onboarding.step3_eyebrow': 'Step 3 of 3',
+  'onboarding.step3_heading': 'Choose your certification level',
+  'onboarding.step3_sub': 'You can change this later.',
+  'onboarding.profile_label': 'Profile',
+  'onboarding.documents_label': 'Documents',
+  'onboarding.level_label': 'Level',
+  'onboarding.skip': 'Skip for now',
+  'onboarding.skip_bottom': 'Skip setup and go directly to Dashboard →',
+  'onboarding.back': '← Back',
+  'onboarding.continue': 'Continue →',
+  'onboarding.saving': 'Saving…',
+  'onboarding.error_name_required': 'Company name is required.',
+  'onboarding.error_save_failed': 'Could not save profile. Please try again.',
+  'onboarding.label_name': 'Company name *',
+  'onboarding.label_sector': 'Sector',
+  'onboarding.label_country': 'Country',
+  'onboarding.label_website': 'Website (optional)',
+  'onboarding.placeholder_name': 'e.g. Acme Trading LLC',
+  'onboarding.placeholder_sector': 'Select sector',
+  'onboarding.placeholder_country': 'Select country',
+  'onboarding.placeholder_website': 'https://yourcompany.com',
+  'onboarding.docs_upload_title': '📁 Where to upload?',
+  'onboarding.docs_upload_body': 'After completing setup, go to Dashboard → Documents to upload and submit your files.',
+  'onboarding.most_popular': 'Most popular',
+  'onboarding.payment_title': '💳 Payment later',
+  'onboarding.payment_body': "You won't be charged now.",
+  'onboarding.finish_with_level': 'Start with {{level}} →',
+  'onboarding.go_to_dashboard': 'Go to Dashboard →',
+}
+
+const mockT = (key, opts) => {
+  let str = OB_T[key] ?? key
+  if (opts && typeof str === 'string') {
+    Object.entries(opts).forEach(([k, v]) => {
+      str = str.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v))
+    })
+  }
+  return str
+}
+
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key) => key }),
+  useTranslation: () => ({ t: mockT }),
 }))
 
 vi.mock('../lib/api', () => ({

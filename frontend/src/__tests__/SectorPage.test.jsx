@@ -30,6 +30,38 @@ vi.mock('../lib/api', () => ({
   default: { get: vi.fn() },
 }))
 
+const SECTOR_T = {
+  'sector.registry_link': 'Registry',
+  'sector.get_certified': 'Get certified',
+  'sector.certified_companies': 'Certified companies',
+  'sector.view_all': 'View all results →',
+  'sector.no_companies': 'No certified companies in this sector yet.',
+  'sector.be_first': 'Be the first →',
+  'sector.faq_heading': 'Frequently asked questions',
+  'sector.cta_heading': 'Get your company certified today.',
+  'sector.cta_sub': 'Join the {{name}} companies already verified on MyDD.',
+  'sector.request_verification': 'Request verification',
+  'sector.browse_registry': 'Browse registry',
+  'sector.other_sectors': 'Other sectors',
+  'sector.total_one': '{{count}} certified company in this sector',
+  'sector.total_other': '{{count}} certified companies in this sector',
+}
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, opts) => {
+      let str = SECTOR_T[key] ?? key
+      if (opts && typeof str === 'string') {
+        Object.entries(opts).forEach(([k, v]) => {
+          str = str.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v))
+        })
+      }
+      return str
+    },
+    i18n: { language: 'en' },
+  }),
+}))
+
 // navigator.language is 'en' by default in jsdom
 Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true })
 

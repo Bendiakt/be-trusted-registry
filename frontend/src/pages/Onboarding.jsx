@@ -96,7 +96,7 @@ export default function Onboarding() {
 
   // Step 1 save
   const saveProfile = async () => {
-    if (!profile.name.trim()) { setError('Company name is required.'); return }
+    if (!profile.name.trim()) { setError(t('onboarding.error_name_required')); return }
     setSaving(true); setError('')
     try {
       await api.patch('/api/companies/me', {
@@ -107,7 +107,7 @@ export default function Onboarding() {
       })
       setStep(2)
     } catch {
-      setError('Could not save profile. Please try again.')
+      setError(t('onboarding.error_save_failed'))
     } finally {
       setSaving(false)
     }
@@ -149,7 +149,9 @@ export default function Onboarding() {
         ))}
       </div>
       <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72rem', color:'#9b988f' }}>
-        <span>Profile</span><span style={{ textAlign:'center' }}>Documents</span><span style={{ textAlign:'right' }}>Level</span>
+        <span>{t('onboarding.profile_label')}</span>
+        <span style={{ textAlign:'center' }}>{t('onboarding.documents_label')}</span>
+        <span style={{ textAlign:'right' }}>{t('onboarding.level_label')}</span>
       </div>
     </div>
   )
@@ -175,51 +177,51 @@ export default function Onboarding() {
         {/* ── Step 1: Profile ── */}
         {step === 1 && (
           <>
-            <div style={G.eyebrow}>Step 1 of 3</div>
-            <h1 style={G.h1}>Set up your company profile</h1>
-            <p style={G.sub}>This information will appear on your public registry listing and certification documents.</p>
+            <div style={G.eyebrow}>{t('onboarding.step1_eyebrow')}</div>
+            <h1 style={G.h1}>{t('onboarding.step1_heading')}</h1>
+            <p style={G.sub}>{t('onboarding.step1_sub')}</p>
 
             {error && <div style={G.err}>{error}</div>}
 
             <div style={{ display:'flex', flexDirection:'column', gap:'1rem', marginBottom:'1.5rem' }}>
               <div>
-                <label style={G.label} htmlFor="ob-name">Company name *</label>
+                <label style={G.label} htmlFor="ob-name">{t('onboarding.label_name')}</label>
                 <input id="ob-name" style={G.input} value={profile.name}
                   onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Acme Trading LLC" />
+                  placeholder={t('onboarding.placeholder_name')} />
               </div>
 
               <div style={G.row}>
                 <div>
-                  <label style={G.label} htmlFor="ob-sector">Sector</label>
+                  <label style={G.label} htmlFor="ob-sector">{t('onboarding.label_sector')}</label>
                   <select id="ob-sector" style={G.select} value={profile.sector}
                     onChange={e => setProfile(p => ({ ...p, sector: e.target.value }))}>
-                    <option value="">Select sector</option>
+                    <option value="">{t('onboarding.placeholder_sector')}</option>
                     {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={G.label} htmlFor="ob-country">Country</label>
+                  <label style={G.label} htmlFor="ob-country">{t('onboarding.label_country')}</label>
                   <select id="ob-country" style={G.select} value={profile.country}
                     onChange={e => setProfile(p => ({ ...p, country: e.target.value }))}>
-                    <option value="">Select country</option>
+                    <option value="">{t('onboarding.placeholder_country')}</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{COUNTRY_NAMES[c] || c}</option>)}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style={G.label} htmlFor="ob-website">Website (optional)</label>
+                <label style={G.label} htmlFor="ob-website">{t('onboarding.label_website')}</label>
                 <input id="ob-website" style={G.input} value={profile.website}
                   onChange={e => setProfile(p => ({ ...p, website: e.target.value }))}
-                  placeholder="https://yourcompany.com" type="url" />
+                  placeholder={t('onboarding.placeholder_website')} type="url" />
               </div>
             </div>
 
             <div style={{ display:'flex', gap:'0.75rem', justifyContent:'flex-end' }}>
-              <button style={G.btnSec} onClick={finish}>Skip for now</button>
+              <button style={G.btnSec} onClick={finish}>{t('onboarding.skip')}</button>
               <button style={G.btn} onClick={saveProfile} disabled={saving}>
-                {saving ? 'Saving…' : 'Continue →'}
+                {saving ? t('onboarding.saving') : t('onboarding.continue')}
               </button>
             </div>
           </>
@@ -228,9 +230,9 @@ export default function Onboarding() {
         {/* ── Step 2: Documents ── */}
         {step === 2 && (
           <>
-            <div style={G.eyebrow}>Step 2 of 3</div>
-            <h1 style={G.h1}>Prepare your documents</h1>
-            <p style={G.sub}>You'll upload these in your Dashboard. Having them ready speeds up your verification significantly.</p>
+            <div style={G.eyebrow}>{t('onboarding.step2_eyebrow')}</div>
+            <h1 style={G.h1}>{t('onboarding.step2_heading')}</h1>
+            <p style={G.sub}>{t('onboarding.step2_sub')}</p>
 
             <ul style={{ listStyle:'none', margin:'0 0 1.5rem', padding:0, display:'flex', flexDirection:'column', gap:'0.6rem' }}>
               {DOCS.map((doc, i) => (
@@ -242,13 +244,13 @@ export default function Onboarding() {
             </ul>
 
             <div style={G.notice}>
-              <strong style={{ color:'#28251d', display:'block', marginBottom:'0.35rem' }}>📁 Where to upload?</strong>
-              After completing setup, go to <strong>Dashboard → Documents</strong> to upload and submit your files.
+              <strong style={{ color:'#28251d', display:'block', marginBottom:'0.35rem' }}>{t('onboarding.docs_upload_title')}</strong>
+              {t('onboarding.docs_upload_body')}
             </div>
 
             <div style={{ display:'flex', gap:'0.75rem', justifyContent:'flex-end', marginTop:'1.5rem' }}>
-              <button style={G.btnSec} onClick={() => setStep(1)}>← Back</button>
-              <button style={G.btn} onClick={() => setStep(3)}>Continue →</button>
+              <button style={G.btnSec} onClick={() => setStep(1)}>{t('onboarding.back')}</button>
+              <button style={G.btn} onClick={() => setStep(3)}>{t('onboarding.continue')}</button>
             </div>
           </>
         )}
@@ -256,9 +258,9 @@ export default function Onboarding() {
         {/* ── Step 3: Level ── */}
         {step === 3 && (
           <>
-            <div style={G.eyebrow}>Step 3 of 3</div>
-            <h1 style={G.h1}>Choose your certification level</h1>
-            <p style={G.sub}>You can change this later. The level determines the depth of verification and the documents required.</p>
+            <div style={G.eyebrow}>{t('onboarding.step3_eyebrow')}</div>
+            <h1 style={G.h1}>{t('onboarding.step3_heading')}</h1>
+            <p style={G.sub}>{t('onboarding.step3_sub')}</p>
 
             <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem', marginBottom:'1.5rem' }}>
               {LEVEL_INFO.map(lv => (
@@ -275,21 +277,23 @@ export default function Onboarding() {
                     {lv.items.map((it, j) => <li key={j}>{it}</li>)}
                   </ul>
                   {lv.featured && (
-                    <div style={{ marginTop:'0.5rem', fontSize:'0.72rem', fontWeight:'700', color: lv.color, textTransform:'uppercase', letterSpacing:'0.08em' }}>Most popular</div>
+                    <div style={{ marginTop:'0.5rem', fontSize:'0.72rem', fontWeight:'700', color: lv.color, textTransform:'uppercase', letterSpacing:'0.08em' }}>{t('onboarding.most_popular')}</div>
                   )}
                 </button>
               ))}
             </div>
 
             <div style={G.notice}>
-              <strong style={{ color:'#28251d', display:'block', marginBottom:'0.35rem' }}>💳 Payment later</strong>
-              You won't be charged now. After uploading your documents, you'll select a plan and pay from your Dashboard.
+              <strong style={{ color:'#28251d', display:'block', marginBottom:'0.35rem' }}>{t('onboarding.payment_title')}</strong>
+              {t('onboarding.payment_body')}
             </div>
 
             <div style={{ display:'flex', gap:'0.75rem', justifyContent:'flex-end', marginTop:'1.5rem' }}>
-              <button style={G.btnSec} onClick={() => setStep(2)}>← Back</button>
+              <button style={G.btnSec} onClick={() => setStep(2)}>{t('onboarding.back')}</button>
               <button style={G.btn} onClick={finish}>
-                {chosenLevel ? `Start with ${LEVEL_INFO.find(l => l.n === chosenLevel)?.label} →` : 'Go to Dashboard →'}
+                {chosenLevel
+                  ? t('onboarding.finish_with_level', { level: LEVEL_INFO.find(l => l.n === chosenLevel)?.label })
+                  : t('onboarding.go_to_dashboard')}
               </button>
             </div>
           </>
@@ -298,7 +302,7 @@ export default function Onboarding() {
 
       {/* Skip link */}
       <button onClick={finish} style={{ marginTop:'1.25rem', background:'none', border:'none', cursor:'pointer', fontSize:'0.82rem', color:'#9b988f', fontFamily:'inherit' }}>
-        Skip setup and go directly to Dashboard →
+        {t('onboarding.skip_bottom')}
       </button>
 
     </div>
