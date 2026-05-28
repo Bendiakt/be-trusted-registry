@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MyDD — You're offline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'General Sans', 'Inter', system-ui, sans-serif;
+      background: #f7f6f2;
+      color: #28251d;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .card {
+      max-width: 480px;
+      width: 100%;
+      background: #f9f8f5;
+      border: 1px solid rgba(40,37,29,0.1);
+      border-radius: 20px;
+      padding: 2.5rem;
+      text-align: center;
+    }
+    .icon  { font-size: 2.5rem; margin-bottom: 1.25rem; }
+    h1     { font-family: Georgia, serif; font-size: 1.6rem; font-weight: 700;
+             margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+    p      { color: #6e6a63; line-height: 1.65; margin-bottom: 1.5rem; }
+    .brand { margin-bottom: 2rem; }
+    .brand strong { font-size: 1.1rem; color: #01696f; }
+    .brand small  { display: block; font-size: 0.78rem; color: #9b988f; }
+    .btn {
+      display: inline-block;
+      padding: 0.75rem 1.5rem;
+      background: #01696f;
+      color: #f9f8f4;
+      border: none;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { background: #0c4e54; }
+    .links { margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .links a { color: #6e6a63; font-size: 0.85rem; text-decoration: none; }
+    .links a:hover { color: #01696f; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <strong>MyDD</strong>
+      <small>B&amp;E Consult FZCO</small>
+    </div>
+    <div class="icon">📡</div>
+    <h1>You're offline</h1>
+    <p>
+      It looks like you've lost your internet connection. Some cached pages are
+      available below, or try again when you're back online.
+    </p>
+    <button class="btn" onclick="window.location.reload()">Try again</button>
+    <div class="links">
+      <a href="/">Home</a>
+      <a href="/registry">Registry</a>
+      <a href="/agents">PAC Agents</a>
+    </div>
+  </div>
+</body>
+</html>

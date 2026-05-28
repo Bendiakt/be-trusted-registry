@@ -15,16 +15,29 @@ const router = express.Router()
 
 const FRONTEND = () => process.env.FRONTEND_URL || 'https://mydd.work'
 
+// Sector slugs that have dedicated landing pages
+const SECTOR_SLUGS = [
+  'manufacturing',
+  'logistics',
+  'agribusiness',
+  'technology',
+  'trade-finance',
+]
+
 // GET /sitemap.xml
 router.get('/sitemap.xml', async (req, res) => {
   const base   = FRONTEND()
-  const STATIC = ['', '/registry', '/login', '/register']
+  const STATIC = ['', '/registry', '/agents', '/login', '/register', '/legal']
   try {
     const result = await query(
       'SELECT id, updated_at FROM companies WHERE certification_level > 0 ORDER BY id ASC'
     )
     const urls = [
+      // Static pages
       ...STATIC.map(p => ({ loc: `${base}${p}`, changefreq: 'weekly', priority: p === '' ? '1.0' : '0.8' })),
+      // Sector landing pages
+      ...SECTOR_SLUGS.map(s => ({ loc: `${base}/sectors/${s}`, changefreq: 'weekly', priority: '0.85' })),
+      // Verified company profiles
       ...result.rows.map(r => ({
         loc:        `${base}/verify/${r.id}`,
         lastmod:    r.updated_at ? new Date(r.updated_at).toISOString().slice(0, 10) : undefined,
@@ -58,7 +71,18 @@ router.get('/sitemap.xml', async (req, res) => {
 router.get('/robots.txt', (req, res) => {
   const base = FRONTEND()
   res.set('Content-Type', 'text/plain')
-  res.send(`User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${base}/sitemap.xml\n`)
+  res.send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /dashboard',
+    'Disallow: /admin',
+    'Disallow: /pac',
+    'Disallow: /trader',
+    'Disallow: /api/',
+    '',
+    `Sitemap: ${base}/sitemap.xml`,
+    '',
+  ].join('\n'))
 })
 
 // GET /.well-known/security.txt — RFC 9116 vulnerability disclosure policy

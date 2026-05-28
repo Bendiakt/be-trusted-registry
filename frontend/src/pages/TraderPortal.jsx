@@ -61,6 +61,23 @@ export default function TraderPortal() {
   const [checkingOut, setCheckingOut]   = useState(false)
   const [selectedPlan, setSelectedPlan] = useState('annual') // 'monthly' | 'annual'
   const countriesLoaded                 = useRef(false)
+  const [compareIds, setCompareIds]     = useState(new Set()) // max 3
+  const [showCompare, setShowCompare]   = useState(false)     // open comparison panel
+
+  const toggleCompare = (company) => {
+    setCompareIds(prev => {
+      const next = new Set(prev)
+      if (next.has(company.id)) {
+        next.delete(company.id)
+      } else if (next.size < 3) {
+        next.add(company.id)
+      }
+      return next
+    })
+  }
+
+  // Companies selected for comparison (full objects)
+  const compareList = companies.filter(c => compareIds.has(c.id))
 
   // ── auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -264,6 +281,76 @@ export default function TraderPortal() {
           >
             {isWatched ? '★' : '☆'}
           </button>
+          {/* Compare toggle */}
+          <button
+            onClick={() => toggleCompare(c)}
+            title={compareIds.has(c.id) ? 'Remove from comparison' : compareIds.size >= 3 ? 'Max 3 companies' : 'Add to comparison'}
+            disabled={!compareIds.has(c.id) && compareIds.size >= 3}
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', background: compareIds.has(c.id) ? 'rgba(99,179,237,0.14)' : 'transparent', color: compareIds.has(c.id) ? '#63b3ed' : '#555', border:`1px solid ${compareIds.has(c.id) ? 'rgba(99,179,237,0.4)' : '#2a2a2a'}`, padding:'0.5rem 0.7rem', borderRadius:'6px', fontSize:'0.8rem', cursor: !compareIds.has(c.id) && compareIds.size >= 3 ? 'not-allowed' : 'pointer', transition:'all 0.15s', opacity: !compareIds.has(c.id) && compareIds.size >= 3 ? 0.4 : 1 }}
+          >
+            ⇌
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Comparison panel ────────────────────────────────────────────────────────
+  const COMPARE_FIELDS = [
+    { key: 'sector',      label: 'Sector' },
+    { key: 'country',     label: 'Country' },
+    { key: 'level',       label: 'Level',       fmt: v => ['—','Bronze','Silver','Gold'][v] || '—' },
+    { key: 'trust_score', label: 'Trust Score',  fmt: v => v != null ? `${v}/100` : '—' },
+    { key: 'expires_at',  label: 'Cert expires', fmt: v => v ? new Date(v).toLocaleDateString() : '—' },
+  ]
+
+  function ComparePanel() {
+    if (!showCompare || compareList.length === 0) return null
+    return (
+      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:200, overflowY:'auto', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'2rem 1rem' }}>
+        <div style={{ background:'#111', border:'1px solid #2a2a2a', borderRadius:'16px', width:'100%', maxWidth:'800px', padding:'1.5rem' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
+            <h2 style={{ color:'#fff', fontSize:'1.05rem', fontWeight:'700', margin:0 }}>⇌ Company Comparison</h2>
+            <button onClick={() => setShowCompare(false)} style={{ background:'transparent', border:'none', color:'#888', cursor:'pointer', fontSize:'1.2rem' }}>✕</button>
+          </div>
+
+          {/* Company headers */}
+          <div style={{ display:'grid', gridTemplateColumns:`2fr ${compareList.map(() => '1fr').join(' ')}`, gap:'0.75rem', marginBottom:'1rem' }}>
+            <div/>
+            {compareList.map(c => (
+              <div key={c.id} style={{ textAlign:'center' }}>
+                <div style={{ fontWeight:'700', color:'#fff', fontSize:'0.9rem', marginBottom:'0.25rem' }}>{c.name}</div>
+                <Link to={`/verify/${c.id}`} style={{ fontSize:'0.72rem', color:'#C9A84C', textDecoration:'none' }}>View profile →</Link>
+              </div>
+            ))}
+          </div>
+
+          {/* Comparison rows */}
+          {COMPARE_FIELDS.map((field, i) => (
+            <div key={field.key} style={{ display:'grid', gridTemplateColumns:`2fr ${compareList.map(() => '1fr').join(' ')}`, gap:'0.75rem', padding:'0.65rem 0', borderTop:'1px solid #1a1a1a', background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderRadius:'4px' }}>
+              <div style={{ color:'#666', fontSize:'0.8rem', fontWeight:'600', display:'flex', alignItems:'center', paddingLeft:'0.5rem' }}>{field.label}</div>
+              {compareList.map(c => {
+                const raw = c[field.key]
+                const val = field.fmt ? field.fmt(raw) : (raw || '—')
+                return (
+                  <div key={c.id} style={{ textAlign:'center', color:'#ccc', fontSize:'0.85rem', fontWeight: field.key === 'level' ? '700' : '400' }}>
+                    {field.key === 'level' && raw > 0
+                      ? <span style={{ color: LEVEL_COLORS[raw], background:`${LEVEL_COLORS[raw]}18`, border:`1px solid ${LEVEL_COLORS[raw]}44`, borderRadius:'999px', padding:'0.2rem 0.6rem', fontSize:'0.75rem' }}>{val}</span>
+                      : val}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+
+          <div style={{ marginTop:'1.5rem', display:'flex', gap:'0.75rem', justifyContent:'flex-end' }}>
+            <button onClick={() => { setCompareIds(new Set()); setShowCompare(false) }} style={{ padding:'0.55rem 1.2rem', background:'transparent', color:'#888', border:'1px solid #2a2a2a', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'0.85rem' }}>
+              Clear comparison
+            </button>
+            <button onClick={() => setShowCompare(false)} style={{ padding:'0.55rem 1.2rem', background:'linear-gradient(135deg,#C9A84C,#9A7B2E)', color:'#111', border:'none', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'0.85rem', fontWeight:'700' }}>
+              Done
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -473,6 +560,33 @@ export default function TraderPortal() {
         )}
         </> /* end subscribed */}
       </main>
+
+      {/* ── Sticky comparison bar ── */}
+      {compareIds.size > 0 && (
+        <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#1a1a1a', borderTop:'1px solid #2a2a2a', padding:'0.75rem 1.5rem', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'1rem', zIndex:100, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', flexWrap:'wrap' }}>
+            <span style={{ color:'#888', fontSize:'0.8rem' }}>⇌ Comparing:</span>
+            {compareList.map(c => (
+              <span key={c.id} style={{ background:'rgba(99,179,237,0.12)', border:'1px solid rgba(99,179,237,0.3)', color:'#63b3ed', borderRadius:'999px', padding:'0.25rem 0.75rem', fontSize:'0.78rem', display:'inline-flex', alignItems:'center', gap:'0.4rem' }}>
+                {c.name}
+                <button onClick={() => toggleCompare(c)} style={{ background:'none', border:'none', color:'#63b3ed', cursor:'pointer', fontSize:'0.85rem', padding:0, lineHeight:1 }}>✕</button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display:'flex', gap:'0.5rem' }}>
+            <button onClick={() => setCompareIds(new Set())} style={{ background:'transparent', border:'1px solid #333', color:'#666', padding:'0.45rem 0.9rem', borderRadius:'6px', cursor:'pointer', fontSize:'0.8rem', fontFamily:'inherit' }}>
+              Clear
+            </button>
+            <button onClick={() => setShowCompare(true)} disabled={compareIds.size < 2}
+              style={{ background:'linear-gradient(135deg,#C9A84C,#9A7B2E)', color:'#111', border:'none', padding:'0.45rem 1.1rem', borderRadius:'6px', cursor: compareIds.size < 2 ? 'not-allowed' : 'pointer', opacity: compareIds.size < 2 ? 0.5 : 1, fontWeight:'700', fontSize:'0.82rem', fontFamily:'inherit' }}>
+              Compare {compareIds.size < 2 ? `(need ${2 - compareIds.size} more)` : `${compareIds.size} companies →`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Comparison panel overlay ── */}
+      <ComparePanel />
     </div>
   )
 }

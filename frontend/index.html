@@ -61,5 +61,14 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- Service Worker registration — PWA offline support -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .catch(function () { /* SW not critical — app works without it */ })
+        })
+      }
+    </script>
   </body>
 </html>

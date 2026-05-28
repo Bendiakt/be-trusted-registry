@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../lib/api'
+import './landing.css'
 
 // ── Bilingual content — authoritative source (FR / EN) ────────────────────────
 // Derived from MyDD Master Copy File © B&E Consult FZCO
@@ -329,6 +330,14 @@ export default function Landing() {
   const [loadingLang, setLoadingLang] = useState(false)
   const [deepLContent, setDeepLContent] = useState(null)
   const [certCount, setCertCount] = useState(null)
+  const [menuOpen, setMenuOpen]   = useState(false)
+
+  // Close mobile menu on resize to desktop
+  useEffect(() => {
+    const onResize = () => { if (window.innerWidth >= 640) setMenuOpen(false) }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Fetch live cert count for social proof
   useEffect(() => {
@@ -437,7 +446,7 @@ export default function Landing() {
     navLink: { fontSize: '0.875rem', color: T.muted, textDecoration: 'none' },
     btnPrimary: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.7rem 1.4rem', background: T.primary, color: T.inverse, border: 'none', borderRadius: '999px', fontWeight: '600', fontSize: '0.875rem', cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' },
     btnSecondary: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.65rem 1.3rem', background: 'transparent', color: T.text, border: `1px solid ${T.border}`, borderRadius: '999px', fontWeight: '500', fontSize: '0.875rem', cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' },
-    container: { maxWidth: '1040px', margin: '0 auto', padding: '0 1.5rem' },
+    container: { maxWidth: '1040px', margin: '0 auto', padding: '0 clamp(1rem, 4vw, 1.5rem)' },
     section: { padding: 'clamp(3.5rem, 6vw, 6rem) 0' },
     eyebrow: { textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: '0.75rem', color: T.muted, marginBottom: '0.85rem' },
     h1: { fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: 'clamp(2rem, 4vw, 3.5rem)', fontWeight: '700', lineHeight: '1.04', letterSpacing: '-0.03em', margin: '0 0 1.25rem', color: T.text },
@@ -467,7 +476,7 @@ export default function Landing() {
             </div>
           </Link>
 
-          <nav style={S.nav} aria-label="Primary">
+          <nav className="lnd-desktop-nav" aria-label="Primary">
             <a href="#buyers"    style={S.navLink}>{C.nav.buyers}</a>
             <a href="#companies" style={S.navLink}>{C.nav.companies}</a>
             <a href="#pac"       style={S.navLink}>{C.nav.pac}</a>
@@ -477,16 +486,55 @@ export default function Landing() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <LangPicker lang={lang} setLang={setLang} setDeepl={setDeepl} loadingLang={loadingLang} />
-            <Link to="/register" style={S.btnPrimary}>{C.nav.cta}</Link>
+            <Link to="/register" className="lnd-header-cta" style={S.btnPrimary}>{C.nav.cta}</Link>
+            <button
+              className="lnd-burger"
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              style={{ color: T.text }}
+            >
+              <span className="lnd-burger-bar" style={{ background: T.text, transform: menuOpen ? 'rotate(45deg) translate(5px, 5px)' : 'none' }}/>
+              <span className="lnd-burger-bar" style={{ background: T.text, opacity: menuOpen ? 0 : 1 }}/>
+              <span className="lnd-burger-bar" style={{ background: T.text, transform: menuOpen ? 'rotate(-45deg) translate(5px, -5px)' : 'none' }}/>
+            </button>
           </div>
         </div>
       </header>
+
+      {/* ── Mobile nav overlay ── */}
+      <nav
+        className={`lnd-mobile-nav${menuOpen ? ' open' : ''}`}
+        style={{ background: T.bg, borderBottom: `1px solid ${T.border}` }}
+        aria-label="Mobile navigation"
+        aria-hidden={!menuOpen}
+      >
+        {([
+          ['#buyers',    C.nav.buyers],
+          ['#companies', C.nav.companies],
+          ['#pac',       C.nav.pac],
+          ['#legal',     C.nav.legal],
+        ]).map(([href, label]) => (
+          <a key={href} href={href} className="lnd-mobile-nav-link"
+            style={{ color: T.text, background: T.surface, border: `1px solid ${T.border}`, borderRadius: '10px' }}
+            onClick={() => setMenuOpen(false)}
+          >{label}</a>
+        ))}
+        <Link to="/registry" className="lnd-mobile-nav-link"
+          style={{ color: T.text, background: T.surface, border: `1px solid ${T.border}`, borderRadius: '10px' }}
+          onClick={() => setMenuOpen(false)}
+        >{C.nav.registry}</Link>
+        <Link to="/register" className="lnd-mobile-nav-link"
+          style={{ background: T.primary, color: T.inverse, borderRadius: '10px', fontWeight: '600', textAlign: 'center', marginTop: '0.25rem' }}
+          onClick={() => setMenuOpen(false)}
+        >{C.nav.cta}</Link>
+      </nav>
 
       <main id="content">
 
         {/* ── Hero ── */}
         <section style={{ padding: 'clamp(4rem, 8vw, 8rem) 0 3rem' }}>
-          <div style={{ ...S.container, display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,0.85fr)', gap: '3rem', alignItems: 'end' }}>
+          <div style={S.container} className="lnd-hero-grid">
             <div>
               <div style={S.eyebrow}>{C.hero.eyebrow}</div>
               <h1 style={S.h1}>{C.hero.h1}</h1>
@@ -541,7 +589,7 @@ export default function Landing() {
 
         {/* ── Problem ── */}
         <section id="problem" style={S.section}>
-          <div style={{ ...S.container, display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem' }}>
+          <div style={S.container} className="lnd-split-80-20">
             <div><h2 style={S.h2}>{C.problem.h2}</h2></div>
             <div>
               <p style={{ ...S.p, fontSize: '1rem' }}>{C.problem.p}</p>
@@ -549,7 +597,7 @@ export default function Landing() {
             </div>
           </div>
           {/* Audience cards */}
-          <div style={{ ...S.container, marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+          <div style={{ ...S.container, marginTop: '2rem' }} className="lnd-grid-4">
             {C.audiences.map((a, i) => (
               <article key={i} style={S.card}>
                 <h3 style={S.h3}>{a.title}</h3>
@@ -562,11 +610,11 @@ export default function Landing() {
         {/* ── Process ── */}
         <section id="process" style={{ ...S.section, background: T.surface }}>
           <div style={S.container}>
-            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem', marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '2rem' }} className="lnd-split-80-20">
               <h2 style={S.h2}>{C.process.h2}</h2>
               <p style={{ ...S.p, alignSelf: 'end' }}>{C.process.sub}</p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+            <div className="lnd-grid-4">
               {C.process.steps.map((step, i) => (
                 <div key={i} style={{ padding: '1.4rem', borderTop: `2px solid ${T.primary}`, background: T.surface2, borderRadius: '14px' }}>
                   <small style={{ color: T.faint, textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: '0.72rem' }}>{step.n}</small>
@@ -581,11 +629,11 @@ export default function Landing() {
         {/* ── Levels ── */}
         <section id="levels" style={S.section}>
           <div style={S.container}>
-            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem', marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '2rem' }} className="lnd-split-80-20">
               <h2 style={S.h2}>{C.levels.h2}</h2>
               <p style={{ ...S.p, alignSelf: 'end', fontSize: '0.92rem' }}>{C.levels.sub}</p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+            <div className="lnd-grid-3">
               {C.levels.tiers.map((tier, i) => (
                 <article key={i} style={{ ...S.card, display: 'flex', flexDirection: 'column', gap: '1rem', ...(tier.featured ? { background: `linear-gradient(180deg, ${T.teal10}, ${T.surface})`, borderColor: T.teal30 } : {}) }}>
                   <div>
@@ -609,7 +657,7 @@ export default function Landing() {
 
         {/* ── Buyers + Companies ── */}
         <section id="buyers" style={{ ...S.section, background: T.surface }}>
-          <div style={{ ...S.container, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div style={S.container} className="lnd-grid-2">
             {/* Buyers */}
             <article style={S.card}>
               <div style={S.eyebrow}>{C.buyers.eyebrow}</div>
@@ -637,7 +685,7 @@ export default function Landing() {
         {/* ── PAC ── */}
         <section id="pac" style={S.section}>
           <div style={S.container}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'start' }}>
+            <div className="lnd-pac-grid">
               <div>
                 <div style={S.eyebrow}>{C.pac.eyebrow}</div>
                 <h2 style={S.h2}>{C.pac.h2}</h2>
@@ -668,7 +716,7 @@ export default function Landing() {
         {/* ── Legal framework ── */}
         <section id="legal" style={{ ...S.section, background: T.surface }}>
           <div style={S.container}>
-            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '2.5rem' }}>
+            <div className="lnd-legal-grid">
               <h2 style={S.h2}>{C.legal.h2}</h2>
               <div>
                 <p style={{ ...S.p, fontSize: '0.95rem' }}>{C.legal.p}</p>
@@ -686,7 +734,7 @@ export default function Landing() {
         {/* ── CTA band ── */}
         <section id="cta" style={S.section}>
           <div style={S.container}>
-            <div style={{ padding: '3rem', borderRadius: '20px', background: `linear-gradient(150deg, ${T.primary}, #0c4e54)`, color: T.inverse, display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '2rem', alignItems: 'end' }}>
+            <div style={{ padding: 'clamp(1.5rem, 4vw, 3rem)', borderRadius: '20px', background: `linear-gradient(150deg, ${T.primary}, #0c4e54)`, color: T.inverse }} className="lnd-cta-grid">
               <div>
                 <h2 style={{ fontFamily: "'Georgia', serif", fontSize: 'clamp(1.4rem, 2.5vw, 2rem)', fontWeight: '700', lineHeight: '1.15', letterSpacing: '-0.025em', margin: '0 0 0.75rem', color: T.inverse }}>
                   {C.cta.h2}
@@ -709,7 +757,7 @@ export default function Landing() {
 
       {/* ── Footer ── */}
       <footer style={{ padding: '2rem 0 4rem', borderTop: `1px solid ${T.border}` }}>
-        <div style={{ ...S.container, display: 'grid', gridTemplateColumns: '1fr auto', gap: '2rem', alignItems: 'start' }}>
+        <div style={S.container} className="lnd-footer-grid">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
               <Logo size={28} />
@@ -724,7 +772,7 @@ export default function Landing() {
               <Link to="/legal" style={{ color: T.faint }}>Legal &amp; Disclaimer</Link>
             </div>
           </div>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+          <nav className="lnd-footer-nav">
             {C.footer.pages.map((page, i) => (
               <Link key={i} to={C.footer.links[i]} style={{ fontSize: '0.85rem', color: T.muted, textDecoration: 'none' }}>
                 {page}

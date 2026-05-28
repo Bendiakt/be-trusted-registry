@@ -20,6 +20,8 @@ import NotFound from './pages/NotFound'
 import MissionReport from './pages/MissionReport'
 import VerifyEmail from './pages/VerifyEmail'
 import Legal from './pages/Legal'
+import SectorPage from './pages/SectorPage'
+import Onboarding from './pages/Onboarding'
 
 /** Requires any authenticated user (session cookie present). */
 function PrivateRoute({ children }) {
@@ -62,6 +64,8 @@ export default function App() {
         <Route path="/privacy"                 element={<Legal tab="privacy" />} />
         <Route path="/terms"                   element={<Legal tab="cgu" />} />
         <Route path="/legal"                   element={<Legal />} />
+        <Route path="/sectors/:sector"         element={<SectorPage />} />
+        <Route path="/onboarding"              element={<PrivateRoute><Onboarding /></PrivateRoute>} />
         <Route path="/dashboard" element={<RoleRoute role="company"><Dashboard /></RoleRoute>} />
         <Route path="/pac"       element={<RoleRoute role="pac"><PACPortal /></RoleRoute>} />
         <Route path="/pac/missions/:id/report" element={<RoleRoute role="pac"><MissionReport /></RoleRoute>} />
