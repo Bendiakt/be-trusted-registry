@@ -229,11 +229,21 @@ test.describe('Company — onboarding wizard', () => {
     expect(flag).toBe('1')
   })
 
-  test('unauthenticated access to /onboarding redirects to /login', async ({ page }) => {
-    // Session is in sessionStorage (key 'mydd_user'), not localStorage — clear both
-    await page.evaluate(() => { localStorage.clear(); sessionStorage.clear() })
-    await page.goto('/onboarding')
+})
 
-    await expect(page).toHaveURL(/\/login/, { timeout: 6000 })
-  })
+// ── Auth guard — standalone (no shared beforeEach) ────────────────────────────
+// This test must NOT run inside the 'Company — onboarding wizard' beforeEach
+// because that beforeEach does page.goto('/login') + seedSession, adding ~11 s
+// of overhead. The test would then clear the session and load /onboarding again,
+// pushing the total time past the 20 s per-test limit on slower machines.
+// Running it standalone: one navigation only → well within the timeout budget.
+test('unauthenticated access to /onboarding redirects to /login', async ({ page }) => {
+  // Stub API so the CSRF call and any other requests don't hang.
+  // No session is seeded — this is the unauthenticated scenario.
+  await stubApi(page)
+  await page.goto('/onboarding')
+  // PrivateRoute (App.jsx) checks getSession() synchronously; with no session in
+  // sessionStorage it renders <Navigate to="/login" replace />, which fires
+  // navigate() in a React useEffect and changes the URL within milliseconds.
+  await expect(page).toHaveURL(/\/login/, { timeout: 10000 })
 })
