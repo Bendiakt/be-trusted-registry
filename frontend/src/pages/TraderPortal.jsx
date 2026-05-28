@@ -61,23 +61,23 @@ export default function TraderPortal() {
   const [checkingOut, setCheckingOut]   = useState(false)
   const [selectedPlan, setSelectedPlan] = useState('annual') // 'monthly' | 'annual'
   const countriesLoaded                 = useRef(false)
-  const [compareIds, setCompareIds]     = useState(new Set()) // max 3
-  const [showCompare, setShowCompare]   = useState(false)     // open comparison panel
+  const [compareMap, setCompareMap]     = useState({}) // { [id]: company } — persists across pages
+  const [showCompare, setShowCompare]   = useState(false)
+
+  const compareIds  = new Set(Object.keys(compareMap).map(Number))
+  const compareList = Object.values(compareMap)
 
   const toggleCompare = (company) => {
-    setCompareIds(prev => {
-      const next = new Set(prev)
-      if (next.has(company.id)) {
-        next.delete(company.id)
-      } else if (next.size < 3) {
-        next.add(company.id)
+    setCompareMap(prev => {
+      const next = { ...prev }
+      if (next[company.id]) {
+        delete next[company.id]
+      } else if (Object.keys(next).length < 3) {
+        next[company.id] = company
       }
       return next
     })
   }
-
-  // Companies selected for comparison (full objects)
-  const compareList = companies.filter(c => compareIds.has(c.id))
 
   // ── auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -284,9 +284,9 @@ export default function TraderPortal() {
           {/* Compare toggle */}
           <button
             onClick={() => toggleCompare(c)}
-            title={compareIds.has(c.id) ? 'Remove from comparison' : compareIds.size >= 3 ? 'Max 3 companies' : 'Add to comparison'}
-            disabled={!compareIds.has(c.id) && compareIds.size >= 3}
-            style={{ display:'flex', alignItems:'center', justifyContent:'center', background: compareIds.has(c.id) ? 'rgba(99,179,237,0.14)' : 'transparent', color: compareIds.has(c.id) ? '#63b3ed' : '#555', border:`1px solid ${compareIds.has(c.id) ? 'rgba(99,179,237,0.4)' : '#2a2a2a'}`, padding:'0.5rem 0.7rem', borderRadius:'6px', fontSize:'0.8rem', cursor: !compareIds.has(c.id) && compareIds.size >= 3 ? 'not-allowed' : 'pointer', transition:'all 0.15s', opacity: !compareIds.has(c.id) && compareIds.size >= 3 ? 0.4 : 1 }}
+            title={compareIds.has(c.id) ? 'Remove from comparison' : compareList.length >= 3 ? 'Max 3 companies' : 'Add to comparison'}
+            disabled={!compareIds.has(c.id) && compareList.length >= 3}
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', background: compareIds.has(c.id) ? 'rgba(99,179,237,0.14)' : 'transparent', color: compareIds.has(c.id) ? '#63b3ed' : '#555', border:`1px solid ${compareIds.has(c.id) ? 'rgba(99,179,237,0.4)' : '#2a2a2a'}`, padding:'0.5rem 0.7rem', borderRadius:'6px', fontSize:'0.8rem', cursor: !compareIds.has(c.id) && compareList.length >= 3 ? 'not-allowed' : 'pointer', transition:'all 0.15s', opacity: !compareIds.has(c.id) && compareList.length >= 3 ? 0.4 : 1 }}
           >
             ⇌
           </button>
@@ -562,7 +562,7 @@ export default function TraderPortal() {
       </main>
 
       {/* ── Sticky comparison bar ── */}
-      {compareIds.size > 0 && (
+      {compareList.length > 0 && (
         <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#1a1a1a', borderTop:'1px solid #2a2a2a', padding:'0.75rem 1.5rem', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'1rem', zIndex:100, flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', flexWrap:'wrap' }}>
             <span style={{ color:'#888', fontSize:'0.8rem' }}>⇌ Comparing:</span>
@@ -577,9 +577,9 @@ export default function TraderPortal() {
             <button onClick={() => setCompareIds(new Set())} style={{ background:'transparent', border:'1px solid #333', color:'#666', padding:'0.45rem 0.9rem', borderRadius:'6px', cursor:'pointer', fontSize:'0.8rem', fontFamily:'inherit' }}>
               Clear
             </button>
-            <button onClick={() => setShowCompare(true)} disabled={compareIds.size < 2}
-              style={{ background:'linear-gradient(135deg,#C9A84C,#9A7B2E)', color:'#111', border:'none', padding:'0.45rem 1.1rem', borderRadius:'6px', cursor: compareIds.size < 2 ? 'not-allowed' : 'pointer', opacity: compareIds.size < 2 ? 0.5 : 1, fontWeight:'700', fontSize:'0.82rem', fontFamily:'inherit' }}>
-              Compare {compareIds.size < 2 ? `(need ${2 - compareIds.size} more)` : `${compareIds.size} companies →`}
+            <button onClick={() => setShowCompare(true)} disabled={compareList.length < 2}
+              style={{ background:'linear-gradient(135deg,#C9A84C,#9A7B2E)', color:'#111', border:'none', padding:'0.45rem 1.1rem', borderRadius:'6px', cursor: compareList.length < 2 ? 'not-allowed' : 'pointer', opacity: compareList.length < 2 ? 0.5 : 1, fontWeight:'700', fontSize:'0.82rem', fontFamily:'inherit' }}>
+              Compare {compareList.length < 2 ? `(need ${2 - compareList.length} more)` : `${compareList.length} companies →`}
             </button>
           </div>
         </div>
