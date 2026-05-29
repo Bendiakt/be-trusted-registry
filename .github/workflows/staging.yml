@@ -151,32 +151,51 @@ jobs:
           echo "Probing staging at: ${{ vars.STAGING_API_URL }}"
           echo "This job is BLOCKING — failure here must be resolved before merging to main."
 
-      - name: Wait for Railway staging deploy
-        # Railway deploys typically complete in ~90 s after push.
-        # We wait 120 s to give it a comfortable margin before probing.
-        run: sleep 120
-
-      - name: Verify staging service is reachable
-        # Distinguish "service not provisioned yet" (exit 7 = connection refused,
-        # exit 6 = DNS failure) from "reachable but unhealthy" (exit 22 = HTTP ≥ 400).
-        # If the service is unreachable we emit a clear warning and skip the health
-        # assertions — Railway staging must be provisioned manually first.
-        # Once the service responds (even with an error), the full checks below run.
-        id: reachability
+      - name: Wait for healthy staging service (poll up to 5 min)
+        # Replaces the fixed sleep + single-shot curl with a polling loop.
+        # Scenarios handled:
+        #   HTTP 000 (DNS/connection) → service not provisioned → warning + skip
+        #   HTTP 200                  → service healthy → proceed with assertions
+        #   HTTP 5xx (crash / deploy) → keep polling until healthy or timeout
+        # Max wait: 300 s (10 polls × 30 s). Railway deploys typically finish in 90–150 s.
+        id: wait_healthy
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
-            "${{ vars.STAGING_API_URL }}/api/health" || echo "000")
-          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
-          if [[ "$HTTP_CODE" == "000" ]]; then
-            echo "::warning::Staging service at ${{ vars.STAGING_API_URL }} is unreachable (DNS/connection failure)."
-            echo "::warning::Provision the Railway staging service first, then re-run this workflow."
-            echo "reachable=false" >> $GITHUB_OUTPUT
-          else
-            echo "reachable=true" >> $GITHUB_OUTPUT
-          fi
+          URL="${{ vars.STAGING_API_URL }}/api/health"
+          MAX=300
+          INTERVAL=30
+          ELAPSED=0
+          STATUS="pending"
+
+          while [ $ELAPSED -le $MAX ]; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" 2>/dev/null || echo "000")
+            echo "  [${ELAPSED}s] HTTP $HTTP_CODE"
+
+            if [[ "$HTTP_CODE" == "000" ]]; then
+              echo "::warning::Service unreachable (DNS/connection). Provision Railway staging service first."
+              echo "provisioned=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            if [[ "$HTTP_CODE" == "200" ]]; then
+              echo "Service healthy after ${ELAPSED}s."
+              echo "provisioned=true" >> $GITHUB_OUTPUT
+              echo "healthy=true"     >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            # 5xx or other — keep polling
+            ELAPSED=$((ELAPSED + INTERVAL))
+            [ $ELAPSED -le $MAX ] && sleep $INTERVAL
+          done
+
+          # Timed out — service responds but never returned 200
+          echo "::error::Staging service did not become healthy within ${MAX}s (last HTTP $HTTP_CODE)."
+          echo "provisioned=true"  >> $GITHUB_OUTPUT
+          echo "healthy=false"     >> $GITHUB_OUTPUT
+          exit 1
 
       - name: Health check — liveness
-        if: steps.reachability.outputs.reachable == 'true'
+        if: steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true'
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
             "${{ vars.STAGING_API_URL }}/api/health")
@@ -189,7 +208,7 @@ jobs:
           "
 
       - name: Health check — readiness (DB)
-        if: steps.reachability.outputs.reachable == 'true'
+        if: steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true'
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
             "${{ vars.STAGING_API_URL }}/api/health/ready")
@@ -203,7 +222,7 @@ jobs:
           "
 
       - name: Auth endpoint sanity check
-        if: steps.reachability.outputs.reachable == 'true'
+        if: steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true'
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
             -X POST "${{ vars.STAGING_API_URL }}/api/auth/login" \
@@ -214,7 +233,7 @@ jobs:
             (echo "FAIL: unexpected status $STATUS" && exit 1)
 
       - name: Staging service not provisioned — reminder
-        if: steps.reachability.outputs.reachable == 'false'
+        if: steps.wait_healthy.outputs.provisioned == 'false'
         run: |
           echo "======================================================================"
           echo "  STAGING SERVICE NOT REACHABLE — provision Railway staging first"
