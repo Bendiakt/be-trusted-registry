@@ -252,11 +252,7 @@
       "loading": "Cargando…",
       "error": "Error al cargar notificaciones",
       "mark_read": "Marcar como leído",
-      "all_caught_up": "¡Todo al día!",
-      "delete": "Eliminar",
-      "deleting": "Eliminando…",
-      "clear_read": "Borrar leídas",
-      "clearing": "Borrando…"
+      "all_caught_up": "¡Todo al día!"
     },
     "settings": {
       "title": "Configuración de la empresa",
