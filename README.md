@@ -104,7 +104,7 @@ node --test tests/encryption.test.js
 cd frontend && npm test
 ```
 
-Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 354 tests across 28 files.
+Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 409 tests across 30 files.
 
 ### E2E tests (Playwright)
 
