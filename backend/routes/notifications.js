@@ -93,4 +93,39 @@ router.patch('/:id/read', auth, writeLimiter, async (req, res) => {
   }
 })
 
+// ── DELETE /api/notifications/:id ────────────────────────────────────────────
+// Delete a single notification (must belong to the authenticated user).
+router.delete('/:id', auth, writeLimiter, async (req, res) => {
+  try {
+    const notifId = parseInt(req.params.id, 10)
+    if (Number.isNaN(notifId)) return res.status(400).json({ error: 'Invalid notification id' })
+
+    const result = await query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [notifId, req.user.id],
+    )
+    if (!result.rows.length) return res.status(404).json({ error: 'Notification not found' })
+    res.json({ deleted: notifId })
+  } catch (err) {
+    console.error('Notification delete error:', err.message)
+    res.status(500).json({ error: 'Failed to delete notification' })
+  }
+})
+
+// ── DELETE /api/notifications ─────────────────────────────────────────────────
+// Delete all READ notifications for the authenticated user (bulk clear).
+// Unread notifications are intentionally kept — they have not been acknowledged.
+router.delete('/', auth, writeLimiter, async (req, res) => {
+  try {
+    const result = await query(
+      `DELETE FROM notifications WHERE user_id = $1 AND read = TRUE RETURNING id`,
+      [req.user.id],
+    )
+    res.json({ deleted: result.rowCount })
+  } catch (err) {
+    console.error('Notifications clear-read error:', err.message)
+    res.status(500).json({ error: 'Failed to clear notifications' })
+  }
+})
+
 module.exports = router

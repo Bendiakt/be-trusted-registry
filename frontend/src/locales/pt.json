@@ -252,7 +252,11 @@
       "loading": "Carregando…",
       "error": "Falha ao carregar notificações",
       "mark_read": "Marcar como lido",
-      "all_caught_up": "Tudo em dia!"
+      "all_caught_up": "Tudo em dia!",
+      "delete": "Eliminar",
+      "deleting": "A eliminar…",
+      "clear_read": "Limpar lidas",
+      "clearing": "A limpar…"
     },
     "settings": {
       "title": "Definições da empresa",

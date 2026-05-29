@@ -252,7 +252,11 @@
       "loading": "Chargement…",
       "error": "Impossible de charger les notifications",
       "mark_read": "Marquer comme lu",
-      "all_caught_up": "Tout est à jour !"
+      "all_caught_up": "Tout est à jour !",
+      "delete": "Supprimer",
+      "deleting": "Suppression…",
+      "clear_read": "Effacer les lues",
+      "clearing": "Effacement…"
     },
     "settings": {
       "title": "Paramètres de l'entreprise",

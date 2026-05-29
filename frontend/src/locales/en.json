@@ -252,7 +252,11 @@
       "loading": "Loading…",
       "error": "Failed to load notifications",
       "mark_read": "Mark as read",
-      "all_caught_up": "You're all caught up!"
+      "all_caught_up": "You're all caught up!",
+      "delete": "Delete",
+      "deleting": "Deleting…",
+      "clear_read": "Clear read",
+      "clearing": "Clearing…"
     },
     "settings": {
       "title": "Company Settings",

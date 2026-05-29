@@ -1774,8 +1774,10 @@ function NotificationsPanel({ G, t }) {
   const [notifs, setNotifs]       = useState(null)   // null = loading
   const [unread, setUnread]       = useState(0)
   const [err, setErr]             = useState('')
-  const [markingId, setMarkingId] = useState(null)
+  const [markingId, setMarkingId]   = useState(null)
   const [markingAll, setMarkingAll] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [clearingRead, setClearingRead] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   // Fetch notifications
@@ -1812,6 +1814,28 @@ function NotificationsPanel({ G, t }) {
       setUnread(0)
     } catch { /* silent */ }
     finally { setMarkingAll(false) }
+  }
+
+  const deleteOne = async (id) => {
+    setDeletingId(id)
+    try {
+      await api.delete(`/api/notifications/${id}`)
+      setNotifs(prev => {
+        const removed = prev.find(n => n.id === id)
+        if (removed && !removed.read) setUnread(u => Math.max(0, u - 1))
+        return prev.filter(n => n.id !== id)
+      })
+    } catch { /* silent */ }
+    finally { setDeletingId(null) }
+  }
+
+  const clearRead = async () => {
+    setClearingRead(true)
+    try {
+      await api.delete('/api/notifications')
+      setNotifs(prev => prev.filter(n => !n.read))
+    } catch { /* silent */ }
+    finally { setClearingRead(false) }
   }
 
   // Relative time helper
@@ -1881,6 +1905,16 @@ function NotificationsPanel({ G, t }) {
               {markingAll ? '…' : t('dashboard.notifications.mark_all_read')}
             </button>
           )}
+          {notifs !== null && notifs.some(n => n.read) && (
+            <button
+              style={{ ...S.iconBtn, color: '#ff6b6b', borderColor: 'rgba(231,76,60,0.25)' }}
+              onClick={clearRead}
+              disabled={clearingRead}
+              data-testid="notif-clear-read"
+            >
+              {clearingRead ? t('dashboard.notifications.clearing', 'Clearing…') : t('dashboard.notifications.clear_read', 'Clear read')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1946,9 +1980,21 @@ function NotificationsPanel({ G, t }) {
               )}
             </div>
           </div>
-          {!n.read && (
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C9A84C', flexShrink: 0, marginTop: '0.4rem' }} />
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            {!n.read && (
+              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C9A84C' }} />
+            )}
+            <button
+              style={{ background: 'transparent', border: 'none', color: '#333', cursor: 'pointer', fontSize: '0.8rem', padding: '0.1rem 0.3rem', borderRadius: '4px', lineHeight: 1 }}
+              onClick={() => deleteOne(n.id)}
+              disabled={deletingId === n.id}
+              title={t('dashboard.notifications.delete', 'Delete')}
+              aria-label={t('dashboard.notifications.delete', 'Delete')}
+              data-testid={`notif-delete-${n.id}`}
+            >
+              {deletingId === n.id ? '…' : '🗑'}
+            </button>
+          </div>
         </div>
       ))}
     </div>
