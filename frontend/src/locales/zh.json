@@ -120,7 +120,8 @@
       "billing": "账单",
       "developer": "开发者",
       "audits": "🔍 审计",
-      "notifications": "通知"
+      "notifications": "通知",
+      "settings": "设置"
     },
     "billing_title": "付款历史",
     "billing_subtitle": "您的认证和 Stripe 交易记录",
@@ -252,6 +253,20 @@
       "error": "加载通知失败",
       "mark_read": "标为已读",
       "all_caught_up": "您已全部阅读！"
+    },
+    "settings": {
+      "title": "公司设置",
+      "subtitle": "更新您的公司档案信息。",
+      "company_name": "公司名称",
+      "sector": "行业",
+      "sector_placeholder": "例如：制造业",
+      "country": "国家",
+      "country_placeholder": "例如：法国",
+      "website": "网站",
+      "save": "保存更改",
+      "saving": "正在保存…",
+      "saved": "档案已成功更新。",
+      "save_error": "保存失败，请重试。"
     }
   },
   "dev": {

@@ -120,7 +120,8 @@
       "billing": "الفواتير",
       "developer": "المطور",
       "audits": "🔍 التدقيقات",
-      "notifications": "الإشعارات"
+      "notifications": "الإشعارات",
+      "settings": "الإعدادات"
     },
     "billing_title": "سجل المدفوعات",
     "billing_subtitle": "شهاداتك ومعاملات Stripe",
@@ -252,6 +253,20 @@
       "error": "فشل تحميل الإشعارات",
       "mark_read": "تحديد كمقروء",
       "all_caught_up": "أنت على اطلاع بكل شيء!"
+    },
+    "settings": {
+      "title": "إعدادات الشركة",
+      "subtitle": "قم بتحديث معلومات ملف الشركة.",
+      "company_name": "اسم الشركة",
+      "sector": "القطاع",
+      "sector_placeholder": "مثال: التصنيع",
+      "country": "البلد",
+      "country_placeholder": "مثال: فرنسا",
+      "website": "الموقع الإلكتروني",
+      "save": "حفظ التغييرات",
+      "saving": "جار الحفظ…",
+      "saved": "تم تحديث الملف الشخصي بنجاح.",
+      "save_error": "فشل الحفظ. يرجى المحاولة مجدداً."
     }
   },
   "dev": {

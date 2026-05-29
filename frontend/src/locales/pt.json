@@ -120,7 +120,8 @@
       "billing": "Faturamento",
       "developer": "Desenvolvedor",
       "audits": "🔍 Auditorias",
-      "notifications": "Notificações"
+      "notifications": "Notificações",
+      "settings": "Definições"
     },
     "billing_title": "Histórico de pagamentos",
     "billing_subtitle": "Suas certificações e transações do Stripe",
@@ -252,6 +253,20 @@
       "error": "Falha ao carregar notificações",
       "mark_read": "Marcar como lido",
       "all_caught_up": "Tudo em dia!"
+    },
+    "settings": {
+      "title": "Definições da empresa",
+      "subtitle": "Atualize as informações do seu perfil empresarial.",
+      "company_name": "Nome da empresa",
+      "sector": "Setor",
+      "sector_placeholder": "ex. Indústria",
+      "country": "País",
+      "country_placeholder": "ex. França",
+      "website": "Website",
+      "save": "Guardar alterações",
+      "saving": "A guardar…",
+      "saved": "Perfil atualizado com sucesso.",
+      "save_error": "Falha ao guardar. Por favor tente novamente."
     }
   },
   "dev": {

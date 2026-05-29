@@ -556,6 +556,7 @@ export default function Dashboard() {
           <TabBtn id="developer"      label={t('dashboard.tabs.developer', 'Developer')} />
           <TabBtn id="notifications" label={t('dashboard.tabs.notifications', 'Notifications')} />
           <TabBtn id="metrics"       label={t('dashboard.tabs.metrics')} />
+          <TabBtn id="settings"      label={t('dashboard.tabs.settings', 'Settings')} />
         </div>
 
         {/* ── Overview ─────────────────────────────────────────────────────── */}
@@ -750,6 +751,19 @@ export default function Dashboard() {
           <div style={G.card}>
             <MetricsDashboard />
           </div>
+        )}
+
+        {/* ── Profile Settings ─────────────────────────────────────────────── */}
+        {tab === 'settings' && (
+          <ProfileSettingsTab
+            company={company}
+            G={G}
+            t={t}
+            onSaved={(updated) => {
+              setCompany(updated)
+              showToast(t('dashboard.settings.saved', 'Profile updated.'))
+            }}
+          />
         )}
 
         {/* ── Audits (company missions) ─────────────────────────────────── */}
@@ -1248,6 +1262,124 @@ function DeveloperTab({ G, t }) {
           {t('dev.sig_hint', 'Compute HMAC-SHA256 of the raw request body using your signing secret and compare with the X-MyDD-Signature header.')}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── ProfileSettingsTab ────────────────────────────────────────────────────────
+// Allows companies to update their profile after initial onboarding.
+// Uses PATCH /api/companies/me (upsert) — same as Onboarding wizard.
+function ProfileSettingsTab({ company, G, t, onSaved }) {
+  const [form, setForm] = useState({
+    companyName: company?.companyName || company?.name || '',
+    sector:      company?.sector      || '',
+    country:     company?.country     || '',
+    website:     company?.website     || '',
+  })
+  const [saving, setSaving]   = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [errMsg, setErrMsg]   = useState('')
+
+  // Re-sync when company prop updates (e.g. after a parent re-fetch)
+  useEffect(() => {
+    setForm({
+      companyName: company?.companyName || company?.name || '',
+      sector:      company?.sector      || '',
+      country:     company?.country     || '',
+      website:     company?.website     || '',
+    })
+  }, [company?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true); setErrMsg(''); setSuccess(false)
+    try {
+      const res = await api.patch('/api/companies/me', form)
+      onSaved(res.data.company)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (err) {
+      setErrMsg(err.response?.data?.error || t('dashboard.settings.save_error', 'Save failed.'))
+    } finally { setSaving(false) }
+  }
+
+  const S = {
+    card:    { ...G.card, maxWidth: '640px' },
+    section: { marginBottom: '1.5rem' },
+    h2:      { fontSize: '1rem', fontWeight: '700', marginBottom: '1rem', color: '#eee' },
+    lbl:     { display: 'block', fontSize: '0.72rem', fontWeight: '600', color: '#888', marginBottom: '0.35rem', letterSpacing: '0.05em', textTransform: 'uppercase' },
+    inp:     { width: '100%', padding: '0.65rem 1rem', background: '#2a2a2a', border: '1px solid #444', borderRadius: '6px', color: '#fff', fontSize: '0.9rem', marginBottom: '1rem', boxSizing: 'border-box' },
+    grid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '0 1rem' },
+  }
+
+  return (
+    <div style={S.card}>
+      <div style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '0.35rem' }}>{t('dashboard.settings.title', 'Company Settings')}</div>
+      <div style={{ color: '#555', fontSize: '0.85rem', marginBottom: '1.5rem' }}>{t('dashboard.settings.subtitle', 'Update your company profile information.')}</div>
+
+      {errMsg && (
+        <div style={{ marginBottom: '1rem', padding: '0.65rem 1rem', borderRadius: '8px', fontSize: '0.875rem', background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.3)', color: '#ff6b6b' }}>
+          {errMsg}
+        </div>
+      )}
+      {success && (
+        <div style={{ marginBottom: '1rem', padding: '0.65rem 1rem', borderRadius: '8px', fontSize: '0.875rem', background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.3)', color: '#2ecc71' }}>
+          ✓ {t('dashboard.settings.saved', 'Profile updated successfully.')}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <label style={S.lbl}>{t('dashboard.settings.company_name', 'Company Name')} *</label>
+        <input
+          style={S.inp}
+          value={form.companyName}
+          onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+          required
+          data-testid="settings-company-name"
+        />
+
+        <div style={S.grid}>
+          <div>
+            <label style={S.lbl}>{t('dashboard.settings.sector', 'Sector')}</label>
+            <input
+              style={S.inp}
+              placeholder={t('dashboard.settings.sector_placeholder', 'e.g. Manufacturing')}
+              value={form.sector}
+              onChange={e => setForm(f => ({ ...f, sector: e.target.value }))}
+              data-testid="settings-sector"
+            />
+          </div>
+          <div>
+            <label style={S.lbl}>{t('dashboard.settings.country', 'Country')}</label>
+            <input
+              style={S.inp}
+              placeholder={t('dashboard.settings.country_placeholder', 'e.g. France')}
+              value={form.country}
+              onChange={e => setForm(f => ({ ...f, country: e.target.value }))}
+              data-testid="settings-country"
+            />
+          </div>
+        </div>
+
+        <label style={S.lbl}>{t('dashboard.settings.website', 'Website')}</label>
+        <input
+          style={S.inp}
+          type="url"
+          placeholder="https://"
+          value={form.website}
+          onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+          data-testid="settings-website"
+        />
+
+        <button
+          type="submit"
+          disabled={saving}
+          style={{ ...G.btn, padding: '0.7rem 1.75rem' }}
+          data-testid="settings-save-btn"
+        >
+          {saving ? t('dashboard.settings.saving', 'Saving…') : t('dashboard.settings.save', 'Save changes')}
+        </button>
+      </form>
     </div>
   )
 }
