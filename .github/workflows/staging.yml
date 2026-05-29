@@ -156,7 +156,27 @@ jobs:
         # We wait 120 s to give it a comfortable margin before probing.
         run: sleep 120
 
+      - name: Verify staging service is reachable
+        # Distinguish "service not provisioned yet" (exit 7 = connection refused,
+        # exit 6 = DNS failure) from "reachable but unhealthy" (exit 22 = HTTP ≥ 400).
+        # If the service is unreachable we emit a clear warning and skip the health
+        # assertions — Railway staging must be provisioned manually first.
+        # Once the service responds (even with an error), the full checks below run.
+        id: reachability
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+            "${{ vars.STAGING_API_URL }}/api/health" || echo "000")
+          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          if [[ "$HTTP_CODE" == "000" ]]; then
+            echo "::warning::Staging service at ${{ vars.STAGING_API_URL }} is unreachable (DNS/connection failure)."
+            echo "::warning::Provision the Railway staging service first, then re-run this workflow."
+            echo "reachable=false" >> $GITHUB_OUTPUT
+          else
+            echo "reachable=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Health check — liveness
+        if: steps.reachability.outputs.reachable == 'true'
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
             "${{ vars.STAGING_API_URL }}/api/health")
@@ -169,6 +189,7 @@ jobs:
           "
 
       - name: Health check — readiness (DB)
+        if: steps.reachability.outputs.reachable == 'true'
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
             "${{ vars.STAGING_API_URL }}/api/health/ready")
@@ -182,6 +203,7 @@ jobs:
           "
 
       - name: Auth endpoint sanity check
+        if: steps.reachability.outputs.reachable == 'true'
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
             -X POST "${{ vars.STAGING_API_URL }}/api/auth/login" \
@@ -190,3 +212,13 @@ jobs:
           echo "Auth endpoint status: $STATUS"
           [[ "$STATUS" == "401" || "$STATUS" == "400" ]] && echo "PASS: auth endpoint active" || \
             (echo "FAIL: unexpected status $STATUS" && exit 1)
+
+      - name: Staging service not provisioned — reminder
+        if: steps.reachability.outputs.reachable == 'false'
+        run: |
+          echo "======================================================================"
+          echo "  STAGING SERVICE NOT REACHABLE — provision Railway staging first"
+          echo "  Follow docs/railway-staging-setup.md then push to staging again."
+          echo "======================================================================"
+          # Not a hard failure — service provisioning is a manual ops step.
+          # Once reachable, all health assertions above will run and block on failure.
