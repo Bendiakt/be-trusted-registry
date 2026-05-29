@@ -26,15 +26,16 @@ const rateLimit = require('express-rate-limit')
  * the request through rather than crashing with an unhandled rejection.
  */
 const makeRateLimiter = (options = {}) => {
+  const { _prefix, ...rlOptions } = options
   const redis = require('./redis').getRedis()
 
   if (redis) {
     try {
       const { RedisStore } = require('rate-limit-redis')
       return rateLimit({
-        ...options,
-        standardHeaders: options.standardHeaders ?? true,
-        legacyHeaders:   options.legacyHeaders   ?? false,
+        ...rlOptions,
+        standardHeaders: rlOptions.standardHeaders ?? true,
+        legacyHeaders:   rlOptions.legacyHeaders   ?? false,
         store: new RedisStore({
           // Use ioredis sendCommand interface (rate-limit-redis v4).
           // Wrapped in a try/catch so that transient Redis disconnects
@@ -56,7 +57,7 @@ const makeRateLimiter = (options = {}) => {
             }
           },
           // Prefix to namespace keys — avoids collisions with other Redis users
-          prefix: options._prefix || 'rl:',
+          prefix: _prefix || 'rl:',
         }),
       })
     } catch (e) {
@@ -67,10 +68,9 @@ const makeRateLimiter = (options = {}) => {
 
   // Fallback: standard in-memory store
   return rateLimit({
-    ...options,
-    standardHeaders: options.standardHeaders ?? true,
-    legacyHeaders:   options.legacyHeaders   ?? false,
+    ...rlOptions,
+    standardHeaders: rlOptions.standardHeaders ?? true,
+    legacyHeaders:   rlOptions.legacyHeaders   ?? false,
   })
 }
-
 module.exports = { makeRateLimiter }
