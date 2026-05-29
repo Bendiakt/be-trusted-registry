@@ -151,7 +151,52 @@ jobs:
           echo "Probing staging at: ${{ vars.STAGING_API_URL }}"
           echo "This job is BLOCKING — failure here must be resolved before merging to main."
 
+      - name: Diagnose staging service
+        # Quick diagnostic before waiting — helps identify root-cause immediately.
+        # HTTP 000        → DNS/connection failure (not provisioned)
+        # HTTP 200 on /   → frontend is running, not backend (wrong service URL)
+        # HTTP 404 on /   → backend catch-all (routes may not be mounted)
+        # HTTP 200 on /api/health → backend healthy
+        id: diagnose
+        run: |
+          BASE="${{ vars.STAGING_API_URL }}"
+          ROOT_CODE=$(curl -s -o /tmp/root_body.txt -w "%{http_code}" --max-time 10 "$BASE/" 2>/dev/null || echo "000")
+          HEALTH_CODE=$(curl -s -o /tmp/health_body.txt -w "%{http_code}" --max-time 10 "$BASE/api/health" 2>/dev/null || echo "000")
+          LIVE_CODE=$(curl -s -o /tmp/live_body.txt -w "%{http_code}" --max-time 10 "$BASE/api/health/live" 2>/dev/null || echo "000")
+
+          ROOT_BODY=$(head -c 120 /tmp/root_body.txt 2>/dev/null || echo "")
+          HEALTH_BODY=$(head -c 200 /tmp/health_body.txt 2>/dev/null || echo "")
+
+          echo "=== Staging diagnostic ==="
+          echo "  GET /             → HTTP $ROOT_CODE  | body: $ROOT_BODY"
+          echo "  GET /api/health   → HTTP $HEALTH_CODE | body: $HEALTH_BODY"
+          echo "  GET /api/health/live → HTTP $LIVE_CODE"
+
+          if [[ "$ROOT_CODE" == "000" ]]; then
+            echo "::warning::DIAGNOSIS: Service unreachable — Railway staging not provisioned or DNS misconfigured."
+            echo "diagnosis=not_provisioned" >> $GITHUB_OUTPUT
+          elif [[ "$ROOT_CODE" == "200" && "$HEALTH_CODE" == "404" ]]; then
+            echo "::error::DIAGNOSIS: Root returns 200 but /api/health returns 404."
+            echo "::error::This looks like the FRONTEND service — STAGING_API_URL points to the wrong Railway service."
+            echo "::error::Fix: update STAGING_API_URL to the backend service URL (check Railway Dashboard)."
+            echo "diagnosis=wrong_service" >> $GITHUB_OUTPUT
+          elif [[ "$HEALTH_CODE" == "404" ]]; then
+            echo "::error::DIAGNOSIS: /api/health returns 404. Backend routes may not be mounted."
+            echo "::error::Check: Railway service root directory = backend/, start command = node server.js"
+            echo "diagnosis=routes_missing" >> $GITHUB_OUTPUT
+          elif [[ "$HEALTH_CODE" == "200" ]]; then
+            echo "DIAGNOSIS: Service is already healthy."
+            echo "diagnosis=healthy" >> $GITHUB_OUTPUT
+          else
+            echo "DIAGNOSIS: Service responds but is not yet healthy (HTTP $HEALTH_CODE). Will poll."
+            echo "diagnosis=starting" >> $GITHUB_OUTPUT
+          fi
+
       - name: Wait for healthy staging service (poll up to 5 min)
+        # Skip polling if already known healthy or definitively broken.
+        if: |
+          steps.diagnose.outputs.diagnosis == 'starting' ||
+          steps.diagnose.outputs.diagnosis == 'routes_missing'
         # Replaces the fixed sleep + single-shot curl with a polling loop.
         # Scenarios handled:
         #   HTTP 000 (DNS/connection) → service not provisioned → warning + skip
@@ -164,7 +209,6 @@ jobs:
           MAX=300
           INTERVAL=30
           ELAPSED=0
-          STATUS="pending"
 
           while [ $ELAPSED -le $MAX ]; do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" 2>/dev/null || echo "000")
@@ -195,7 +239,9 @@ jobs:
           exit 1
 
       - name: Health check — liveness
-        if: steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true'
+        if: |
+          (steps.diagnose.outputs.diagnosis == 'healthy') ||
+          (steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true')
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
             "${{ vars.STAGING_API_URL }}/api/health")
@@ -208,7 +254,9 @@ jobs:
           "
 
       - name: Health check — readiness (DB)
-        if: steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true'
+        if: |
+          (steps.diagnose.outputs.diagnosis == 'healthy') ||
+          (steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true')
         run: |
           RESPONSE=$(curl -sf --max-time 10 \
             "${{ vars.STAGING_API_URL }}/api/health/ready")
@@ -222,7 +270,9 @@ jobs:
           "
 
       - name: Auth endpoint sanity check
-        if: steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true'
+        if: |
+          (steps.diagnose.outputs.diagnosis == 'healthy') ||
+          (steps.wait_healthy.outputs.provisioned == 'true' && steps.wait_healthy.outputs.healthy == 'true')
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
             -X POST "${{ vars.STAGING_API_URL }}/api/auth/login" \
@@ -233,7 +283,9 @@ jobs:
             (echo "FAIL: unexpected status $STATUS" && exit 1)
 
       - name: Staging service not provisioned — reminder
-        if: steps.wait_healthy.outputs.provisioned == 'false'
+        if: |
+          steps.diagnose.outputs.diagnosis == 'not_provisioned' ||
+          steps.wait_healthy.outputs.provisioned == 'false'
         run: |
           echo "======================================================================"
           echo "  STAGING SERVICE NOT REACHABLE — provision Railway staging first"
