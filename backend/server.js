@@ -1,5 +1,30 @@
 require('./instrument.js')
 require('dotenv').config()
+
+// ── Global error safety net ───────────────────────────────────────────────────
+// Prevent transient Redis disconnects from crashing the process.
+// The primary fix is in lib/rateLimiter.js (command-specific fail-open return
+// values). This handler is a defence-in-depth layer for any other Redis-related
+// unhandled rejections that might slip through.
+process.on('unhandledRejection', (reason) => {
+  const msg = (reason && reason.message) || String(reason)
+  if (
+    msg.includes('unexpected reply from redis client') ||
+    msg.includes("Stream isn't writeable") ||
+    msg.includes('enableOfflineQueue')
+  ) {
+    console.warn(JSON.stringify({
+      event:   'process.unhandledRejection.redis_absorbed',
+      message: msg,
+      note:    'Redis disconnect absorbed — server continues running',
+    }))
+    return  // absorb: do NOT re-throw, do NOT crash
+  }
+  // All other unhandled rejections: log and crash (default Node behaviour).
+  console.error(JSON.stringify({ event: 'process.unhandledRejection', message: msg }))
+  process.exit(1)
+})
+
 // Eagerly initialise Redis so the client is ready before the first request.
 // lib/redis.js handles REDIS_URL absence gracefully (logs warning, returns null).
 require('./lib/redis').getRedis()
