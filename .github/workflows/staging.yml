@@ -172,17 +172,32 @@ jobs:
           echo "  GET /api/health   → HTTP $HEALTH_CODE | body: $HEALTH_BODY"
           echo "  GET /api/health/live → HTTP $LIVE_CODE"
 
-          if [[ "$ROOT_CODE" == "000" ]]; then
-            echo "::warning::DIAGNOSIS: Service unreachable — Railway staging not provisioned or DNS misconfigured."
+          # Detect Railway's own "Application not found" infrastructure 404.
+          # This means the Railway service does not exist — different from a
+          # running backend that returns 404 for unknown routes.
+          RAILWAY_NOT_FOUND=false
+          if grep -q "Application not found" /tmp/root_body.txt 2>/dev/null || \
+             grep -q "Application not found" /tmp/health_body.txt 2>/dev/null; then
+            RAILWAY_NOT_FOUND=true
+          fi
+
+          if [[ "$ROOT_CODE" == "000" ]] || [[ "$RAILWAY_NOT_FOUND" == "true" ]]; then
+            echo "::warning::DIAGNOSIS: Railway service does not exist at $BASE."
+            echo "::warning::The URL is not associated with any deployed Railway service."
+            echo "::warning::ACTION: Follow docs/railway-staging-setup.md to provision the backend staging service,"
+            echo "::warning::then update STAGING_API_URL in GitHub → Settings → Variables with the correct URL."
+            echo "::warning::Until then, remove STAGING_API_URL from GitHub vars to skip this job automatically."
             echo "diagnosis=not_provisioned" >> $GITHUB_OUTPUT
           elif [[ "$ROOT_CODE" == "200" && "$HEALTH_CODE" == "404" ]]; then
             echo "::error::DIAGNOSIS: Root returns 200 but /api/health returns 404."
             echo "::error::This looks like the FRONTEND service — STAGING_API_URL points to the wrong Railway service."
-            echo "::error::Fix: update STAGING_API_URL to the backend service URL (check Railway Dashboard)."
+            echo "::error::Fix: update STAGING_API_URL to the backend service URL (check Railway Dashboard → backend service → Settings → Networking)."
             echo "diagnosis=wrong_service" >> $GITHUB_OUTPUT
           elif [[ "$HEALTH_CODE" == "404" ]]; then
-            echo "::error::DIAGNOSIS: /api/health returns 404. Backend routes may not be mounted."
-            echo "::error::Check: Railway service root directory = backend/, start command = node server.js"
+            echo "::error::DIAGNOSIS: /api/health returns 404. Backend is running but routes are not mounted."
+            echo "::error::Check Railway Dashboard → staging backend service → Settings:"
+            echo "::error::  Root directory must be: backend"
+            echo "::error::  Start command must be: node server.js"
             echo "diagnosis=routes_missing" >> $GITHUB_OUTPUT
           elif [[ "$HEALTH_CODE" == "200" ]]; then
             echo "DIAGNOSIS: Service is already healthy."
