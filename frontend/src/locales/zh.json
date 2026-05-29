@@ -422,7 +422,8 @@
       "companies": "企业",
       "missions": "任务",
       "audit": "审计日志",
-      "disputes": "争议"
+      "disputes": "争议",
+      "fraud": "欺诈"
     },
     "stats": {
       "total_users": "总用户数",
@@ -487,6 +488,20 @@
       "dismissed": "驳回",
       "second_audit": "二次审计",
       "resolution": "决定"
+    },
+    "fraud": {
+      "title": "欺诈警报",
+      "filter_open": "开放",
+      "filter_resolved": "已解决",
+      "col_user": "用户",
+      "col_rule": "规则",
+      "col_severity": "严重性",
+      "col_date": "日期",
+      "resolve_btn": "解决",
+      "resolving": "处理中…",
+      "resolved_badge": "已解决",
+      "no_alerts": "此类别中没有警报。",
+      "export_csv": "导出 CSV"
     }
   },
   "metrics": {

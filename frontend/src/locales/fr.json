@@ -422,7 +422,8 @@
       "companies": "Entreprises",
       "missions": "Missions",
       "audit": "Journal d'audit",
-      "disputes": "Litiges"
+      "disputes": "Litiges",
+      "fraud": "Fraude"
     },
     "stats": {
       "total_users": "Utilisateurs",
@@ -487,6 +488,20 @@
       "dismissed": "Rejeté",
       "second_audit": "Second audit",
       "resolution": "Résolution"
+    },
+    "fraud": {
+      "title": "Alertes de fraude",
+      "filter_open": "Ouvertes",
+      "filter_resolved": "Résolues",
+      "col_user": "Utilisateur",
+      "col_rule": "Règle",
+      "col_severity": "Sévérité",
+      "col_date": "Date",
+      "resolve_btn": "Résoudre",
+      "resolving": "En cours…",
+      "resolved_badge": "Résolu",
+      "no_alerts": "Aucune alerte dans cette catégorie.",
+      "export_csv": "Exporter CSV"
     }
   },
   "metrics": {

@@ -213,6 +213,8 @@ function mockAdminFull(overrides = {}) {
       return Promise.resolve({ data: { statements: overrides.bonus ?? [] } })
     if (url.includes('/api/admin/audit-log'))
       return Promise.resolve({ data: { data: [], pagination: { total: 0, pages: 0 } } })
+    if (url.includes('/api/admin/fraud-alerts'))
+      return Promise.resolve({ data: { data: overrides.fraudAlerts ?? [], pagination: { total: 0, pages: 0 } } })
     return Promise.resolve({ data: {} })
   })
 }
@@ -468,5 +470,125 @@ describe('AdminPanel — PAC tab: bonus', () => {
         expect.objectContaining({}),
       ),
     )
+  })
+})
+
+// ── Fraud Alerts tab ──────────────────────────────────────────────────────────
+
+const FRAUD_ALERTS_DATA = [
+  { id: 1, user_id: 10, company_id: 1, rule: 'disposable_email', severity: 'high',
+    resolved: false, created_at: '2026-01-15T10:00:00Z',
+    user_name: 'Jean Dupont', user_email: 'jean@mailinator.com' },
+  { id: 2, user_id: 11, company_id: 2, rule: 'ip_multi_account', severity: 'medium',
+    resolved: false, created_at: '2026-01-14T08:00:00Z',
+    user_name: 'Marie Curie', user_email: 'marie@test.io' },
+]
+
+describe('AdminPanel — Fraud Alerts tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAdminFull({ fraudAlerts: FRAUD_ALERTS_DATA })
+  })
+
+  it('renders Fraud tab button in the tab bar', async () => {
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    expect(screen.getByText('admin.tabs.fraud')).toBeInTheDocument()
+  })
+
+  it('fetches fraud alerts when Fraud tab is clicked', async () => {
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.fraud'))
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/api/admin/fraud-alerts'))
+    })
+  })
+
+  it('lists fraud alert user email and rule', async () => {
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.fraud'))
+    await waitFor(() => {
+      expect(screen.getByText('jean@mailinator.com')).toBeInTheDocument()
+      expect(screen.getByText('disposable_email')).toBeInTheDocument()
+      expect(screen.getByText('marie@test.io')).toBeInTheDocument()
+      expect(screen.getByText('ip_multi_account')).toBeInTheDocument()
+    })
+  })
+
+  it('shows no-alerts message when list is empty', async () => {
+    mockAdminFull({ fraudAlerts: [] })
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.fraud'))
+    await waitFor(() => {
+      expect(screen.getByText('admin.fraud.no_alerts')).toBeInTheDocument()
+    })
+  })
+
+  it('Resolve button calls PATCH /api/admin/fraud-alerts/:id/resolve', async () => {
+    api.patch.mockResolvedValueOnce({ data: { alert: { id: 1, rule: 'disposable_email', resolved: true } } })
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.fraud'))
+    await waitFor(() => screen.getAllByText('admin.fraud.resolve_btn'))
+    fireEvent.click(screen.getAllByText('admin.fraud.resolve_btn')[0])
+    await waitFor(() => {
+      expect(api.patch).toHaveBeenCalledWith('/api/admin/fraud-alerts/1/resolve', {})
+    })
+  })
+
+  it('switches to resolved filter and fetches resolved=true alerts', async () => {
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.fraud'))
+    await waitFor(() => screen.getByText('admin.fraud.filter_resolved'))
+    fireEvent.click(screen.getByText('admin.fraud.filter_resolved'))
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith(expect.stringContaining('resolved=true'))
+    })
+  })
+})
+
+// ── Companies tab: CSV export ─────────────────────────────────────────────────
+
+describe('AdminPanel — Companies tab: CSV export', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAdminFull({ companies: COMPANIES_DATA })
+  })
+
+  it('renders the Export CSV button in the Companies tab', async () => {
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.companies'))
+    await waitFor(() => {
+      expect(screen.getByText(/admin\.fraud\.export_csv/)).toBeInTheDocument()
+    })
+  })
+
+  it('Export CSV button calls GET /api/admin/export/companies', async () => {
+    // Mock responseType blob download
+    api.get.mockImplementation((url) => {
+      if (url.includes('/api/admin/stats')) return Promise.resolve({ data: STATS })
+      if (url.includes('/api/admin/companies')) return Promise.resolve({ data: { data: COMPANIES_DATA, pagination: { total: 1, pages: 1 } } })
+      if (url.includes('/api/admin/export/companies')) return Promise.resolve({ data: new Blob(['csv'], { type: 'text/csv' }) })
+      return Promise.resolve({ data: { data: [], pagination: { total: 0, pages: 0 } } })
+    })
+
+    // Stub URL.createObjectURL and anchor click
+    const mockCreate = vi.fn().mockReturnValue('blob:mock')
+    const mockRevoke = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL: mockCreate, revokeObjectURL: mockRevoke })
+
+    render(<AdminPanel />)
+    await waitFor(() => screen.getByText('admin.title'))
+    fireEvent.click(screen.getByText('admin.tabs.companies'))
+    await waitFor(() => screen.getByText(/admin\.fraud\.export_csv/))
+    fireEvent.click(screen.getByText(/admin\.fraud\.export_csv/))
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith('/api/admin/export/companies', expect.objectContaining({ responseType: 'blob' }))
+    })
   })
 })
