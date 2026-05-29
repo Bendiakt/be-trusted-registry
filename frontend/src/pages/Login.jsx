@@ -6,6 +6,14 @@ import { saveSession } from '../lib/session'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 
 const ROLE_ROUTE = { pac: '/pac', admin: '/admin', trader: '/trader' }
+const ONBOARDING_KEY = 'mydd_onboarding_done'
+
+/** Company users who haven't completed onboarding get redirected there */
+function getDestination(user) {
+  if (ROLE_ROUTE[user.role]) return ROLE_ROUTE[user.role]
+  if (user.role === 'company' && !localStorage.getItem(ONBOARDING_KEY)) return '/onboarding'
+  return '/dashboard'
+}
 
 export default function Login() {
   const { t } = useTranslation()
@@ -39,7 +47,7 @@ export default function Login() {
         return
       }
       saveSession(res.data.user)
-      navigate(ROLE_ROUTE[res.data.user.role] || '/dashboard')
+      navigate(getDestination(res.data.user))
     } catch (err) {
       setError(err.response?.data?.error || t('login.error_default'))
     } finally { setLoading(false) }
@@ -57,7 +65,7 @@ export default function Login() {
     try {
       const res = await api.post('/api/auth/2fa/validate', { tempToken, token: totpCode })
       saveSession(res.data.user)
-      navigate(ROLE_ROUTE[res.data.user.role] || '/dashboard')
+      navigate(getDestination(res.data.user))
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid code. Try again.')
       setTotpCode('')

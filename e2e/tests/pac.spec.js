@@ -204,3 +204,41 @@ test.describe('PAC — profile tab', () => {
     await expect(page.getByText(/saved|success/i)).toBeVisible({ timeout: 5000 })
   })
 })
+
+test.describe('PAC Portal — earnings tab', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubPacApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 2, name: 'Jean Martin', email: 'jean@pac.com', role: 'pac' })
+  })
+
+  test('earnings tab is visible and shows summary stats', async ({ page }) => {
+    await page.goto('/pac')
+
+    const earningsTab = page.getByRole('button', { name: /revenu|earning/i }).first()
+    await expect(earningsTab).toBeVisible({ timeout: 5000 })
+    await earningsTab.click()
+
+    // Summary stats from stub: $50 earned, $75 pending, 10% commission
+    await expect(page.getByText('$50.00').first()).toBeVisible({ timeout: 6000 })
+    await expect(page.getByText('$75.00').first()).toBeVisible({ timeout: 4000 })
+    await expect(page.getByText(/10%/).first()).toBeVisible({ timeout: 4000 })
+  })
+
+  test('earnings tab shows mission breakdown table with payment status', async ({ page }) => {
+    await page.goto('/pac')
+
+    const earningsTab = page.getByRole('button', { name: /revenu|earning/i }).first()
+    await expect(earningsTab).toBeVisible({ timeout: 5000 })
+    await earningsTab.click()
+
+    // Acme Corp mission (paid)
+    await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 6000 })
+    // Beta Ltd mission (pending)
+    await expect(page.getByText('Beta Ltd').first()).toBeVisible({ timeout: 4000 })
+    // Paid badge — EN: "✓ Paid", FR: "✓ Payé" (i18n locale-aware)
+    await expect(page.getByText(/✓.*(Paid|Payé)/i).first()).toBeVisible({ timeout: 4000 })
+    // Pending badge — EN: "⏳ Pending", FR: "En attente"
+    await expect(page.getByText(/Pending|En attente/i).first()).toBeVisible({ timeout: 4000 })
+  })
+})

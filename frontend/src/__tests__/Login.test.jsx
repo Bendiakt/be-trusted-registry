@@ -9,6 +9,8 @@
  *   - TOTP submit (success + error)
  *   - Back-to-login button
  *   - TOTP confirm button disabled until 6 digits
+ *   - Onboarding redirect: company without mydd_onboarding_done → /onboarding
+ *   - Onboarding redirect: company with  mydd_onboarding_done → /dashboard
  */
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { vi } from 'vitest'
@@ -32,6 +34,8 @@ vi.mock('../lib/api', () => ({
 vi.mock('../lib/session', () => ({
   saveSession: vi.fn(),
 }))
+
+// localStorage is real in jsdom — we control it per-test via spies / direct writes
 
 vi.mock('../components/LanguageSwitcher', () => ({
   default: () => <div data-testid="language-switcher" />,
@@ -79,7 +83,9 @@ describe('Login — password step', () => {
     })
   })
 
-  it('saves session and navigates to /dashboard for company role', async () => {
+  it('saves session and navigates to /dashboard for company role (onboarding done)', async () => {
+    // Simulate a company that has already completed onboarding
+    localStorage.setItem('mydd_onboarding_done', '1')
     const user = { role: 'company', id: 1, name: 'Alice' }
     api.post.mockResolvedValueOnce({ data: { user } })
     fillCredentials()
@@ -88,6 +94,7 @@ describe('Login — password step', () => {
       expect(saveSession).toHaveBeenCalledWith(user)
       expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
     })
+    localStorage.removeItem('mydd_onboarding_done')
   })
 
   it('navigates to /admin for admin role', async () => {
@@ -182,7 +189,9 @@ describe('Login — 2FA TOTP step', () => {
     })
   })
 
-  it('saves session and navigates after successful TOTP', async () => {
+  it('saves session and navigates after successful TOTP (onboarding done)', async () => {
+    // Simulate a company that has already completed onboarding
+    localStorage.setItem('mydd_onboarding_done', '1')
     await triggerTotpStep()
     const user = { role: 'company', id: 2 }
     api.post.mockResolvedValueOnce({ data: { user } })
@@ -194,6 +203,7 @@ describe('Login — 2FA TOTP step', () => {
       expect(saveSession).toHaveBeenCalledWith(user)
       expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
     })
+    localStorage.removeItem('mydd_onboarding_done')
   })
 
   it('shows error and clears code on failed TOTP', async () => {
@@ -218,5 +228,62 @@ describe('Login — 2FA TOTP step', () => {
     // Password step inputs are back
     expect(document.querySelector('#login-email')).toBeInTheDocument()
     expect(document.querySelector('#login-password')).toBeInTheDocument()
+  })
+})
+
+describe('Login — onboarding redirect (company role)', () => {
+  const ONBOARDING_KEY = 'mydd_onboarding_done'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.removeItem(ONBOARDING_KEY)
+    render(<Login />)
+  })
+
+  afterEach(() => {
+    localStorage.removeItem(ONBOARDING_KEY)
+  })
+
+  it('redirects company to /onboarding when flag not set', async () => {
+    const user = { role: 'company', id: 10, name: 'NewCo' }
+    api.post.mockResolvedValueOnce({ data: { user } })
+    fillCredentials()
+    submitPasswordForm()
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/onboarding')
+    })
+  })
+
+  it('redirects company to /dashboard when onboarding flag is already set', async () => {
+    localStorage.setItem(ONBOARDING_KEY, '1')
+    const user = { role: 'company', id: 11, name: 'OldCo' }
+    api.post.mockResolvedValueOnce({ data: { user } })
+    fillCredentials()
+    submitPasswordForm()
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
+    })
+  })
+
+  it('does not redirect pac user to /onboarding', async () => {
+    const user = { role: 'pac', id: 20 }
+    api.post.mockResolvedValueOnce({ data: { user } })
+    fillCredentials()
+    submitPasswordForm()
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/pac')
+      expect(mockNavigate).not.toHaveBeenCalledWith('/onboarding')
+    })
+  })
+
+  it('does not redirect trader user to /onboarding', async () => {
+    const user = { role: 'trader', id: 21 }
+    api.post.mockResolvedValueOnce({ data: { user } })
+    fillCredentials()
+    submitPasswordForm()
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/trader')
+      expect(mockNavigate).not.toHaveBeenCalledWith('/onboarding')
+    })
   })
 })

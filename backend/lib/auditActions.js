@@ -40,6 +40,10 @@ const AUDIT = Object.freeze({
   PAC_PROFILE_UPDATE:     'pac_profile_update',
   MISSION_ACCEPTED:       'mission_accepted',
   MISSION_COMPLETED:      'mission_completed',
+  PAC_FOUNDER_GRANTED:    'pac_founder_granted',
+  PAC_UPGRADE_APPROVED:   'pac_upgrade_approved',
+  PAC_LICENSE_SUSPENDED:  'pac_license_suspended',
+  PAC_LICENSE_REINSTATED: 'pac_license_reinstated',
 
   // ── Admin ─────────────────────────────────────────────────────────────────
   ADMIN_CHANGE_USER_ROLE:       'admin_change_user_role',
@@ -48,7 +52,15 @@ const AUDIT = Object.freeze({
   ADMIN_SUSPEND_COMPANY:        'admin_suspend_company',
   ADMIN_UNSUSPEND_COMPANY:      'admin_unsuspend_company',
   ADMIN_MISSION_STATUS_UPDATE:  'admin_mission_status_update',
+  ADMIN_MISSION_CREATED:        'admin_mission_created',
+  ADMIN_MISSION_ASSIGNED:       'admin_mission_assigned',
+  ADMIN_MISSION_CANCELLED:      'admin_mission_cancelled',
+  ADMIN_MISSION_SCORED:         'admin_mission_scored',
+  ADMIN_MISSION_CLIENT_SCORED:  'admin_mission_client_scored',
   ADMIN_RESOLVE_FRAUD_ALERT:    'admin_resolve_fraud_alert',
+  COMPANY_MISSION_RATED:        'company_mission_rated',
+  COMPANY_DISPUTE_OPENED:       'company_dispute_opened',
+  ADMIN_DISPUTE_RESOLVED:       'admin_dispute_resolved',
 
   // ── GDPR ──────────────────────────────────────────────────────────────────
   USER_DATA_EXPORT:       'user_data_export',

@@ -8,9 +8,11 @@ const { query }              = require('../db')
 const { auth }               = require('../lib/authUtils')
 const { mapCompanyRow }      = require('../lib/mappers')
 const { logAudit }           = require('../lib/audit')
+const { AUDIT }              = require('../lib/auditActions')
 const { checkFraud }         = require('../lib/fraudDetection')
 const { computeTrustScore }  = require('../lib/trustScore')
 const { validate, schemas }  = require('../lib/validators')
+const { sendDisputeSubmitted } = require('../lib/mailer')
 
 const publicReadLimiter = rateLimit({
   windowMs: 60 * 1000, max: 30,
@@ -106,15 +108,76 @@ router.get('/me', auth, companyReadLimiter, async (req, res) => {
       }
     }
 
+    // Docs count + open disputes count for onboarding stepper
+    let docsCount    = 0
+    let disputeCount = 0
+    if (companyRow?.id) {
+      const [docsRes, disputeRes] = await Promise.all([
+        query(`SELECT COUNT(*)::int AS n FROM documents WHERE company_id = $1`, [companyRow.id]),
+        query(`SELECT COUNT(*)::int AS n FROM mission_disputes WHERE company_id = $1 AND status != 'resolved'`, [companyRow.id]),
+      ])
+      docsCount    = docsRes.rows[0]?.n    || 0
+      disputeCount = disputeRes.rows[0]?.n || 0
+    }
+
     const userRow = await query('SELECT id, name, email, role, email_verified FROM users WHERE id = $1 LIMIT 1', [req.user.id])
     const u       = userRow.rows[0] || req.user
     res.json({
-      company: company ? { ...company, certInfo } : null,
+      company: company ? { ...company, certInfo, docsCount, openDisputeCount: disputeCount } : null,
       user:    { id: u.id, name: u.name, email: u.email, role: u.role, emailVerified: u.email_verified ?? false },
     })
   } catch (err) {
     console.error(JSON.stringify({ event: 'my_company_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load profile' })
+  }
+})
+
+// ── PATCH /api/companies/me — onboarding profile update ──────────────────────
+// Used by the Onboarding wizard (step 1) to save companyName, sector, country, website.
+// Creates the company row if the user has no company yet (new registration flow).
+router.patch('/me', auth, companyWriteLimiter, validate(schemas.updateCompany), async (req, res) => {
+  try {
+    if (req.user.role !== 'company') return res.status(403).json({ error: 'Only company accounts can update their profile.' })
+
+    const { companyName, country, sector, website } = req.body
+
+    let cleanWebsite = null
+    if (website) {
+      const w = String(website).trim().slice(0, 500)
+      if (w && !/^https?:\/\/.+/i.test(w)) {
+        return res.status(400).json({ error: 'Website must start with http:// or https://' })
+      }
+      cleanWebsite = w || null
+    }
+
+    // Upsert: update if company exists, insert if not
+    const result = await query(
+      `INSERT INTO companies (user_id, name, company_name, industry, sector, country, website, status, certification_level)
+         VALUES ($1, $2, $2, $3, $3, $4, $5, 'pending', 0)
+       ON CONFLICT (user_id) DO UPDATE
+         SET company_name = COALESCE($2, companies.company_name),
+             name         = COALESCE($2, companies.name),
+             sector       = COALESCE($3, companies.sector),
+             industry     = COALESCE($3, companies.industry),
+             country      = COALESCE($4, companies.country),
+             website      = COALESCE($5, companies.website),
+             updated_at   = NOW()
+       RETURNING *`,
+      [req.user.id, companyName || null, sector || null, country || null, cleanWebsite],
+    )
+
+    // Also update the user.name to match company name if provided
+    if (companyName) {
+      await query('UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2', [
+        String(companyName).trim().slice(0, 200),
+        req.user.id,
+      ])
+    }
+
+    res.json({ company: mapCompanyRow(result.rows[0]) })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'patch_me_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to update profile' })
   }
 })
 
@@ -322,11 +385,16 @@ router.get('/missions', auth, companyReadLimiter, async (req, res) => {
 
     const [result, countResult] = await Promise.all([
       query(
-        `SELECT m.id, m.status, m.outcome, m.report_text,
+        `SELECT m.id, m.title, m.status, m.outcome, m.report_text,
                 m.location, m.type, m.description,
+                m.fee_usd, m.pac_tier_required, m.due_date,
+                m.payment_confirmed_at,
+                m.admin_score, m.admin_scored_at,
+                m.client_score, m.client_scored_at,
                 m.created_at, m.completed_at,
                 pp.full_name AS pac_name,
-                pp.location  AS pac_location
+                pp.location  AS pac_location,
+                pp.pac_tier  AS pac_tier
            FROM missions m
            LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
           WHERE m.company_id = $1
@@ -343,23 +411,165 @@ router.get('/missions', auth, companyReadLimiter, async (req, res) => {
     const total = countResult.rows[0]?.total || 0
     res.json({
       missions: result.rows.map(r => ({
-        id:          r.id,
-        status:      r.status,
-        outcome:     r.outcome      || null,
-        reportText:  r.report_text  || null,
-        location:    r.location     || '',
-        type:        r.type         || '',
-        description: r.description  || '',
-        createdAt:   r.created_at,
-        completedAt: r.completed_at || null,
-        pacName:     r.pac_name     || null,
-        pacLocation: r.pac_location || null,
+        id:              r.id,
+        title:           r.title           || null,
+        status:          r.status,
+        outcome:         r.outcome         || null,
+        reportText:      r.report_text     || null,
+        location:        r.location        || '',
+        type:            r.type            || '',
+        description:     r.description     || '',
+        feeUsd:              r.fee_usd              || null,
+        paymentConfirmedAt:  r.payment_confirmed_at || null,
+        tierRequired:    r.pac_tier_required || 'S1',
+        dueDate:         r.due_date        || null,
+        adminScore:      r.admin_score     || null,
+        adminScoredAt:   r.admin_scored_at || null,
+        clientScore:     r.client_score    || null,
+        clientScoredAt:  r.client_scored_at || null,
+        createdAt:       r.created_at,
+        completedAt:     r.completed_at    || null,
+        pacName:         r.pac_name        || null,
+        pacLocation:     r.pac_location    || null,
+        pacTier:         r.pac_tier        || null,
       })),
       pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
     })
   } catch (err) {
     console.error(JSON.stringify({ event: 'company_missions_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to load missions' })
+  }
+})
+
+// ── PATCH /api/companies/missions/:id/rate — company rates the PAC agent ──────
+// One-time: company submits a 1–5 score after mission completion.
+// Writes client_score on the mission, updates pac_profiles counters,
+// and checks for double_rejections (two consecutive scores < 2 on this agent).
+router.patch('/missions/:id/rate', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'company') return res.status(403).json({ error: 'Only company accounts can rate missions' })
+
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const { client_score } = req.body
+    const score = parseInt(client_score, 10)
+    if (!score || score < 1 || score > 5) return res.status(400).json({ error: 'client_score must be 1–5' })
+
+    // Resolve company_id from logged-in user
+    const compResult = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    if (!compResult.rows.length) return res.status(404).json({ error: 'Company not found' })
+    const companyId = compResult.rows[0].id
+
+    // Load mission — must belong to this company, be completed, and unscored
+    const mRes = await query(
+      `SELECT m.id, m.assigned_to, m.client_score AS prev_score, pp.double_rejections
+         FROM missions m
+         LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
+        WHERE m.id = $1
+          AND m.company_id = $2
+          AND m.status = 'completed'
+        LIMIT 1`,
+      [missionId, companyId]
+    )
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found, not yours, or not completed' })
+
+    const { assigned_to, prev_score } = mRes.rows[0]
+
+    // Idempotency — already scored?
+    if (prev_score !== null) return res.status(409).json({ error: 'Mission already rated' })
+
+    // Stamp score
+    const { rows } = await query(
+      `UPDATE missions SET client_score = $1, client_scored_at = NOW(), updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, client_score, client_scored_at`,
+      [score, missionId]
+    )
+
+    // Update pac_profiles counters (fire-and-forget, do not block response)
+    if (assigned_to) {
+      const isLow        = score < 2
+      const prevWasLow   = prev_score !== null && prev_score < 2
+      const newDoubleRej = isLow && prevWasLow ? 1 : 0
+
+      query(
+        `UPDATE pac_profiles SET
+           client_score_total = client_score_total + $1,
+           client_score_count = client_score_count + 1,
+           double_rejections  = double_rejections + $2,
+           updated_at         = NOW()
+         WHERE user_id = $3`,
+        [score, newDoubleRej, assigned_to]
+      ).catch(err => console.error(JSON.stringify({ event: 'company_rate_counter_error', message: err.message })))
+    }
+
+    logAudit(req.user.id, AUDIT.COMPANY_MISSION_RATED, 'missions', req.ip, { missionId, score, companyId })
+    res.json({ message: 'Rating submitted', missionId, clientScore: rows[0].client_score })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'company_mission_rate_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to submit rating' })
+  }
+})
+
+// ── POST /api/companies/missions/:id/dispute — open a dispute on a mission ────
+// Company can dispute a completed mission outcome (e.g. contested fail).
+// One dispute per mission maximum (409 if already open).
+router.patch('/missions/:id/dispute', auth, companyWriteLimiter, async (req, res) => {
+  try {
+    if (req.user.role !== 'company') return res.status(403).json({ error: 'Only company accounts can open disputes' })
+
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : ''
+    if (!reason || reason.length < 20) return res.status(400).json({ error: 'reason must be at least 20 characters' })
+    if (reason.length > 2000)          return res.status(400).json({ error: 'reason too long (max 2000 chars)' })
+
+    const compResult = await query('SELECT id FROM companies WHERE user_id = $1 LIMIT 1', [req.user.id])
+    if (!compResult.rows.length) return res.status(404).json({ error: 'Company not found' })
+    const companyId = compResult.rows[0].id
+
+    // Verify mission belongs to company and is completed
+    const mRes = await query(
+      `SELECT id FROM missions WHERE id = $1 AND company_id = $2 AND status = 'completed' LIMIT 1`,
+      [missionId, companyId]
+    )
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found, not yours, or not completed' })
+
+    // Idempotency — one dispute per mission
+    const existing = await query(
+      `SELECT id, status FROM mission_disputes WHERE mission_id = $1 AND company_id = $2 LIMIT 1`,
+      [missionId, companyId]
+    )
+    if (existing.rows.length) return res.status(409).json({ error: 'A dispute is already open for this mission', dispute: existing.rows[0] })
+
+    const { rows } = await query(
+      `INSERT INTO mission_disputes (mission_id, company_id, opened_by, reason)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, status, created_at`,
+      [missionId, companyId, req.user.id, reason]
+    )
+
+    logAudit(req.user.id, AUDIT.COMPANY_DISPUTE_OPENED, 'mission_disputes', req.ip, { missionId, companyId, disputeId: rows[0].id })
+
+    // Notify admin via email (non-blocking)
+    query(`SELECT email FROM users WHERE role = 'admin' LIMIT 1`).then(({ rows: admins }) => {
+      if (admins[0]) {
+        sendDisputeSubmitted({
+          adminEmail: admins[0].email,
+          companyName: req.user.name || `Company #${companyId}`,
+          reason,
+          missionId,
+          disputeId: rows[0].id,
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+
+    res.status(201).json({ message: 'Dispute opened', dispute: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'company_dispute_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to open dispute' })
   }
 })
 

@@ -116,8 +116,11 @@
       "register": "Registrar empresa",
       "pricing": "Planos e atualização",
       "metrics": "Métricas",
-      "documents": "Documents","billing": "Faturamento",
-      "developer": "Desenvolvedor"
+      "documents": "Documents",
+      "billing": "Faturamento",
+      "developer": "Desenvolvedor",
+      "audits": "🔍 Auditorias",
+      "notifications": "Notificações"
     },
     "billing_title": "Histórico de pagamentos",
     "billing_subtitle": "Suas certificações e transações do Stripe",
@@ -227,6 +230,28 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "Minhas auditorias B&E",
+      "empty": "As suas missões de auditoria PAC aparecerão aqui quando atribuídas pela equipa B&E.",
+      "pay_fee": "💳 Pagar ${{amount}}",
+      "fee_paid": "✓ Pago ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ Contestar",
+      "rate_agent": "⭐ Avaliar o agente",
+      "pending_dispute": "⏳ Contestação pendente"
+    },
+    "notifications": {
+      "title": "Notificações",
+      "empty": "Nenhuma notificação ainda",
+      "empty_sub": "Atualizações de missão, confirmações de pagamento e alertas aparecerão aqui.",
+      "mark_all_read": "Marcar tudo como lido",
+      "unread_count": "{{count}} não lido(s)",
+      "refresh": "Atualizar",
+      "loading": "Carregando…",
+      "error": "Falha ao carregar notificações",
+      "mark_read": "Marcar como lido",
+      "all_caught_up": "Tudo em dia!"
     }
   },
   "dev": {
@@ -257,7 +282,9 @@
     "portal": "Portal do Agente PAC",
     "tabs": {
       "missions": "Missões disponíveis",
-      "profile": "Meu perfil"
+      "profile": "Meu perfil",
+      "earnings": "💰 Ganhos",
+      "progression": "🎯 Progressão"
     },
     "missions": {
       "status_title": "Seu status",
@@ -301,6 +328,23 @@
       "save": "SALVAR PERFIL",
       "saved": "Perfil salvo com sucesso",
       "error": "Erro ao salvar o perfil"
+    },
+    "earnings": {
+      "loading": "Carregando…",
+      "total_earned": "Total recebido",
+      "pending": "Pendente",
+      "commission_rate": "Taxa de comissão",
+      "total_missions": "Total de missões",
+      "paid_missions": "missão(ões) paga(s)",
+      "completed_missions": "missão(ões) concluída(s)",
+      "assigned": "atribuídas ou concluídas",
+      "paid_badge": "✓ Pago",
+      "pending_badge": "⏳ Pendente",
+      "no_missions": "Nenhuma missão atribuída por enquanto.",
+      "detail_title": "Detalhes das missões",
+      "entries": "entrada(s)",
+      "commission_note": "Como são calculadas as suas comissões?",
+      "commission_desc": "Cada missão tem um honorário fixo. A sua comissão ({{pct}}% como agente {{tier}}) é calculada quando a empresa cliente confirma o pagamento via Stripe. Os pagamentos são processados pela B&E Consult FZCO no seu ciclo mensal."
     }
   },
   "verify": {
@@ -377,7 +421,8 @@
       "users": "Usuários",
       "companies": "Empresas",
       "missions": "Missões",
-      "audit": "Log de auditoria"
+      "audit": "Log de auditoria",
+      "disputes": "Litígios"
     },
     "stats": {
       "total_users": "Total de usuários",
@@ -429,7 +474,20 @@
     "saving": "Salvando…",
     "saved": "Salvo",
     "no_data": "Nenhum registro encontrado.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "Litígios de missões",
+      "empty": "Nenhum litígio aberto.",
+      "reason": "Motivo",
+      "status": "Estado",
+      "open": "Aberto",
+      "resolved": "Resolvido",
+      "resolve": "Resolver",
+      "upheld": "Confirmado",
+      "dismissed": "Indeferido",
+      "second_audit": "Segunda auditoria",
+      "resolution": "Resolução"
+    }
   },
   "metrics": {
     "title": "Métricas de negócio",
@@ -479,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "Imprimir / Salvar PDF",
-    "copy_link": "Copiar link de verificação"
+    "copy_link": "Copiar link de verificação",
+    "download_pdf": "Baixar PDF"
   },
   "cookie": {
     "title": "Usamos cookies",
@@ -532,5 +591,111 @@
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
     }
+  },
+  "agents": {
+    "directory": {
+      "badge": "Rede PAC Certificada",
+      "title_line1": "Auditores B&E",
+      "title_line2": "certificados e verificados",
+      "subtitle": "Cada especialista PAC é selecionado, treinado e certificado pela B&E Consulting. Auditoria no local, due diligence de fornecedores, conformidade ESG — três níveis de certificação para todas as suas necessidades.",
+      "stat_agents": "Especialistas ativos",
+      "stat_tiers": "Níveis de certificação",
+      "stat_kyc": "KYC verificado",
+      "search_placeholder": "Pesquisar por nome, localização, especialização…",
+      "search_btn": "Pesquisar",
+      "filter_tier_label": "Nível:",
+      "filter_reset": "✕ Redefinir",
+      "error_load": "Não foi possível carregar o diretório.",
+      "empty": "Nenhum especialista encontrado para esta pesquisa.",
+      "card_verified": "✔ Verificado",
+      "card_view": "Ver perfil →",
+      "card_missions": "Missões",
+      "card_ontime": "No prazo",
+      "prev": "← Anterior",
+      "next": "Próximo →"
+    },
+    "profile": {
+      "back": "← Todos os especialistas",
+      "kyc_verified": "✔ KYC Verificado",
+      "member_since": "Membro desde",
+      "promoted_since_s3": "S3 desde",
+      "error_load": "Não foi possível carregar o perfil.",
+      "stat_missions": "Missões",
+      "stat_l2": "Missões L2+",
+      "stat_ontime": "No prazo",
+      "stat_client": "Avaliação cliente",
+      "stat_admin": "Avaliação B&E",
+      "history_title": "Histórico de missões",
+      "history_count": "{{n}} últimas missões",
+      "col_type": "Tipo",
+      "col_zone": "Zona",
+      "col_tier": "Nível",
+      "col_outcome": "Resultado",
+      "col_client": "Aval. cliente",
+      "col_admin": "Aval. B&E",
+      "col_delay": "Prazo",
+      "col_date": "Data",
+      "ontime_yes": "✓ No prazo",
+      "ontime_late": "Atraso",
+      "outcome_pass": "Conforme",
+      "outcome_fail": "Não conforme",
+      "outcome_cond": "Condicional",
+      "cta_title": "Precisa de uma auditoria certificada?",
+      "cta_desc": "Obtenha uma certificação L3 com um especialista como {{name}}.",
+      "cta_agents": "← Todos os especialistas",
+      "cta_register": "Iniciar certificação"
+    }
+  },
+  "onboarding": {
+    "step1_eyebrow": "Passo 1 de 3",
+    "step1_heading": "Configure o perfil da sua empresa",
+    "step1_sub": "Estas informações aparecerão na sua listagem no registro público e nos documentos de certificação.",
+    "step2_eyebrow": "Passo 2 de 3",
+    "step2_heading": "Prepare seus documentos",
+    "step2_sub": "Você os enviará pelo seu painel. Tê-los prontos acelera significativamente a sua verificação.",
+    "step3_eyebrow": "Passo 3 de 3",
+    "step3_heading": "Escolha seu nível de certificação",
+    "step3_sub": "Você pode alterar isso depois. O nível determina a profundidade da verificação e os documentos necessários.",
+    "profile_label": "Perfil",
+    "documents_label": "Documentos",
+    "level_label": "Nível",
+    "skip": "Pular por agora",
+    "skip_bottom": "Pular configuração e ir diretamente ao painel →",
+    "back": "← Voltar",
+    "continue": "Continuar →",
+    "saving": "Salvando…",
+    "error_name_required": "O nome da empresa é obrigatório.",
+    "error_save_failed": "Não foi possível salvar o perfil. Por favor, tente novamente.",
+    "label_name": "Nome da empresa *",
+    "label_sector": "Setor",
+    "label_country": "País",
+    "label_website": "Site (opcional)",
+    "placeholder_name": "ex. Acme Trading LLC",
+    "placeholder_sector": "Selecionar setor",
+    "placeholder_country": "Selecionar país",
+    "placeholder_website": "https://suaempresa.com",
+    "docs_upload_title": "📁 Onde enviar?",
+    "docs_upload_body": "Após a configuração, acesse Painel → Documentos para enviar e submeter seus arquivos.",
+    "most_popular": "Mais popular",
+    "payment_title": "💳 Pagamento posterior",
+    "payment_body": "Você não será cobrado agora. Após enviar seus documentos, selecionará um plano e pagará pelo painel.",
+    "finish_with_level": "Começar com {{level}} →",
+    "go_to_dashboard": "Ir ao painel →"
+  },
+  "sector": {
+    "registry_link": "Registro",
+    "get_certified": "Certificar-se",
+    "certified_companies": "Empresas certificadas",
+    "view_all": "Ver todos os resultados →",
+    "no_companies": "Nenhuma empresa certificada neste setor ainda.",
+    "be_first": "Seja o primeiro →",
+    "faq_heading": "Perguntas frequentes",
+    "cta_heading": "Certifique sua empresa hoje.",
+    "cta_sub": "Junte-se às empresas {{name}} já verificadas no MyDD.",
+    "request_verification": "Solicitar verificação",
+    "browse_registry": "Ver o registro",
+    "other_sectors": "Outros setores",
+    "total_one": "{{count}} empresa certificada neste setor",
+    "total_other": "{{count}} empresas certificadas neste setor"
   }
 }

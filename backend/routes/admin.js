@@ -5,13 +5,19 @@ const rateLimit = require('express-rate-limit')
 const router    = express.Router()
 
 const { query }                  = require('../db')
-const { auth, requireAdmin }     = require('../lib/authUtils')
+const { auth, requireAdmin,
+        requireAdminMFA }        = require('../lib/authUtils')
 const { logAudit }               = require('../lib/audit')
+const { AUDIT }                  = require('../lib/auditActions')
 const { notifyUser }             = require('../lib/wsNotify')
 const { createNotification }     = require('../lib/notify')
 const { sendCertGranted,
         sendCertRevoked,
-        sendPacKycDecision }     = require('../lib/mailer')
+        sendPacKycDecision,
+        sendFounderWelcome,
+        sendS2Promoted,
+        sendS3Promoted,
+        sendDisputeResolved }    = require('../lib/mailer')
 const { dispatchWebhook }        = require('../lib/webhookDispatch')
 const { isBlockedCompany }       = require('../lib/blocklist')
 const { validate, schemas }      = require('../lib/validators')
@@ -37,7 +43,7 @@ const adminWriteLimiter = rateLimit({
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
-    const [users, companies, revenue, alerts, docs, missions] = await Promise.all([
+    const [users, companies, revenue, alerts, docs, pacStats, missionStats] = await Promise.all([
       query(`SELECT COUNT(*)::int AS total,
                     COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30d')::int AS last_30d,
                     COUNT(*) FILTER (WHERE email_verified = FALSE)::int AS unverified
@@ -51,7 +57,19 @@ router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
              FROM payments`),
       query(`SELECT COUNT(*) FILTER (WHERE resolved = FALSE)::int AS open_alerts FROM fraud_alerts`),
       query(`SELECT COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_docs FROM documents`),
-      query(`SELECT COUNT(*) FILTER (WHERE status = 'available')::int AS open_missions FROM missions`),
+      query(`SELECT
+               COUNT(*) FILTER (WHERE pac_tier = 'S1')::int              AS s1,
+               COUNT(*) FILTER (WHERE pac_tier = 'S2')::int              AS s2,
+               COUNT(*) FILTER (WHERE pac_tier = 'S3')::int              AS s3,
+               COUNT(*) FILTER (WHERE eligible_for_s2 OR eligible_for_s3)::int AS eligible_for_upgrade,
+               COUNT(*) FILTER (WHERE license_suspended_at IS NOT NULL)::int   AS suspended
+             FROM pac_profiles`),
+      query(`SELECT
+               COUNT(*) FILTER (WHERE status = 'available')::int  AS available,
+               COUNT(*) FILTER (WHERE status = 'assigned')::int   AS assigned,
+               COUNT(*) FILTER (WHERE status = 'completed')::int  AS completed,
+               COUNT(*) FILTER (WHERE status = 'cancelled')::int  AS cancelled
+             FROM missions`),
     ])
     res.json({
       users:     users.rows[0],
@@ -60,9 +78,10 @@ router.get('/stats', auth, requireAdmin, adminReadLimiter, async (req, res) => {
         total_usd:      (Number(revenue.rows[0].total_cents) / 100).toFixed(2),
         total_payments: revenue.rows[0].total_payments,
       },
-      fraud:     { open_alerts:   alerts.rows[0].open_alerts },
-      documents: { pending_docs:  docs.rows[0].pending_docs },
-      missions:  { open_missions: missions.rows[0].open_missions },
+      fraud:     { open_alerts:  alerts.rows[0].open_alerts },
+      documents: { pending_docs: docs.rows[0].pending_docs },
+      pac:       pacStats.rows[0],
+      missions:  missionStats.rows[0],
     })
   } catch (err) {
     console.error(JSON.stringify({ event: 'admin_stats_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
@@ -97,7 +116,7 @@ router.get('/users/:id', auth, requireAdmin, adminReadLimiter, async (req, res) 
 })
 
 // ── PATCH /api/admin/users/:id/role ─────────────────────────────────────────
-router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, validate(schemas.assignRole), async (req, res) => {
+router.patch('/users/:id/role', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.assignRole), async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10)
     const { role } = req.body
@@ -123,7 +142,7 @@ router.patch('/users/:id/role', auth, requireAdmin, adminWriteLimiter, validate(
 })
 
 // ── DELETE /api/admin/users/:id ──────────────────────────────────────────────
-router.delete('/users/:id', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.delete('/users/:id', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10)
     if (Number.isNaN(userId)) return res.status(400).json({ error: 'Invalid user id' })
@@ -240,7 +259,7 @@ router.get('/companies', auth, requireAdmin, adminReadLimiter, async (req, res) 
 })
 
 // ── PATCH /api/admin/companies/:id/level ─────────────────────────────────────
-router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, validate(schemas.certifyCompany), async (req, res) => {
+router.patch('/companies/:id/level', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.certifyCompany), async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     const level     = parseInt(req.body?.level, 10)
@@ -328,7 +347,7 @@ router.patch('/companies/:id/level', auth, requireAdmin, adminWriteLimiter, vali
 })
 
 // ── PATCH /api/admin/companies/:id/suspend ────────────────────────────────────
-router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, validate(schemas.suspendCompany), async (req, res) => {
+router.patch('/companies/:id/suspend', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.suspendCompany), async (req, res) => {
   try {
     const companyId = parseInt(req.params.id, 10)
     if (Number.isNaN(companyId)) return res.status(400).json({ error: 'Invalid company id' })
@@ -353,8 +372,186 @@ router.patch('/companies/:id/suspend', auth, requireAdmin, adminWriteLimiter, va
   }
 })
 
+// ── POST /api/admin/missions — create a new mission ──────────────────────────
+router.post('/missions', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+  try {
+    const { title, description, company_id, company_name, location, type,
+            fee_usd, pac_tier_required, due_date } = req.body
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'title is required' })
+    }
+    const feeNum  = parseInt(fee_usd, 10)
+    if (Number.isNaN(feeNum) || feeNum < 0) {
+      return res.status(400).json({ error: 'fee_usd must be a non-negative integer (USD)' })
+    }
+    const VALID_TIERS = ['S1', 'S2', 'S3']
+    const tier = pac_tier_required || 'S1'
+    if (!VALID_TIERS.includes(tier)) {
+      return res.status(400).json({ error: 'pac_tier_required must be S1, S2 or S3' })
+    }
+
+    const { rows } = await query(`
+      INSERT INTO missions
+        (title, description, company_id, company_name, location, type,
+         fee_usd, pac_tier_required, due_date, status, created_at, updated_at)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, 'available', NOW(), NOW())
+      RETURNING *
+    `, [
+      title.trim(), description || null,
+      company_id   ? parseInt(company_id, 10) : null,
+      company_name || null,
+      location     || null,
+      type         || null,
+      feeNum,
+      tier,
+      due_date     || null,
+    ])
+
+    logAudit(req.user.id, 'admin_mission_created', 'missions', req.ip, { missionId: rows[0].id, title, tier })
+    res.status(201).json({ mission: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_create_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to create mission' })
+  }
+})
+
+// ── PATCH /api/admin/missions/:id/assign — assign to a PAC agent ─────────────
+router.patch('/missions/:id/assign', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    const { pac_user_id } = req.body
+
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+    const agentId = parseInt(pac_user_id, 10)
+    if (Number.isNaN(agentId))   return res.status(400).json({ error: 'pac_user_id is required' })
+
+    // Verify agent is an active PAC user
+    const agentQ = await query(
+      `SELECT u.id, u.name, pp.pac_tier FROM users u
+       JOIN pac_profiles pp ON pp.user_id = u.id
+       WHERE u.id = $1 AND u.role = 'pac'
+       LIMIT 1`,
+      [agentId]
+    )
+    if (!agentQ.rows.length) return res.status(404).json({ error: 'PAC agent not found' })
+    const agent = agentQ.rows[0]
+
+    const { rows } = await query(`
+      UPDATE missions SET
+        assigned_to = $1,
+        status      = 'assigned',
+        updated_at  = NOW()
+      WHERE id = $2 AND status IN ('available','assigned')
+      RETURNING *
+    `, [agentId, missionId])
+
+    if (!rows.length) return res.status(404).json({ error: 'Mission not found or not assignable' })
+
+    logAudit(req.user.id, 'admin_mission_assigned', 'missions', req.ip, { missionId, agentId, agentName: agent.name })
+
+    // Look up company contact email for notification
+    let companyEmail = null
+    if (rows[0].company_id) {
+      const emailQ = await query(
+        `SELECT u.email FROM companies c JOIN users u ON u.id = c.user_id WHERE c.id = $1 LIMIT 1`,
+        [rows[0].company_id]
+      )
+      if (emailQ.rows.length) companyEmail = emailQ.rows[0].email
+    }
+
+    // Notify agent
+    const { sendMissionAssigned } = require('../lib/mailer')
+    sendMissionAssigned({ email: companyEmail, name: agent.name, missionId, companyName: rows[0].company_name }).catch(() => {})
+
+    res.json({ mission: rows[0], agent: { id: agent.id, name: agent.name, tier: agent.pac_tier } })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_assign_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to assign mission' })
+  }
+})
+
+// ── PATCH /api/admin/missions/:id/cancel — cancel a mission ──────────────────
+router.patch('/missions/:id/cancel', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+
+    const { rows } = await query(`
+      UPDATE missions SET
+        status     = 'cancelled',
+        updated_at = NOW()
+      WHERE id = $1 AND status NOT IN ('completed','cancelled')
+      RETURNING id, status, title
+    `, [missionId])
+
+    if (!rows.length) return res.status(404).json({ error: 'Mission not found or already completed/cancelled' })
+    logAudit(req.user.id, 'admin_mission_cancelled', 'missions', req.ip, { missionId })
+    res.json({ mission: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_mission_cancel_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to cancel mission' })
+  }
+})
+
+// ── PATCH /api/admin/missions/:id/client-score — company rates agent ──────────
+// Called by admin on behalf of company (or by company if company portal is wired).
+// Updates client_score_total/count on pac_profiles.
+// If score < 2 and agent already has a prior low score on this mission → double_rejection.
+router.patch('/missions/:id/client-score', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+  try {
+    const missionId = parseInt(req.params.id, 10)
+    const { client_score } = req.body
+
+    if (Number.isNaN(missionId)) return res.status(400).json({ error: 'Invalid mission id' })
+    if (!client_score || client_score < 1 || client_score > 5) {
+      return res.status(400).json({ error: 'client_score must be 1–5' })
+    }
+
+    const mRes = await query(
+      `SELECT m.assigned_to, m.client_score AS prev_score, pp.double_rejections
+       FROM missions m
+       LEFT JOIN pac_profiles pp ON pp.user_id = m.assigned_to
+       WHERE m.id = $1 AND m.status = 'completed'
+       LIMIT 1`,
+      [missionId]
+    )
+    if (!mRes.rows.length) return res.status(404).json({ error: 'Mission not found or not completed' })
+    const { assigned_to, prev_score, double_rejections } = mRes.rows[0]
+
+    // Stamp client_score on mission
+    await query(
+      `UPDATE missions SET client_score = $1, client_scored_at = NOW(), updated_at = NOW() WHERE id = $2`,
+      [client_score, missionId]
+    )
+
+    if (assigned_to) {
+      // Is this a second consecutive low-score (< 2)?
+      const isLowScore   = client_score < 2
+      const prevWasLow   = prev_score !== null && prev_score < 2
+      const newDoubleRej = isLowScore && prevWasLow ? 1 : 0
+
+      await query(`
+        UPDATE pac_profiles SET
+          client_score_total  = client_score_total + $1,
+          client_score_count  = client_score_count + 1,
+          double_rejections   = double_rejections + $2,
+          updated_at          = NOW()
+        WHERE user_id = $3
+      `, [client_score, newDoubleRej, assigned_to])
+    }
+
+    logAudit(req.user.id, 'admin_mission_client_scored', 'missions', req.ip, { missionId, client_score })
+    res.json({ message: 'Client score recorded', missionId, client_score })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_client_score_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to record client score' })
+  }
+})
+
 // ── PATCH /api/admin/missions/:id/status ─────────────────────────────────────
-router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, validate(schemas.updateCompanyStatus), async (req, res) => {
+router.patch('/missions/:id/status', auth, requireAdminMFA, adminWriteLimiter, validate(schemas.updateCompanyStatus), async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { status }  = req.body
@@ -378,16 +575,54 @@ router.patch('/missions/:id/status', auth, requireAdmin, adminWriteLimiter, vali
 // ── GET /api/admin/missions ───────────────────────────────────────────────────
 router.get('/missions', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
-    const page   = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
-    const limit  = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
-    const offset = (page - 1) * limit
+    const page       = Math.max(parseInt(req.query.page  || '1',  10) || 1, 1)
+    const limit      = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200)
+    const offset     = (page - 1) * limit
+    const status     = req.query.status     ? String(req.query.status).trim()     : null
+    const q          = req.query.q          ? String(req.query.q).trim()          : null
+    const unassigned = req.query.unassigned === '1'
+    const tierReq    = req.query.tier_required ? String(req.query.tier_required).trim() : null
+
+    const params  = []
+    const where   = []
+
+    if (status) {
+      params.push(status)
+      where.push(`m.status = $${params.length}`)
+    }
+    if (q) {
+      params.push(`%${q}%`)
+      where.push(`(m.company_name ILIKE $${params.length} OR m.title ILIKE $${params.length})`)
+    }
+    if (unassigned) {
+      where.push(`m.assigned_to IS NULL`)
+    }
+    if (tierReq) {
+      params.push(tierReq)
+      where.push(`m.pac_tier_required = $${params.length}`)
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+    // Build queries with shared filter
+    const dataParams  = [...params, limit, offset]
+    const countParams = [...params]
 
     const [rowsResult, totalResult] = await Promise.all([
-      query(`SELECT m.*, u.name AS pac_name, u.email AS pac_email
-             FROM missions m LEFT JOIN users u ON u.id = m.assigned_to
-             ORDER BY m.id DESC LIMIT $1 OFFSET $2`, [limit, offset]),
-      query('SELECT COUNT(*)::int AS total FROM missions'),
+      query(`
+        SELECT m.*, u.name AS pac_name, u.email AS pac_email,
+               cu.email AS company_email
+        FROM missions m
+        LEFT JOIN users u  ON u.id  = m.assigned_to
+        LEFT JOIN companies c ON c.id = m.company_id
+        LEFT JOIN users cu ON cu.id = c.user_id
+        ${whereClause}
+        ORDER BY m.id DESC
+        LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+      `, dataParams),
+      query(`SELECT COUNT(*)::int AS total FROM missions m ${whereClause}`, countParams),
     ])
+
     const total = totalResult.rows[0]?.total || 0
     res.json({ data: rowsResult.rows, pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) } })
   } catch (err) {
@@ -471,7 +706,7 @@ router.get('/fraud-alerts', auth, requireAdmin, adminReadLimiter, async (req, re
 })
 
 // ── PATCH /api/admin/fraud-alerts/:id/resolve ─────────────────────────────────
-router.patch('/fraud-alerts/:id/resolve', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/fraud-alerts/:id/resolve', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const alertId = parseInt(req.params.id, 10)
     if (Number.isNaN(alertId)) return res.status(400).json({ error: 'Invalid alert id' })
@@ -605,7 +840,7 @@ router.get('/export/companies', auth, requireAdmin, adminReadLimiter, async (req
 // PATCH /api/admin/missions/:id/score
 // Admin scores a completed mission (1–5) and optionally confirms client payment.
 // Setting payment_confirmed=true stamps payment_confirmed_at and calculates commission.
-router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/missions/:id/score', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const missionId = parseInt(req.params.id, 10)
     const { admin_score, payment_confirmed, stripe_invoice_id } = req.body
@@ -656,6 +891,19 @@ router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async
       missionId, admin_score, payment_confirmed, commissionCents
     })
 
+    // ── Update admin_score counters on pac_profiles (fire-and-forget) ────────
+    if (admin_score !== undefined && admin_score !== null && mission.assigned_to) {
+      query(`
+        UPDATE pac_profiles SET
+          admin_score_total = admin_score_total + $1,
+          admin_score_count = admin_score_count + 1,
+          updated_at        = NOW()
+        WHERE user_id = $2
+      `, [admin_score, mission.assigned_to]).catch(e =>
+        console.error(JSON.stringify({ event: 'admin_score_counter_error', message: e.message }))
+      )
+    }
+
     res.json({ mission: result.rows[0] })
   } catch (err) {
     console.error(JSON.stringify({ event: 'admin_mission_score_error', message: err.message }))
@@ -670,8 +918,9 @@ router.patch('/missions/:id/score', auth, requireAdmin, adminWriteLimiter, async
 // GET /api/admin/pac/agents — list all PAC agents with tier + KYC status
 router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
-    const { tier, kyc_status, page = 1, limit = 50 } = req.query
+    const { tier, kyc_status, eligible, page = 1, limit = 50 } = req.query
     const offset = (Math.max(parseInt(page,10),1) - 1) * Math.min(parseInt(limit,10),200)
+    const eligibleOnly = eligible === '1'
 
     const { rows } = await query(`
       SELECT
@@ -679,17 +928,18 @@ router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res)
         u.email, u.name AS user_name, u.created_at AS user_created_at,
         -- Active supervisees count
         (SELECT COUNT(*) FROM pac_supervision ps WHERE ps.supervisor_id = pp.id AND ps.status = 'active') AS active_supervisees,
-        -- Completed missions
-        (SELECT COUNT(*) FROM missions m WHERE m.assigned_to = pp.user_id AND m.status = 'completed') AS missions_completed,
+        -- Completed missions (from counter column — faster than subquery)
+        pp.missions_completed,
         -- Pending bonus (draft statements)
         (SELECT COALESCE(SUM(final_bonus_cents),0) FROM pac_bonus_payouts pb WHERE pb.supervisor_id = pp.id AND pb.status = 'draft') AS pending_bonus_cents
       FROM pac_profiles pp
       JOIN users u ON u.id = pp.user_id
       WHERE ($1::text IS NULL OR pp.pac_tier = $1)
         AND ($2::text IS NULL OR pp.kyc_status = $2)
-      ORDER BY pp.pac_tier DESC, pp.created_at DESC
-      LIMIT $3 OFFSET $4
-    `, [tier || null, kyc_status || null, Math.min(parseInt(limit,10),200), offset])
+        AND ($3::boolean IS FALSE OR (pp.eligible_for_s2 = TRUE OR pp.eligible_for_s3 = TRUE))
+      ORDER BY (pp.eligible_for_s2 OR pp.eligible_for_s3) DESC, pp.pac_tier DESC, pp.created_at DESC
+      LIMIT $4 OFFSET $5
+    `, [tier || null, kyc_status || null, eligibleOnly, Math.min(parseInt(limit,10),200), offset])
 
     res.json({ agents: rows })
   } catch (err) {
@@ -699,7 +949,7 @@ router.get('/pac/agents', auth, requireAdmin, adminReadLimiter, async (req, res)
 })
 
 // PATCH /api/admin/pac/agents/:id/kyc — approve or reject KYC + optionally set tier
-router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+router.patch('/pac/agents/:id/kyc', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
   try {
     const pacId = parseInt(req.params.id, 10)
     const { kyc_status, pac_tier, notes } = req.body
@@ -763,6 +1013,250 @@ router.patch('/pac/agents/:id/kyc', auth, requireAdmin, adminWriteLimiter, async
   }
 })
 
+// PATCH /api/admin/pac/:id/approve-upgrade — approve an S1→S2 or S2→S3 promotion
+// Requires: agent must have eligible_for_s2 or eligible_for_s3 = TRUE (set by nightly cron).
+// Creates a Stripe subscription with 365-day free trial.
+// Body: { tier: 'S2'|'S3' }
+router.patch('/pac/:id/approve-upgrade', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+  const { tier } = req.body
+  const userId   = parseInt(req.params.id, 10)
+  const VALID_UPGRADE_TIERS = ['S2', 'S3']
+
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' })
+  if (!VALID_UPGRADE_TIERS.includes(tier)) {
+    return res.status(400).json({ error: 'tier must be S2 or S3' })
+  }
+
+  const client = await require('../db').getPool().connect()
+  try {
+    await client.query('BEGIN')
+
+    // Fetch agent profile
+    const { rows: pacRows } = await client.query(
+      `SELECT pp.*, u.email, u.name, u.stripe_customer_id
+       FROM pac_profiles pp
+       JOIN users u ON u.id = pp.user_id
+       WHERE pp.user_id = $1 LIMIT 1`,
+      [userId]
+    )
+    if (!pacRows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'PAC profile not found' })
+    }
+    const pac = pacRows[0]
+
+    // Verify eligibility flag
+    const eligibleField = tier === 'S2' ? 'eligible_for_s2' : 'eligible_for_s3'
+    if (!pac[eligibleField]) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: `Agent is not flagged eligible_for_${tier.toLowerCase()}` })
+    }
+
+    // Tier config
+    const tierConfig = {
+      S2: { commission_rate: 0.15, max_supervised: 10, priceEnvKey: 'STRIPE_PAC_S2_PRICE_ID', amountUsd: 399 },
+      S3: { commission_rate: 0.20, max_supervised: 5,  priceEnvKey: 'STRIPE_PAC_S3_PRICE_ID', amountUsd: 799 },
+    }
+    const cfg = tierConfig[tier]
+
+    // Create Stripe subscription with 365-day free trial
+    let stripeSubId = null
+    const priceId = process.env[cfg.priceEnvKey]
+    if (priceId) {
+      try {
+        const Stripe = require('stripe')
+        const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+
+        // Ensure Stripe customer exists
+        let customerId = pac.stripe_customer_id
+        if (!customerId && pac.email) {
+          const customer = await stripe.customers.create({
+            email: pac.email,
+            metadata: { userId: String(userId) },
+          })
+          customerId = customer.id
+          await client.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, userId])
+        }
+
+        const promotionDate = new Date()
+        const trialEnd = Math.floor((promotionDate.getTime() + 365 * 24 * 60 * 60 * 1000) / 1000)
+        const sub = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [{ price: priceId }],
+          trial_end: trialEnd,
+          metadata: {
+            pac_user_id:      String(userId),
+            pac_tier:         tier.toLowerCase(),
+            promotion_date:   promotionDate.toISOString(),
+            subscriptionType: 'pac_membership',
+          },
+        })
+        stripeSubId = sub.id
+      } catch (stripeErr) {
+        console.error(JSON.stringify({ event: 'admin.pac.approve_upgrade.stripe_error', err: stripeErr.message }))
+        // Non-fatal: proceed without Stripe — admin can fix later
+      }
+    }
+
+    const now = new Date()
+    const anniversary = new Date(now)
+    anniversary.setFullYear(anniversary.getFullYear() + 1)
+
+    // Promote the agent
+    await client.query(
+      `UPDATE pac_profiles SET
+         pac_tier                  = $1,
+         kyc_status                = 'approved',
+         commission_rate           = $2,
+         max_supervised            = $3,
+         membership_active         = TRUE,
+         membership_expires        = $4,
+         membership_stripe_sub_id  = COALESCE($5, membership_stripe_sub_id),
+         promotion_date_s2         = CASE WHEN $1 IN ('S2','s2') THEN NOW() ELSE promotion_date_s2 END,
+         promotion_date_s3         = CASE WHEN $1 IN ('S3','s3') THEN NOW() ELSE promotion_date_s3 END,
+         tier_anniversary          = $6,
+         eligible_for_s2           = CASE WHEN $1 IN ('S2','s2') THEN FALSE ELSE eligible_for_s2 END,
+         eligible_for_s3           = CASE WHEN $1 IN ('S3','s3') THEN FALSE ELSE eligible_for_s3 END,
+         updated_at                = NOW()
+       WHERE user_id = $7`,
+      [tier, cfg.commission_rate, cfg.max_supervised, anniversary.toISOString(),
+       stripeSubId, anniversary.toDateString(), userId]
+    )
+
+    await client.query(
+      `UPDATE users SET pac_tier = $1, pac_status = 'approved' WHERE id = $2`,
+      [tier.toLowerCase(), userId]
+    )
+
+    await client.query('COMMIT')
+
+    await logAudit(req.user.id, AUDIT.PAC_UPGRADE_APPROVED, 'pac_profiles', req.ip, {
+      targetUserId: userId, tier, stripeSubId,
+    })
+
+    // Fire promotion email (non-blocking)
+    const emailFn = tier === 'S2' ? sendS2Promoted : sendS3Promoted
+    emailFn({
+      email:            pac.email,
+      full_name:        pac.full_name,
+      anniversary_date: anniversary,
+    }).catch(() => {})
+
+    res.json({
+      message:          `Agent promoted to ${tier}`,
+      tier,
+      anniversary_date: anniversary,
+      stripe_sub_id:    stripeSubId,
+    })
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    console.error(JSON.stringify({ event: 'admin_pac_approve_upgrade_error', message: err.message }))
+    res.status(500).json({ error: 'Server error' })
+  } finally {
+    client.release()
+  }
+})
+
+// PATCH /api/admin/pac/:id/founder — grant S3 Founder status (B&E mgmt only)
+// Body: { region: 'west_africa'|'central_east_africa'|'mena'|'europe'|'asia' }
+// - Caps active founders at 5
+// - Sets pac_tier='s3', membership_active=true, membership_expires=+1yr, kyc_status='pending'
+// - Bypasses Stripe entirely — no charge for Y1
+router.patch('/pac/:id/founder', auth, requireAdminMFA, adminWriteLimiter, async (req, res) => {
+  const VALID_REGIONS = ['west_africa', 'central_east_africa', 'mena', 'europe', 'asia']
+  const { region } = req.body
+  const userId = parseInt(req.params.id, 10)
+
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' })
+  if (!region || !VALID_REGIONS.includes(region)) {
+    return res.status(400).json({ error: `region must be one of: ${VALID_REGIONS.join(', ')}` })
+  }
+
+  const client = await require('../db').getPool().connect()
+  try {
+    await client.query('BEGIN')
+
+    // Enforce max 5 active founders
+    const { rows: countRows } = await client.query(
+      `SELECT COUNT(*) FROM pac_profiles
+       WHERE is_founder = TRUE AND founder_exemption_expires > NOW()`
+    )
+    if (parseInt(countRows[0].count, 10) >= 5) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Maximum 5 active founders already reached' })
+    }
+
+    // Verify target user exists and has a PAC profile
+    const { rows: pacRows } = await client.query(
+      `SELECT pp.id, pp.full_name, u.email
+       FROM pac_profiles pp
+       JOIN users u ON u.id = pp.user_id
+       WHERE pp.user_id = $1`,
+      [userId]
+    )
+    if (!pacRows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'PAC profile not found for this user' })
+    }
+    const pac = pacRows[0]
+
+    // S3 Fondateurs get 24 months free (Y0 + Y1 per PAC Network v4.0 spec)
+    const exemptionExpires = new Date()
+    exemptionExpires.setFullYear(exemptionExpires.getFullYear() + 2)
+
+    // Upgrade pac_profiles
+    await client.query(
+      `UPDATE pac_profiles SET
+         is_founder               = TRUE,
+         founder_exemption_expires = $1,
+         founder_region           = $2,
+         pac_tier                 = 's3',
+         membership_active        = TRUE,
+         membership_expires       = $1,
+         kyc_status               = 'pending',
+         updated_at               = NOW()
+       WHERE user_id = $3`,
+      [exemptionExpires, region, userId]
+    )
+
+    // Sync users table tier
+    await client.query(
+      `UPDATE users SET pac_tier = 's3', pac_status = 'pending' WHERE id = $1`,
+      [userId]
+    )
+
+    await client.query('COMMIT')
+
+    await logAudit(req.user.id, AUDIT.PAC_FOUNDER_GRANTED, 'pac_profiles', req.ip, {
+      targetUserId: userId,
+      region,
+      exemptionExpires,
+    })
+
+    // Fire welcome email (non-blocking)
+    sendFounderWelcome({
+      email:             pac.email,
+      full_name:         pac.full_name,
+      region,
+      exemption_expires: exemptionExpires,
+    }).catch(() => {})
+
+    res.json({
+      message:          'Founder status granted',
+      tier:             's3',
+      region,
+      exemption_expires: exemptionExpires,
+      kyc_status:       'pending',
+    })
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    console.error(JSON.stringify({ event: 'admin_pac_founder_error', message: err.message }))
+    res.status(500).json({ error: 'Server error' })
+  } finally {
+    client.release()
+  }
+})
+
 // GET /api/admin/pac/supervision/pending — all pending supervision requests
 router.get('/pac/supervision/pending', auth, requireAdmin, adminReadLimiter, async (req, res) => {
   try {
@@ -782,6 +1276,112 @@ router.get('/pac/supervision/pending', auth, requireAdmin, adminReadLimiter, asy
     res.json({ requests: rows })
   } catch (err) {
     res.status(500).json({ error: 'Failed to load pending requests' })
+  }
+})
+
+// ── GET /api/admin/disputes — list all mission disputes ──────────────────────
+router.get('/disputes', auth, requireAdmin, adminReadLimiter, async (req, res) => {
+  try {
+    const status = req.query.status ? String(req.query.status).trim() : null
+    const page   = Math.max(1, parseInt(req.query.page || '1', 10) || 1)
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit || '50', 10) || 50))
+    const offset = (page - 1) * limit
+
+    const params = []
+    const where  = []
+    if (status && ['open','under_review','resolved'].includes(status)) {
+      params.push(status)
+      where.push(`d.status = $${params.length}`)
+    }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+    const dataParams  = [...params, limit, offset]
+
+    const [rows, countRow] = await Promise.all([
+      query(`
+        SELECT d.*, m.title AS mission_title, m.outcome AS mission_outcome,
+               c.name AS company_name, uc.email AS company_email,
+               ua.email AS resolver_email
+        FROM mission_disputes d
+        JOIN missions  m  ON m.id  = d.mission_id
+        JOIN companies c  ON c.id  = d.company_id
+        JOIN users     uc ON uc.id = d.opened_by
+        LEFT JOIN users ua ON ua.id = d.resolved_by
+        ${whereClause}
+        ORDER BY d.created_at DESC
+        LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+      `, dataParams),
+      query(`SELECT COUNT(*)::int AS total FROM mission_disputes d ${whereClause}`, params),
+    ])
+
+    res.json({ data: rows.rows, pagination: { page, limit, total: countRow.rows[0]?.total || 0 } })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_disputes_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to load disputes' })
+  }
+})
+
+// ── PATCH /api/admin/disputes/:id/resolve — admin resolves a dispute ─────────
+router.patch('/disputes/:id/resolve', auth, requireAdmin, adminWriteLimiter, async (req, res) => {
+  try {
+    const disputeId = parseInt(req.params.id, 10)
+    if (Number.isNaN(disputeId)) return res.status(400).json({ error: 'Invalid dispute id' })
+
+    const { resolution, resolution_note } = req.body
+    if (!resolution || !['upheld','dismissed','second_audit'].includes(resolution)) {
+      return res.status(400).json({ error: 'resolution must be: upheld | dismissed | second_audit' })
+    }
+
+    const { rows } = await query(`
+      UPDATE mission_disputes SET
+        status          = 'resolved',
+        resolution      = $1,
+        resolution_note = $2,
+        resolved_by     = $3,
+        resolved_at     = NOW(),
+        updated_at      = NOW()
+      WHERE id = $4 AND status != 'resolved'
+      RETURNING *
+    `, [resolution, resolution_note || null, req.user.id, disputeId])
+
+    if (!rows.length) return res.status(404).json({ error: 'Dispute not found or already resolved' })
+
+    // If second_audit: re-open the mission as available
+    if (resolution === 'second_audit') {
+      await query(
+        `UPDATE missions SET status = 'available', assigned_to = NULL, updated_at = NOW() WHERE id = $1`,
+        [rows[0].mission_id]
+      )
+    }
+
+    logAudit(req.user.id, AUDIT.ADMIN_DISPUTE_RESOLVED, 'mission_disputes', req.ip, { disputeId, resolution })
+
+    // Email company with decision (non-blocking)
+    const d = rows[0]
+    query(`
+      SELECT u.email, u.name, c.name AS company_name, m.id AS mission_id
+        FROM mission_disputes md
+        JOIN companies c ON c.id = md.company_id
+        JOIN users u     ON u.id = c.user_id
+        JOIN missions m  ON m.id = md.mission_id
+       WHERE md.id = $1
+    `, [disputeId]).then(({ rows: info }) => {
+      if (info[0]) {
+        sendDisputeResolved({
+          email:       info[0].email,
+          name:        info[0].name,
+          companyName: info[0].company_name,
+          missionId:   info[0].mission_id,
+          disputeId,
+          resolution,
+          notes:       d.resolution_note || null,
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+
+    res.json({ dispute: rows[0] })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'admin_dispute_resolve_error', message: err.message }))
+    res.status(500).json({ error: 'Failed to resolve dispute' })
   }
 })
 

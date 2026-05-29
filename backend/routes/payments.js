@@ -5,7 +5,9 @@ const { query } = require('../db')
 const { auth } = require('../lib/authUtils')
 const { validate, schemas } = require('../lib/validators')
 const { checkFraud } = require('../lib/fraudDetection')
-const { sendPaymentConfirmation, sendPacMembershipConfirmation, sendPacKycDecision } = require('../lib/mailer')
+const { sendPaymentConfirmation, sendPacMembershipConfirmation, sendPacKycDecision,
+        sendLicenseSuspended, sendLicenseReinstated,
+        sendMissionFeeReceipt, sendMissionCommissionEarned } = require('../lib/mailer')
 const { dispatchWebhook } = require('../lib/webhookDispatch')
 const { isBlockedCompany } = require('../lib/blocklist')
 
@@ -171,7 +173,85 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
       const resolvedCompanyId = companyId ? parseInt(companyId, 10) : null
       const resolvedUserId = userId ? parseInt(userId, 10) : null
-      const { subscriptionType: sesSubType, pacProfileId, nextTier, fromTier } = session.metadata || {}
+      const { subscriptionType: sesSubType, pacProfileId, nextTier, fromTier, missionId: metaMissionId } = session.metadata || {}
+
+      // ── Mission fee payment ───────────────────────────────────────────────────
+      if (sesSubType === 'mission_fee' && metaMissionId) {
+        const missionId = parseInt(metaMissionId, 10)
+
+        // Mark payment record completed
+        await query(
+          `UPDATE payments SET status = 'completed', stripe_payment_intent_id = $1, updated_at = NOW()
+             WHERE stripe_session_id = $2`,
+          [session.payment_intent ? String(session.payment_intent) : null, session.id]
+        )
+
+        // Confirm payment on mission + compute commission
+        const mResult = await query(
+          `UPDATE missions
+              SET payment_confirmed_at  = NOW(),
+                  commission_amount_cents = ROUND(fee_usd * COALESCE(
+                    (SELECT commission_rate FROM pac_profiles WHERE user_id = assigned_to LIMIT 1), 0.10
+                  ) * 100)::INTEGER
+            WHERE id = $1 AND payment_confirmed_at IS NULL
+            RETURNING id, fee_usd, company_id, assigned_to, commission_amount_cents`,
+          [missionId]
+        )
+        const m = mResult.rows[0]
+        console.log(JSON.stringify({
+          event: 'mission.fee.confirmed', missionId, sessionId: session.id,
+          feeUsd: m?.fee_usd, commissionCents: m?.commission_amount_cents,
+        }))
+
+        // Notify admin via DB notification
+        if (m) {
+          query(`
+            INSERT INTO notifications (user_id, type, title, body)
+            SELECT id, 'info', $1, $2 FROM users WHERE role = 'admin' LIMIT 3
+          `, [
+            `Mission Fee Received: #${missionId}`,
+            `Mission #${missionId} fee of $${m.fee_usd} paid and confirmed.`,
+          ]).catch(() => {})
+
+          // Email company: payment receipt
+          query(
+            `SELECT u.email, u.name, c.name AS company_name
+               FROM companies c JOIN users u ON u.id = c.user_id
+              WHERE c.id = $1`,
+            [m.company_id]
+          ).then(({ rows }) => {
+            if (rows[0]) {
+              sendMissionFeeReceipt({
+                email:       rows[0].email,
+                name:        rows[0].name,
+                companyName: rows[0].company_name,
+                feeUsd:      m.fee_usd,
+                missionId,
+              }).catch(() => {})
+            }
+          }).catch(() => {})
+
+          // Email PAC agent: commission earned
+          if (m.assigned_to) {
+            query(
+              `SELECT u.email, u.name FROM users u WHERE u.id = $1`,
+              [m.assigned_to]
+            ).then(({ rows }) => {
+              if (rows[0]) {
+                sendMissionCommissionEarned({
+                  email:         rows[0].email,
+                  name:          rows[0].name,
+                  companyName:   session.metadata?.companyName || null,
+                  commissionUsd: ((m.commission_amount_cents || 0) / 100).toFixed(2),
+                  missionId,
+                }).catch(() => {})
+              }
+            }).catch(() => {})
+          }
+        }
+
+        return res.json({ received: true })
+      }
 
       // ── PAC membership upgrade ────────────────────────────────────────────────
       if (sesSubType === 'pac_membership' && pacProfileId && nextTier) {
@@ -400,6 +480,70 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       )
     }
 
+    // ── invoice.payment_failed — PAC membership non-payment ────────────────────
+    // Stripe retries 3× over ~14 days by default. On the final failure Stripe
+    // sends this event. We record the failure date. A separate nightly cron
+    // (or the subscription.deleted event) handles final demotion.
+    // We implement immediate demotion on the 4th attempt (dunning exhausted):
+    //   attempt_count >= 4 → downgrade + suspend + email
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object
+      if (!invoice.subscription) {
+        return res.json({ received: true })
+      }
+      const pacResult = await query(
+        `SELECT pp.id, pp.pac_tier, pp.full_name, u.email, u.id AS user_id
+         FROM pac_profiles pp
+         JOIN users u ON u.id = pp.user_id
+         WHERE pp.membership_stripe_sub_id = $1 LIMIT 1`,
+        [invoice.subscription]
+      )
+      if (!pacResult.rows[0]) {
+        return res.json({ received: true }) // not a PAC subscription — ignore
+      }
+      const pac          = pacResult.rows[0]
+      const attemptCount = invoice.attempt_count || 1
+
+      console.log(JSON.stringify({
+        event:        'pac.membership.payment_failed',
+        pacId:        pac.id,
+        tier:         pac.pac_tier,
+        attemptCount,
+        invoiceId:    invoice.id,
+      }))
+
+      // On attempt 3+ (Stripe default max is 4) — downgrade the agent
+      if (attemptCount >= 3) {
+        const downTier = (pac.pac_tier === 'S3' || pac.pac_tier === 's3') ? 'S2' : 'S1'
+        const downCommission = downTier === 'S2' ? 0.15 : 0.10
+        const downMaxSup     = downTier === 'S2' ? 10 : 0
+
+        await query(
+          `UPDATE pac_profiles SET
+             membership_active         = FALSE,
+             pac_tier                  = $1,
+             commission_rate           = $2,
+             max_supervised            = $3,
+             license_suspended_at      = NOW(),
+             license_suspended_tier    = $4,
+             updated_at                = NOW()
+           WHERE id = $5`,
+          [downTier, downCommission, downMaxSup, pac.pac_tier, pac.id]
+        )
+        await query(
+          `UPDATE users SET pac_tier = $1 WHERE id = $2`,
+          [downTier.toLowerCase(), pac.user_id]
+        )
+        sendLicenseSuspended({
+          email:     pac.email,
+          full_name: pac.full_name,
+          tier:      pac.pac_tier,
+        }).catch(() => {})
+        console.log(JSON.stringify({ event: 'pac.membership.demoted', pacId: pac.id, from: pac.pac_tier, to: downTier }))
+      }
+      return res.json({ received: true })
+    }
+
     if (event.type === 'charge.refunded') {
       const charge = event.data.object
       await query(
@@ -453,8 +597,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           ? new Date(sub.current_period_end * 1000).toISOString()
           : null
         const pacResult = await query(
-          `SELECT id, pac_tier, full_name FROM pac_profiles
-            WHERE membership_stripe_sub_id = $1 LIMIT 1`,
+          `SELECT pp.id, pp.pac_tier, pp.full_name, pp.license_suspended_at,
+                  pp.license_suspended_tier, pp.membership_active, u.email
+           FROM pac_profiles pp
+           JOIN users u ON u.id = pp.user_id
+           WHERE pp.membership_stripe_sub_id = $1 LIMIT 1`,
           [invoice.subscription]
         )
         const pac = pacResult.rows[0]
@@ -462,15 +609,41 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           console.warn(JSON.stringify({ event: 'stripe.invoice.paid.pac_not_found', subId: invoice.subscription, invoiceId: invoice.id }))
           return res.json({ received: true })
         }
+
+        const isReinstatement = !pac.membership_active && pac.license_suspended_at
+        const reinstatedTier  = pac.license_suspended_tier || pac.pac_tier
+        const tierCfg = (reinstatedTier === 'S3' || reinstatedTier === 's3')
+          ? { commission_rate: 0.20, max_supervised: 5 }
+          : (reinstatedTier === 'S2' || reinstatedTier === 's2')
+            ? { commission_rate: 0.15, max_supervised: 10 }
+            : null
+
         await query(
           `UPDATE pac_profiles
-             SET membership_active  = TRUE,
-                 membership_expires = $1,
-                 updated_at         = NOW()
+             SET membership_active         = TRUE,
+                 membership_expires        = $1,
+                 pac_tier                  = CASE WHEN $3 IS NOT NULL THEN $3 ELSE pac_tier END,
+                 commission_rate           = CASE WHEN $4::numeric IS NOT NULL THEN $4 ELSE commission_rate END,
+                 max_supervised            = CASE WHEN $5::int IS NOT NULL THEN $5 ELSE max_supervised END,
+                 license_suspended_at      = NULL,
+                 license_suspended_tier    = NULL,
+                 updated_at                = NOW()
            WHERE id = $2`,
-          [periodEnd, pac.id]
+          [periodEnd, pac.id,
+           isReinstatement ? reinstatedTier : null,
+           isReinstatement ? tierCfg?.commission_rate ?? null : null,
+           isReinstatement ? tierCfg?.max_supervised ?? null : null]
         )
-        console.log(JSON.stringify({ event: 'pac.membership.renewed', pacId: pac.id, pac_tier: pac.pac_tier, periodEnd, invoiceId: invoice.id }))
+        if (isReinstatement) {
+          await query(
+            `UPDATE users SET pac_tier = $1 WHERE id = (SELECT user_id FROM pac_profiles WHERE id = $2)`,
+            [reinstatedTier.toLowerCase(), pac.id]
+          )
+          sendLicenseReinstated({ email: pac.email, full_name: pac.full_name, tier: reinstatedTier }).catch(() => {})
+          console.log(JSON.stringify({ event: 'pac.membership.reinstated', pacId: pac.id, tier: reinstatedTier, invoiceId: invoice.id }))
+        } else {
+          console.log(JSON.stringify({ event: 'pac.membership.renewed', pacId: pac.id, pac_tier: pac.pac_tier, periodEnd, invoiceId: invoice.id }))
+        }
         return res.json({ received: true })
       }
 
@@ -1012,9 +1185,10 @@ router.post('/pac-upgrade-checkout', auth, async (req, res) => {
       return res.status(403).json({ error: 'Only PAC agents can upgrade' })
     }
 
-    // Fetch current PAC profile
+    // Fetch current PAC profile (include founder fields for bypass check)
     const { rows: pacRows } = await query(
-      `SELECT pp.id, pp.pac_tier, pp.kyc_status, u.email
+      `SELECT pp.id, pp.pac_tier, pp.kyc_status, pp.is_founder,
+              pp.founder_exemption_expires, u.email
          FROM pac_profiles pp JOIN users u ON u.id = pp.user_id
         WHERE pp.user_id = $1 LIMIT 1`,
       [req.user.id]
@@ -1024,6 +1198,29 @@ router.post('/pac-upgrade-checkout', auth, async (req, res) => {
 
     const nextTier = pac.pac_tier === 'S1' ? 'S2' : pac.pac_tier === 'S2' ? 'S3' : null
     if (!nextTier) return res.status(400).json({ error: 'Already at maximum tier (S3)' })
+
+    // ── Founder bypass — skip Stripe for S3 if active Y1 exemption ───────────
+    if (nextTier === 'S3' && pac.is_founder && pac.founder_exemption_expires > new Date()) {
+      await query(
+        `UPDATE pac_profiles SET
+           pac_tier          = 's3',
+           membership_active = TRUE,
+           membership_expires = founder_exemption_expires,
+           kyc_status        = 'pending',
+           updated_at        = NOW()
+         WHERE user_id = $1`,
+        [req.user.id]
+      )
+      await query(
+        `UPDATE users SET pac_tier = 's3', pac_status = 'pending' WHERE id = $1`,
+        [req.user.id]
+      )
+      return res.json({
+        activated: true,
+        founder:   true,
+        message:   'S3 Founder membership activated — KYC review in progress',
+      })
+    }
 
     // Minimum missions check
     const { rows: mRows } = await query(
@@ -1136,6 +1333,90 @@ router.get('/history', auth, async (req, res) => {
   } catch (err) {
     console.error(JSON.stringify({ event: 'payments.history.error', userId: req.user?.id, err: err.message }))
     res.status(500).json({ error: 'Failed to load payment history' })
+  }
+})
+
+// ── POST /api/payments/mission-checkout ──────────────────────────────────────
+// Creates a Stripe one-time Checkout session for a PAC mission fee.
+// The company must own the mission. On success the webhook sets payment_confirmed_at.
+router.post('/mission-checkout', auth, validate(schemas.missionCheckout), async (req, res) => {
+  try {
+    const { missionId } = req.body
+
+    // Only company role can pay mission fees
+    if (req.user.role !== 'company') {
+      return res.status(403).json({ error: 'Only company accounts can pay mission fees' })
+    }
+
+    const companyResult = await query(
+      'SELECT id, name FROM companies WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    )
+    const company = companyResult.rows[0]
+    if (!company) return res.status(400).json({ error: 'No company profile found' })
+
+    // Verify the mission belongs to this company and is payable
+    const missionResult = await query(
+      `SELECT id, title, fee_usd, payment_confirmed_at, status
+         FROM missions
+        WHERE id = $1 AND company_id = $2
+        LIMIT 1`,
+      [missionId, company.id]
+    )
+    const mission = missionResult.rows[0]
+    if (!mission) return res.status(404).json({ error: 'Mission not found' })
+    if (mission.payment_confirmed_at) {
+      return res.status(409).json({ error: 'Mission fee already paid' })
+    }
+
+    const feeUsd    = mission.fee_usd || 500
+    const amountCents = feeUsd * 100
+    const missionLabel = mission.title || `Mission #${mission.id}`
+
+    const session = await getStripe().checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency:     'usd',
+          product_data: {
+            name:        `MyDD Audit Fee — ${missionLabel}`,
+            description: `On-site audit mission for ${company.name}`,
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&mission=${mission.id}`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=cancelled`,
+      metadata: {
+        subscriptionType: 'mission_fee',
+        missionId:        String(mission.id),
+        companyId:        String(company.id),
+        userId:           String(req.user.id),
+      },
+      customer_email: req.user.email || undefined,
+    })
+
+    await query(
+      `INSERT INTO payments (user_id, company_id, mission_id, stripe_session_id, amount_cents, currency, plan_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'usd', 'mission_fee', 'pending')
+       ON CONFLICT (stripe_session_id) DO NOTHING`,
+      [req.user.id, company.id, mission.id, session.id, amountCents]
+    )
+
+    console.log(JSON.stringify({
+      event: 'mission.checkout.created', missionId: mission.id,
+      companyId: company.id, feeUsd, sessionId: session.id,
+    }))
+
+    res.json({ url: session.url, missionId: mission.id, feeUsd })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'payments.mission_checkout.error', userId: req.user?.id, err: err.message }))
+    if (err.message === 'Missing STRIPE_SECRET_KEY') {
+      return res.status(500).json({ error: 'Server payment configuration is incomplete' })
+    }
+    res.status(500).json({ error: 'Failed to create mission checkout session' })
   }
 })
 

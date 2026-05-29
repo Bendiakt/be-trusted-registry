@@ -44,6 +44,28 @@ export default function AdminPanel() {
   const [missionScoreModal, setMissionScoreModal] = useState(null)
   const [missionScoreForm, setMissionScoreForm]   = useState({ admin_score: '', payment_confirmed: false, stripe_invoice_id: '' })
   const [missionScoreSaving, setMissionScoreSaving] = useState(false)
+  const [upgradeApproving, setUpgradeApproving]   = useState({}) // { [pacId]: bool }
+  // Mission create modal
+  const [createMissionModal, setCreateMissionModal] = useState(false)
+  const [createMissionForm, setCreateMissionForm]   = useState({ title: '', description: '', company_name: '', location: '', type: '', fee_usd: '500', pac_tier_required: 'S1', due_date: '' })
+  const [createMissionSaving, setCreateMissionSaving] = useState(false)
+  // Per-mission assign / cancel / client-score
+  const [assignModal, setAssignModal]               = useState(null) // { missionId }
+  const [assignAgentId, setAssignAgentId]           = useState('')
+  const [assignSaving, setAssignSaving]             = useState({})
+  const [cancelSaving, setCancelSaving]             = useState({})
+  const [clientScoreModal, setClientScoreModal]     = useState(null) // { missionId, pacName }
+  const [clientScoreVal, setClientScoreVal]         = useState(0)
+  const [clientScoreSaving, setClientScoreSaving]   = useState(false)
+  // Mission filter bar
+  const [missionFilter, setMissionFilter] = useState({ status: '', q: '', unassigned: false, tier_required: '' })
+  // Disputes state
+  const [disputes, setDisputes]           = useState([])
+  const [disputeFilter, setDisputeFilter] = useState('open')   // open | under_review | resolved | ''
+  const [disputePag, setDisputePag]       = useState({})
+  const [resolveModal, setResolveModal]   = useState(null)     // { id, mission_title, company_name }
+  const [resolveForm, setResolveForm]     = useState({ resolution: 'upheld', resolution_note: '' })
+  const [resolveSaving, setResolveSaving] = useState(false)
 
   useEffect(() => {
     const user = getSession()
@@ -57,6 +79,7 @@ export default function AdminPanel() {
     if (tab === 'missions')  fetchMissions(1)
     if (tab === 'audit')     fetchAuditLog(1)
     if (tab === 'pac')       fetchPacAgents()
+    if (tab === 'disputes')  fetchDisputes(1, disputeFilter)
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -88,13 +111,19 @@ export default function AdminPanel() {
     } catch { /* silent */ }
   }, [q])
 
-  const fetchMissions = useCallback(async (page = 1) => {
+  const fetchMissions = useCallback(async (page = 1, filters) => {
     try {
-      const res = await api.get(`/api/admin/missions?page=${page}&limit=50`)
+      const f   = filters || missionFilter
+      const qs  = new URLSearchParams({ page, limit: 50 })
+      if (f.status)       qs.set('status',       f.status)
+      if (f.q)            qs.set('q',            f.q)
+      if (f.unassigned)   qs.set('unassigned',   '1')
+      if (f.tier_required) qs.set('tier_required', f.tier_required)
+      const res = await api.get(`/api/admin/missions?${qs}`)
       setMissions(res.data.data)
       setPagination(p => ({ ...p, missions: res.data.pagination }))
     } catch { /* silent */ }
-  }, [])
+  }, [missionFilter])
 
   const fetchAuditLog = useCallback(async (page = 1, q = '') => {
     try {
@@ -106,6 +135,28 @@ export default function AdminPanel() {
       setAuditPage(page)
     } catch { /* silent */ }
   }, [])
+
+  const fetchDisputes = useCallback(async (page = 1, status = '') => {
+    try {
+      const qs = new URLSearchParams({ page, limit: 50 })
+      if (status) qs.set('status', status)
+      const res = await api.get(`/api/admin/disputes?${qs}`)
+      setDisputes(res.data.data || [])
+      setDisputePag(res.data.pagination || {})
+    } catch { /* silent */ }
+  }, [])
+
+  const resolveDispute = async () => {
+    if (!resolveModal) return
+    setResolveSaving(true)
+    try {
+      await api.patch(`/api/admin/disputes/${resolveModal.id}/resolve`, resolveForm)
+      setResolveModal(null)
+      setResolveForm({ resolution: 'upheld', resolution_note: '' })
+      fetchDisputes(1, disputeFilter)
+    } catch { /* silent */ }
+    finally { setResolveSaving(false) }
+  }
 
   const setCompanyLevel = async (companyId, level) => {
     setSaving(s => ({ ...s, [companyId]: true }))
@@ -179,6 +230,7 @@ export default function AdminPanel() {
       const qs = new URLSearchParams()
       if (pacAgentFilter.tier)       qs.set('tier', pacAgentFilter.tier)
       if (pacAgentFilter.kyc_status) qs.set('kyc_status', pacAgentFilter.kyc_status)
+      if (pacAgentFilter.eligible)   qs.set('eligible', pacAgentFilter.eligible)
       qs.set('limit', '100')
       const res = await api.get(`/api/admin/pac/agents?${qs}`)
       setPacAgents(res.data.agents || res.data.data || [])
@@ -197,6 +249,67 @@ export default function AdminPanel() {
       const res = await api.get('/api/pac/admin/bonus/statements')
       setPacBonus(res.data.statements || [])
     } catch { /* silent */ }
+  }
+
+  // ── Mission CRUD handlers ──────────────────────────────────────────────────
+  const createMission = async () => {
+    setCreateMissionSaving(true)
+    try {
+      const res = await api.post('/api/admin/missions', {
+        ...createMissionForm,
+        fee_usd: parseInt(createMissionForm.fee_usd, 10) || 500,
+      })
+      setMissions(prev => [res.data.mission, ...prev])
+      setCreateMissionModal(false)
+      setCreateMissionForm({ title: '', description: '', company_name: '', location: '', type: '', fee_usd: '500', pac_tier_required: 'S1', due_date: '' })
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de la création.')
+    } finally {
+      setCreateMissionSaving(false)
+    }
+  }
+
+  const assignMission = async (missionId) => {
+    if (!assignAgentId) return
+    setAssignSaving(prev => ({ ...prev, [missionId]: true }))
+    try {
+      const res = await api.patch(`/api/admin/missions/${missionId}/assign`, { pac_user_id: parseInt(assignAgentId, 10) })
+      setMissions(prev => prev.map(m => m.id === missionId ? { ...m, ...res.data.mission, pac_name: res.data.agent?.name } : m))
+      setAssignModal(null)
+      setAssignAgentId('')
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de l\'assignation.')
+    } finally {
+      setAssignSaving(prev => ({ ...prev, [missionId]: false }))
+    }
+  }
+
+  const cancelMission = async (missionId) => {
+    if (!window.confirm('Annuler cette mission ?')) return
+    setCancelSaving(prev => ({ ...prev, [missionId]: true }))
+    try {
+      await api.patch(`/api/admin/missions/${missionId}/cancel`)
+      setMissions(prev => prev.map(m => m.id === missionId ? { ...m, status: 'cancelled' } : m))
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de l\'annulation.')
+    } finally {
+      setCancelSaving(prev => ({ ...prev, [missionId]: false }))
+    }
+  }
+
+  const submitClientScore = async () => {
+    if (!clientScoreModal || !clientScoreVal) return
+    setClientScoreSaving(true)
+    try {
+      await api.patch(`/api/admin/missions/${clientScoreModal.missionId}/client-score`, { client_score: clientScoreVal })
+      setMissions(prev => prev.map(m => m.id === clientScoreModal.missionId ? { ...m, client_score: clientScoreVal } : m))
+      setClientScoreModal(null)
+      setClientScoreVal(0)
+    } catch (e) {
+      alert(e.response?.data?.error || 'Erreur lors de la notation client.')
+    } finally {
+      setClientScoreSaving(false)
+    }
   }
 
   const openKycModal = (agent) => {
@@ -313,11 +426,15 @@ export default function AdminPanel() {
     { id: 'companies', label: t('admin.tabs.companies') },
     { id: 'missions',  label: t('admin.tabs.missions') },
     { id: 'pac',       label: 'PAC Network' },
+    { id: 'disputes',  label: 'Disputes' },
     { id: 'audit',     label: t('admin.tabs.audit') },
   ]
 
   return (
     <div style={G.page}>
+      <div className="admin-mobile-notice" style={{ background: '#1a1a1a', borderBottom: '2px solid #C9A84C', padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.85rem', color: '#C9A84C', fontWeight: '600' }}>
+        ⚠️ L'interface d'administration est optimisée pour desktop. Certaines fonctionnalités peuvent être limitées sur mobile.
+      </div>
       <nav style={G.nav}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={G.logo}>{t('admin.title')}</div>
@@ -346,20 +463,66 @@ export default function AdminPanel() {
 
         {/* Overview */}
         {tab === 'overview' && stats && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-            {[
-              { label: t('admin.stats.total_users'),    value: stats.users?.total,     color: '#C9A84C' },
-              { label: t('admin.stats.new_30d'),        value: stats.users?.last_30d,  color: '#4a90e2' },
-              { label: t('admin.stats.total_companies'),value: stats.companies?.total, color: '#888' },
-              { label: t('admin.stats.certified'),      value: stats.companies?.certified, color: '#4CAF50' },
-              { label: t('admin.stats.revenue'),        value: `$${stats.revenue?.total_usd}`, color: '#C9A84C', raw: true },
-            ].map(item => (
-              <div key={item.label} style={{ ...G.card, marginBottom: 0, position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
-                <div style={{ color: '#555', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{item.label}</div>
-                <div style={{ color: item.color, fontSize: '2rem', fontWeight: '900' }}>{item.value}</div>
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {/* Core stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+              {[
+                { label: t('admin.stats.total_users'),    value: stats.users?.total,     color: '#C9A84C' },
+                { label: t('admin.stats.new_30d'),        value: stats.users?.last_30d,  color: '#4a90e2' },
+                { label: t('admin.stats.total_companies'),value: stats.companies?.total, color: '#888' },
+                { label: t('admin.stats.certified'),      value: stats.companies?.certified, color: '#4CAF50' },
+                { label: t('admin.stats.revenue'),        value: `$${stats.revenue?.total_usd}`, color: '#C9A84C' },
+              ].map(item => (
+                <div key={item.label} style={{ ...G.card, marginBottom: 0, position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
+                  <div style={{ color: '#555', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{item.label}</div>
+                  <div style={{ color: item.color, fontSize: '2rem', fontWeight: '900' }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* PAC Network stats */}
+            {stats.pac && (
+              <div>
+                <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>PAC Network</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+                  {[
+                    { label: 'S1 Associates', value: stats.pac.s1,                  color: '#888' },
+                    { label: 'S2 Certified',  value: stats.pac.s2,                  color: '#4a90e2' },
+                    { label: 'S3 Senior',     value: stats.pac.s3,                  color: '#C9A84C' },
+                    { label: '🎯 Éligibles upgrade', value: stats.pac.eligible_for_upgrade, color: '#4CAF50' },
+                    { label: '⚠️ Suspendus',  value: stats.pac.suspended,           color: '#ff6b6b' },
+                  ].map(item => (
+                    <div key={item.label} style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '10px', padding: '0.85rem 1rem', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
+                      <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{item.label}</div>
+                      <div style={{ color: item.color, fontSize: '1.6rem', fontWeight: '900' }}>{item.value ?? '—'}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+
+            {/* Missions stats */}
+            {stats.missions && (
+              <div>
+                <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Missions</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                  {[
+                    { label: 'Disponibles', value: stats.missions.available,  color: '#4a90e2' },
+                    { label: 'Assignées',   value: stats.missions.assigned,   color: '#C9A84C' },
+                    { label: 'Terminées',   value: stats.missions.completed,  color: '#4CAF50' },
+                    { label: 'Annulées',    value: stats.missions.cancelled,  color: '#555' },
+                  ].map(item => (
+                    <div key={item.label} style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '10px', padding: '0.85rem 1rem', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg,${item.color},transparent)` }} />
+                      <div style={{ color: '#444', fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{item.label}</div>
+                      <div style={{ color: item.color, fontSize: '1.6rem', fontWeight: '900' }}>{item.value ?? '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -553,7 +716,168 @@ export default function AdminPanel() {
         {/* Missions */}
         {tab === 'missions' && (
           <div style={G.card}>
-            <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '1.25rem' }}>{t('admin.missions.title')}</div>
+            {/* Header + create button */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem' }}>{t('admin.missions.title')}</div>
+              <button onClick={() => setCreateMissionModal(true)} style={{ ...G.btn, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                ＋ Nouvelle mission
+              </button>
+            </div>
+
+            {/* Filter bar */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.25rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid #1e1e1e' }}>
+              <input
+                type="text"
+                placeholder="🔍 Rechercher…"
+                value={missionFilter.q}
+                onChange={e => setMissionFilter(f => ({ ...f, q: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && fetchMissions(1)}
+                style={{ ...G.inp, minWidth: '160px', flex: '1' }}
+              />
+              <select
+                value={missionFilter.status}
+                onChange={e => setMissionFilter(f => ({ ...f, status: e.target.value }))}
+                style={{ ...G.inp, fontSize: '0.75rem' }}
+              >
+                <option value="">Tous statuts</option>
+                <option value="available">Available</option>
+                <option value="assigned">Assigned</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <select
+                value={missionFilter.tier_required}
+                onChange={e => setMissionFilter(f => ({ ...f, tier_required: e.target.value }))}
+                style={{ ...G.inp, fontSize: '0.75rem' }}
+              >
+                <option value="">Tous tiers</option>
+                <option value="S1">S1</option>
+                <option value="S2">S2</option>
+                <option value="S3">S3</option>
+              </select>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#777', fontSize: '0.75rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={missionFilter.unassigned}
+                  onChange={e => setMissionFilter(f => ({ ...f, unassigned: e.target.checked }))}
+                  style={{ accentColor: '#C9A84C' }}
+                />
+                Non assignées
+              </label>
+              <button
+                onClick={() => fetchMissions(1)}
+                style={{ ...G.btn, padding: '0.4rem 1rem', fontSize: '0.75rem' }}
+              >
+                Filtrer
+              </button>
+              <button
+                onClick={() => {
+                  const reset = { status: '', q: '', unassigned: false, tier_required: '' }
+                  setMissionFilter(reset)
+                  fetchMissions(1, reset)
+                }}
+                style={{ ...G.outline, padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#555' }}
+              >
+                ✕ Reset
+              </button>
+            </div>
+
+            {/* Create mission modal */}
+            {createMissionModal && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '14px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee' }}>Créer une mission</div>
+                    <button onClick={() => setCreateMissionModal(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {[
+                      { key: 'title',        label: 'Titre *',            type: 'text',   ph: 'Ex: Audit Fournisseur ACME' },
+                      { key: 'company_name', label: 'Nom entreprise',     type: 'text',   ph: 'Nom du client' },
+                      { key: 'location',     label: 'Localisation',       type: 'text',   ph: 'Paris, France' },
+                      { key: 'type',         label: 'Type de mission',    type: 'text',   ph: 'supply_chain, esg, finance…' },
+                      { key: 'fee_usd',      label: 'Honoraires ($)',     type: 'number', ph: '500' },
+                      { key: 'due_date',     label: 'Date limite',        type: 'date',   ph: '' },
+                    ].map(({ key, label, type, ph }) => (
+                      <div key={key}>
+                        <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</label>
+                        <input type={type} placeholder={ph} value={createMissionForm[key]}
+                          onChange={e => setCreateMissionForm(f => ({ ...f, [key]: e.target.value }))}
+                          style={{ ...G.inp, width: '100%', boxSizing: 'border-box' }} />
+                      </div>
+                    ))}
+                    <div>
+                      <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tier requis</label>
+                      <select value={createMissionForm.pac_tier_required} onChange={e => setCreateMissionForm(f => ({ ...f, pac_tier_required: e.target.value }))} style={{ ...G.inp, width: '100%' }}>
+                        <option value="S1">S1 Associate</option>
+                        <option value="S2">S2 Certified</option>
+                        <option value="S3">S3 Senior</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Description</label>
+                      <textarea rows={3} placeholder="Contexte et objectifs de la mission…" value={createMissionForm.description}
+                        onChange={e => setCreateMissionForm(f => ({ ...f, description: e.target.value }))}
+                        style={{ ...G.inp, width: '100%', resize: 'vertical', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                      <button onClick={() => setCreateMissionModal(false)} style={{ ...G.outline, padding: '0.6rem 1.25rem' }}>Annuler</button>
+                      <button onClick={createMission} disabled={createMissionSaving || !createMissionForm.title.trim()} style={{ ...G.btn, padding: '0.6rem 1.5rem', opacity: createMissionSaving ? 0.7 : 1 }}>
+                        {createMissionSaving ? '…' : 'Créer'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Assign agent modal */}
+            {assignModal && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '14px', padding: '1.75rem', width: '100%', maxWidth: '400px' }}>
+                  <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '1.25rem' }}>Assigner la mission #{assignModal.missionId}</div>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '600', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>User ID de l'agent PAC</label>
+                    <input type="number" placeholder="ex: 42" value={assignAgentId}
+                      onChange={e => setAssignAgentId(e.target.value)}
+                      style={{ ...G.inp, width: '100%', boxSizing: 'border-box' }} />
+                    <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.3rem' }}>Visible dans l'onglet PAC → Agents (colonne PAC #id → user_id = pp.user_id)</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setAssignModal(null); setAssignAgentId('') }} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Annuler</button>
+                    <button onClick={() => assignMission(assignModal.missionId)} disabled={assignSaving[assignModal.missionId] || !assignAgentId}
+                      style={{ ...G.btn, padding: '0.5rem 1.25rem', opacity: assignSaving[assignModal.missionId] ? 0.7 : 1 }}>
+                      {assignSaving[assignModal.missionId] ? '…' : '✓ Assigner'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Client score modal */}
+            {clientScoreModal && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '14px', padding: '1.75rem', width: '100%', maxWidth: '380px' }}>
+                  <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '0.5rem' }}>Note client — Mission #{clientScoreModal.missionId}</div>
+                  <div style={{ color: '#555', fontSize: '0.8rem', marginBottom: '1.25rem' }}>Agent : {clientScoreModal.pacName}</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', justifyContent: 'center' }}>
+                    {[1,2,3,4,5].map(n => (
+                      <button key={n} onClick={() => setClientScoreVal(n)}
+                        style={{ width: '48px', height: '48px', borderRadius: '8px', border: `2px solid ${clientScoreVal === n ? '#C9A84C' : '#2a2a2a'}`, background: clientScoreVal === n ? 'rgba(201,168,76,0.15)' : '#111', color: clientScoreVal === n ? '#C9A84C' : '#555', fontWeight: '800', fontSize: '1.1rem', cursor: 'pointer' }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setClientScoreModal(null); setClientScoreVal(0) }} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Annuler</button>
+                    <button onClick={submitClientScore} disabled={clientScoreSaving || !clientScoreVal}
+                      style={{ ...G.btn, padding: '0.5rem 1.25rem', opacity: clientScoreSaving ? 0.7 : 1 }}>
+                      {clientScoreSaving ? '…' : '✓ Enregistrer'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {missions.length === 0 && (
                 <div style={{ ...G.td, textAlign: 'center', color: '#444', padding: '2rem' }}>{t('admin.no_data')}</div>
@@ -574,7 +898,19 @@ export default function AdminPanel() {
                           <span style={{ fontWeight: '700', fontSize: '0.9rem', color: '#eee' }}>{m.company_name || '—'}</span>
                         </div>
                         <div style={{ color: '#555', fontSize: '0.75rem' }}>{m.location || '—'}{m.type ? ` · ${m.type}` : ''}</div>
-                        {m.pac_name && <div style={{ color: '#555', fontSize: '0.7rem', marginTop: '0.2rem' }}>PAC: {m.pac_name}</div>}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                          {m.pac_name && <div style={{ color: '#555', fontSize: '0.7rem' }}>PAC: {m.pac_name}</div>}
+                          {m.pac_tier_required && m.pac_tier_required !== 'S1' && (
+                            <span style={{ fontSize: '0.6rem', background: 'rgba(74,144,226,0.1)', color: '#4a90e2', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '700' }}>
+                              {m.pac_tier_required}+
+                            </span>
+                          )}
+                          {m.due_date && (
+                            <span style={{ fontSize: '0.6rem', color: '#555' }}>
+                              📅 {new Date(m.due_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -619,6 +955,42 @@ export default function AdminPanel() {
                             style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#e056fd', border: '1px solid rgba(224,86,253,0.3)' }}
                           >
                             ⭐ Score
+                          </button>
+                        )}
+
+                        {/* Client score button */}
+                        {m.status === 'completed' && !m.client_score && (
+                          <button
+                            onClick={() => { setClientScoreModal({ missionId: m.id, pacName: m.pac_name || '—' }); setClientScoreVal(0) }}
+                            style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#f39c12', border: '1px solid rgba(243,156,18,0.3)' }}
+                          >
+                            👤 Note client
+                          </button>
+                        )}
+                        {m.client_score && (
+                          <span style={{ background: 'rgba(243,156,18,0.1)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                            👤 {m.client_score}/5
+                          </span>
+                        )}
+
+                        {/* Assign button (available missions) */}
+                        {m.status === 'available' && (
+                          <button
+                            onClick={() => setAssignModal({ missionId: m.id })}
+                            style={{ ...G.btn, padding: '0.2rem 0.6rem', fontSize: '0.65rem' }}
+                          >
+                            👤 Assigner
+                          </button>
+                        )}
+
+                        {/* Cancel button */}
+                        {!['completed','cancelled'].includes(m.status) && (
+                          <button
+                            disabled={cancelSaving[m.id]}
+                            onClick={() => cancelMission(m.id)}
+                            style={{ ...G.outline, padding: '0.2rem 0.6rem', fontSize: '0.65rem', color: '#ff6b6b', border: '1px solid rgba(231,76,60,0.25)', opacity: cancelSaving[m.id] ? 0.5 : 1 }}
+                          >
+                            {cancelSaving[m.id] ? '…' : '✕ Annuler'}
                           </button>
                         )}
 
@@ -716,6 +1088,10 @@ export default function AdminPanel() {
                       <option value="rejected">Rejected</option>
                       <option value="suspended">Suspended</option>
                     </select>
+                    <select value={pacAgentFilter.eligible || ''} onChange={e => setPacAgentFilter(f => ({ ...f, eligible: e.target.value }))} style={{ ...G.inp, fontSize: '0.75rem' }}>
+                      <option value="">Tous</option>
+                      <option value="1">🎯 Éligibles upgrade</option>
+                    </select>
                     <button onClick={fetchPacAgents} style={G.btn}>Filter</button>
                   </div>
                 </div>
@@ -743,9 +1119,16 @@ export default function AdminPanel() {
                               </td>
                               <td style={{ ...G.td, color: '#666', fontSize: '0.75rem' }}>{a.email}</td>
                               <td style={G.td}>
-                                <span style={{ background: `${tc}22`, color: tc, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                                  {a.pac_tier}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <span style={{ background: `${tc}22`, color: tc, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                                    {a.pac_tier}
+                                  </span>
+                                  {(a.eligible_for_s2 || a.eligible_for_s3) && (
+                                    <span title={`Éligible ${a.eligible_for_s3 ? 'S3' : 'S2'}`} style={{ fontSize: '0.65rem', background: 'rgba(201,168,76,0.15)', color: '#C9A84C', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '700', border: '1px solid rgba(201,168,76,0.3)' }}>
+                                      🎯 {a.eligible_for_s3 ? 'S3' : 'S2'}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td style={G.td}>
                                 <span style={{ background: kc.bg, color: kc.text, fontWeight: '700', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', textTransform: 'uppercase' }}>
@@ -758,12 +1141,44 @@ export default function AdminPanel() {
                                 {a.pending_bonus_cents > 0 ? `$${(a.pending_bonus_cents / 100).toFixed(2)}` : '—'}
                               </td>
                               <td style={G.td}>
-                                <button
-                                  onClick={() => openKycModal(a)}
-                                  style={{ ...G.btn, padding: '0.25rem 0.75rem', fontSize: '0.7rem' }}
-                                >
-                                  KYC Review
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                  <button
+                                    onClick={() => openKycModal(a)}
+                                    style={{ ...G.btn, padding: '0.25rem 0.75rem', fontSize: '0.7rem' }}
+                                  >
+                                    KYC Review
+                                  </button>
+                                  {(a.eligible_for_s2 || a.eligible_for_s3) && (
+                                    <button
+                                      disabled={!!upgradeApproving[a.id]}
+                                      onClick={async () => {
+                                        const targetTier = a.eligible_for_s3 ? 'S3' : 'S2'
+                                        if (!window.confirm(`Approuver le passage de ${a.full_name || 'cet agent'} en ${targetTier} ?`)) return
+                                        setUpgradeApproving(prev => ({ ...prev, [a.id]: true }))
+                                        try {
+                                          await api.patch(`/api/admin/pac/${a.user_id}/approve-upgrade`, { tier: targetTier })
+                                          setPacAgents(prev => prev.map(ag => ag.id === a.id
+                                            ? { ...ag, pac_tier: targetTier.toLowerCase(), eligible_for_s2: false, eligible_for_s3: false }
+                                            : ag
+                                          ))
+                                        } catch (e) {
+                                          alert(e.response?.data?.error || 'Erreur lors de l\'approbation.')
+                                        } finally {
+                                          setUpgradeApproving(prev => ({ ...prev, [a.id]: false }))
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '0.25rem 0.75rem', fontSize: '0.7rem', borderRadius: '6px',
+                                        border: 'none', cursor: upgradeApproving[a.id] ? 'not-allowed' : 'pointer',
+                                        background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)',
+                                        color: '#111', fontWeight: '700',
+                                        opacity: upgradeApproving[a.id] ? 0.6 : 1,
+                                      }}
+                                    >
+                                      {upgradeApproving[a.id] ? '…' : `✓ Approuver ${a.eligible_for_s3 ? 'S3' : 'S2'}`}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           )
@@ -900,6 +1315,109 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {/* ── Disputes Tab ──────────────────────────────────────────────── */}
+        {tab === 'disputes' && (
+          <div style={G.card}>
+            {/* Header + filter */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem' }}>
+                Mission Disputes
+                {disputePag.total != null && (
+                  <span style={{ marginLeft: '0.6rem', background: '#1f1f1f', color: '#888', fontSize: '0.72rem', padding: '0.15rem 0.6rem', borderRadius: '999px' }}>
+                    {disputePag.total}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {[{ v: 'open', label: 'Open' }, { v: 'under_review', label: 'Under Review' }, { v: 'resolved', label: 'Resolved' }, { v: '', label: 'All' }].map(({ v, label }) => (
+                  <button key={v} onClick={() => { setDisputeFilter(v); fetchDisputes(1, v) }} style={{
+                    padding: '0.35rem 0.85rem', borderRadius: '999px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: '600',
+                    background: disputeFilter === v ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1a1a1a',
+                    color: disputeFilter === v ? '#111' : '#666',
+                    outline: disputeFilter === v ? 'none' : '1px solid #222',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {disputes.length === 0 ? (
+              <div style={{ color: '#444', textAlign: 'center', padding: '3rem', fontSize: '0.85rem' }}>
+                {disputeFilter === 'open' ? 'No open disputes 🎉' : 'No disputes found.'}
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['#', 'Mission', 'Company', 'Reason', 'Status', 'Opened', 'Resolved by', 'Actions'].map(h => (
+                        <th key={h} style={G.th}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disputes.map(d => {
+                      const statusColor = d.status === 'open' ? '#e74c3c' : d.status === 'under_review' ? '#f39c12' : '#2ecc71'
+                      const resColor = d.resolution === 'upheld' ? '#e74c3c' : d.resolution === 'dismissed' ? '#888' : '#3498db'
+                      return (
+                        <tr key={d.id} style={{ borderBottom: '1px solid #1c1c1c' }}>
+                          <td style={{ ...G.td, color: '#555', fontFamily: 'monospace', fontSize: '0.72rem' }}>#{d.id}</td>
+                          <td style={G.td}>
+                            <div style={{ fontWeight: '600', color: '#eee', fontSize: '0.82rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {d.mission_title || `Mission #${d.mission_id}`}
+                            </div>
+                          </td>
+                          <td style={G.td}>
+                            <div style={{ color: '#ccc', fontSize: '0.8rem' }}>{d.company_name || '—'}</div>
+                            <div style={{ color: '#555', fontSize: '0.7rem' }}>{d.company_email}</div>
+                          </td>
+                          <td style={{ ...G.td, maxWidth: '220px' }}>
+                            <div style={{ color: '#aaa', fontSize: '0.78rem', whiteSpace: 'pre-wrap', lineClamp: 3, overflow: 'hidden' }}>
+                              {d.reason?.slice(0, 120)}{d.reason?.length > 120 ? '…' : ''}
+                            </div>
+                          </td>
+                          <td style={G.td}>
+                            <span style={{ background: `${statusColor}22`, color: statusColor, padding: '0.2rem 0.55rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                              {d.status.replace('_', ' ')}
+                            </span>
+                            {d.resolution && (
+                              <div style={{ marginTop: '0.25rem' }}>
+                                <span style={{ background: `${resColor}22`, color: resColor, padding: '0.15rem 0.45rem', borderRadius: '999px', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase' }}>
+                                  {d.resolution.replace('_', ' ')}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ ...G.td, color: '#555', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                            {new Date(d.created_at).toLocaleDateString()}
+                          </td>
+                          <td style={G.td}>
+                            {d.resolver_email
+                              ? <div style={{ color: '#888', fontSize: '0.72rem' }}>{d.resolver_email}</div>
+                              : <span style={{ color: '#333' }}>—</span>}
+                          </td>
+                          <td style={G.td}>
+                            {d.status !== 'resolved' ? (
+                              <button
+                                onClick={() => { setResolveModal(d); setResolveForm({ resolution: 'upheld', resolution_note: '' }) }}
+                                style={{ ...G.btn, padding: '0.35rem 0.9rem', fontSize: '0.75rem' }}
+                              >
+                                Resolve
+                              </button>
+                            ) : (
+                              <span style={{ color: '#333', fontSize: '0.72rem' }}>Done</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <PaginationBar pag={disputePag} onPage={p => fetchDisputes(p, disputeFilter)} G={G} />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Audit Log Tab ─────────────────────────────────────────────── */}
         {tab === 'audit' && (
           <div style={G.card}>
@@ -967,6 +1485,58 @@ export default function AdminPanel() {
           </div>
         )}
       </main>
+
+      {/* ── Resolve Dispute Modal ─────────────────────────────────────── */}
+      {resolveModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '2rem', maxWidth: '480px', width: '100%' }}>
+            <div style={{ fontWeight: '700', fontSize: '1rem', marginBottom: '0.3rem', color: '#C9A84C' }}>Resolve Dispute #{resolveModal.id}</div>
+            <div style={{ color: '#888', fontSize: '0.82rem', marginBottom: '1.5rem' }}>
+              {resolveModal.mission_title} · <span style={{ color: '#ccc' }}>{resolveModal.company_name}</span>
+            </div>
+
+            {/* Resolution choice */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Decision</div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {[
+                  { v: 'upheld',       label: 'Upheld',        color: '#e74c3c', hint: 'Client complaint is valid' },
+                  { v: 'dismissed',    label: 'Dismissed',     color: '#888',    hint: 'Complaint unfounded' },
+                  { v: 'second_audit', label: 'Second Audit',  color: '#3498db', hint: 'Re-open mission' },
+                ].map(({ v, label, color, hint }) => (
+                  <button key={v} onClick={() => setResolveForm(f => ({ ...f, resolution: v }))} title={hint} style={{
+                    flex: 1, padding: '0.55rem 0.5rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                    fontWeight: '700', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em',
+                    background: resolveForm.resolution === v ? `${color}22` : '#111',
+                    color: resolveForm.resolution === v ? color : '#444',
+                    outline: resolveForm.resolution === v ? `1px solid ${color}` : '1px solid #222',
+                    transition: 'all 0.15s',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Resolution note <span style={{ color: '#333', fontWeight: '400', textTransform: 'none' }}>(optional)</span></div>
+              <textarea
+                value={resolveForm.resolution_note}
+                onChange={e => setResolveForm(f => ({ ...f, resolution_note: e.target.value }))}
+                placeholder="Explain the decision…"
+                rows={3}
+                style={{ ...G.inp, width: '100%', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setResolveModal(null)} style={{ ...G.outline, padding: '0.5rem 1rem' }}>Cancel</button>
+              <button onClick={resolveDispute} disabled={resolveSaving} style={{ ...G.btn, padding: '0.5rem 1.4rem' }}>
+                {resolveSaving ? '…' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── KYC Review Modal ───────────────────────────────────────────── */}
       {kycModal && (

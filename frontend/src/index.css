@@ -29,3 +29,54 @@ input, select, textarea {
   outline: none;
 }
 input:focus, select:focus { border-color: var(--gold) !important; }
+
+/* ── Mobile utilities ───────────────────────────────────────────────────────── */
+/* Horizontal scroll container — used for tab bars on mobile */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* IE 10+ */
+}
+.scroll-x::-webkit-scrollbar { display: none; }
+
+/* Admin panel — desktop-first warning shown on small screens */
+@media (max-width: 768px) {
+  .admin-mobile-notice {
+    display: block !important;
+  }
+}
+.admin-mobile-notice { display: none; }
+
+/* ── PAC agent directory & profile — responsive ──────────────────────────── */
+.pac-nav          { padding: 1rem 2rem; }
+.pac-page         { padding: 3.5rem 1.5rem 2rem; }
+.pac-search-form  { display: flex; gap: 0.5rem; }
+.pac-stats-bar    { display: flex; gap: 2rem; flex-wrap: wrap; }
+.pac-stat-div     { width: 1px; background: #1a1a1a; }
+.agent-card-inner { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.agent-card-stats { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-end; min-width: 130px; }
+.pac-nav-links    { display: flex; align-items: center; gap: 1rem; }
+.profile-hero     { padding: 2rem; }
+.profile-cta      { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.profile-cta-btns { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .pac-nav          { padding: 0.75rem 1rem; }
+  .pac-page         { padding: 2rem 1rem 1.5rem; }
+  .pac-nav-links    { gap: 0.5rem; }
+  .pac-nav-links a.pac-nav-secondary { display: none; }
+  .pac-search-form  { flex-direction: column; }
+  .pac-search-form input, .pac-search-form button { width: 100%; }
+  .pac-stats-bar    { gap: 1rem; }
+  .pac-stat-div     { display: none; }
+  .agent-card-stats { flex-direction: row; align-items: flex-start; min-width: 0; gap: 1rem; flex-wrap: wrap; }
+  .profile-hero     { padding: 1.25rem; }
+  .profile-cta      { flex-direction: column; align-items: flex-start; }
+  .profile-cta-btns { width: 100%; }
+  .profile-cta-btns a { flex: 1; text-align: center; }
+}
+
+@media (max-width: 400px) {
+  .agent-card-stats { display: none; }
+}

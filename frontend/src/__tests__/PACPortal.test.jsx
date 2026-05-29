@@ -56,12 +56,33 @@ const MISSIONS = [
 
 const PROFILE = { name: 'Bob Agent', location: 'Paris', languages: 'fr,en', certifications: 'ISO-9001', bio: 'Experienced agent' }
 
+const EARNINGS = {
+  summary: {
+    totalEarnedCents: 5000, totalEarnedUsd: 50.00,
+    pendingCents: 7500, pendingUsd: 75.00,
+    commissionRate: 0.10, commissionPct: 10, pacTier: 'S1',
+    completedCount: 3, paidCount: 1,
+  },
+  missions: [
+    { id: 42, companyName: 'Acme Corp', location: 'Paris, FR', type: 'site_inspection',
+      feeUsd: 500, commissionCents: 5000, commissionUsd: 50.00,
+      paymentConfirmedAt: '2026-05-01T10:00:00Z', status: 'completed', outcome: 'pass' },
+    { id: 43, companyName: 'Beta Ltd', location: 'Lyon, FR', type: 'site_inspection',
+      feeUsd: 500, commissionCents: 5000, commissionUsd: 50.00,
+      paymentConfirmedAt: null, status: 'completed', outcome: 'pass' },
+  ],
+}
+
 function mockPACSession(missions = MISSIONS) {
   getSession.mockReturnValue(PAC_SESSION)
-  api.get
-    .mockResolvedValueOnce({ data: missions })               // /api/pac/missions
-    .mockResolvedValueOnce({ data: PROFILE })                // /api/pac/profile
-    .mockResolvedValue({ data: [] })                         // any further calls
+  // URL-aware dispatch so new API calls (progress, earnings) don't misroute mock data
+  api.get.mockImplementation((url) => {
+    if (url === '/api/pac/missions')  return Promise.resolve({ data: missions })
+    if (url === '/api/pac/profile')   return Promise.resolve({ data: PROFILE })
+    if (url === '/api/pac/earnings')  return Promise.resolve({ data: EARNINGS })
+    if (url === '/api/pac/progress')  return Promise.resolve({ data: {} })
+    return Promise.resolve({ data: [] })
+  })
 }
 
 describe('PACPortal — auth guard', () => {
@@ -149,6 +170,127 @@ describe('PACPortal — portal UI', () => {
     await waitFor(() => {
       expect(clearSession).toHaveBeenCalled()
       expect(mockNavigate).toHaveBeenCalledWith('/login')
+    })
+  })
+})
+
+describe('PACPortal — earnings tab', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  // Note: t() mock returns the key as-is, so assertions use i18n keys after migration.
+  it('renders Earnings tab button', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => {
+      expect(screen.getByText('pac.tabs.earnings')).toBeInTheDocument()
+    })
+  })
+
+  it('fetches GET /api/pac/earnings on mount', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith('/api/pac/earnings')
+    })
+  })
+
+  it('earnings tab shows total earned stat', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    // Switch to earnings tab (label is now the i18n key since t() mock returns key)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      // i18n key for the label
+      expect(screen.getByText('pac.earnings.total_earned')).toBeInTheDocument()
+      // $50.00 appears at least once (stat card + commission column)
+      expect(screen.getAllByText('$50.00').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('earnings tab shows pending amount stat', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      // Pending = $75.00
+      expect(screen.getByText('$75.00')).toBeInTheDocument()
+    })
+  })
+
+  it('earnings tab shows commission percentage', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      // commissionPct = 10 → "10%"
+      expect(screen.getByText('10%')).toBeInTheDocument()
+    })
+  })
+
+  it('earnings tab shows PAC tier', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      // pacTier = S1 → "Tier S1" (only "Tier " is hardcoded, S1 is data)
+      expect(screen.getByText('Tier S1')).toBeInTheDocument()
+    })
+  })
+
+  it('earnings tab shows mission company names in breakdown table', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument()
+      expect(screen.getByText('Beta Ltd')).toBeInTheDocument()
+    })
+  })
+
+  it('paid mission shows paid badge in earnings table', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      // Acme Corp has paymentConfirmedAt set → badge uses t('pac.earnings.paid_badge') + date
+      // t() mock returns key, so text starts with "pac.earnings.paid_badge"
+      expect(screen.getByText(/pac\.earnings\.paid_badge/)).toBeInTheDocument()
+    })
+  })
+
+  it('unpaid mission shows pending badge in earnings table', async () => {
+    mockPACSession()
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    await waitFor(() => {
+      // Beta Ltd has no paymentConfirmedAt → shows t('pac.earnings.pending_badge')
+      expect(screen.getByText('pac.earnings.pending_badge')).toBeInTheDocument()
+    })
+  })
+
+  it('shows loading state when earnings not yet fetched', async () => {
+    getSession.mockReturnValue(PAC_SESSION)
+    // Delay the earnings response so loading state is visible
+    api.get.mockImplementation((url) => {
+      if (url === '/api/pac/earnings') return new Promise(() => {})  // never resolves
+      if (url === '/api/pac/missions') return Promise.resolve({ data: [] })
+      if (url === '/api/pac/profile')  return Promise.resolve({ data: PROFILE })
+      if (url === '/api/pac/progress') return Promise.resolve({ data: {} })
+      return Promise.resolve({ data: [] })
+    })
+    render(<PACPortal />)
+    await waitFor(() => screen.getByText('pac.tabs.earnings'))
+    fireEvent.click(screen.getByText('pac.tabs.earnings'))
+    // t() mock returns key → loading text is 'pac.earnings.loading'
+    await waitFor(() => {
+      expect(screen.getByText('pac.earnings.loading')).toBeInTheDocument()
     })
   })
 })

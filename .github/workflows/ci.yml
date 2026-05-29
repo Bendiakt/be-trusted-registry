@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   unit-tests:
@@ -36,6 +37,9 @@ jobs:
           node --test tests/validators.test.js
           node --test tests/lib.test.js
           node --test tests/pac.test.js
+          node --test tests/payments.test.js
+          node --test tests/disputes.test.js
+          node --test tests/earnings.test.js
 
   test:
     name: Backend lint & health check
@@ -62,12 +66,18 @@ jobs:
           find . -name "*.js" -not -path "*/node_modules/*" \
             -exec node --check {} \; && echo "Syntax OK"
 
+      - name: Security audit (high+ vulnerabilities)
+        working-directory: backend
+        run: npm audit --audit-level=high
+
       - name: Verify required env vars documented
         run: |
           grep -q "JWT_SECRET" backend/.env.example || \
             (echo "FAIL: JWT_SECRET missing from .env.example" && exit 1)
           grep -q "STRIPE_SECRET_KEY" backend/.env.example || \
             (echo "FAIL: STRIPE_SECRET_KEY missing from .env.example" && exit 1)
+          grep -q "DEEPL_API_KEY" backend/.env.example || \
+            (echo "FAIL: DEEPL_API_KEY missing from .env.example" && exit 1)
           echo "Env vars documented OK"
 
   production-health:

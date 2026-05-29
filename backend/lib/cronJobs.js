@@ -16,7 +16,8 @@
  */
 
 const { query }                              = require('../db')
-const { sendRenewalReminder, sendCertExpired, sendSupervisionTaskReminder } = require('./mailer')
+const { sendRenewalReminder, sendCertExpired, sendSupervisionTaskReminder,
+        sendS2Eligible, sendS3Eligible, sendLicenseRenewalReminder } = require('./mailer')
 const { dispatchWebhook } = require('./webhookDispatch')
 
 // ── Token cleanup ─────────────────────────────────────────────────────────────
@@ -288,6 +289,172 @@ function schedulePacSupervisionReminders () {
   }, delay)
 }
 
+// ── PAC Achievement Checker — daily 03:00 UTC ─────────────────────────────────
+// Evaluates S1→S2 and S2→S3 eligibility for all active agents.
+// Sets eligible_for_s2 / eligible_for_s3 flags and fires notification emails.
+// A separate admin endpoint (PATCH /api/admin/pac/:id/approve-upgrade) performs
+// the actual promotion after human review.
+const runAchievementCheck = async () => {
+  try {
+    console.log(JSON.stringify({ event: 'cron.achievements.start' }))
+
+    // ── Update months_as_s2 for all current S2s ────────────────────────────────
+    await query(`
+      UPDATE pac_profiles SET
+        months_as_s2 = GREATEST(0,
+          EXTRACT(MONTH FROM AGE(NOW(), promotion_date_s2))::int
+        )
+      WHERE pac_tier IN ('S2','s2')
+        AND promotion_date_s2 IS NOT NULL
+    `)
+
+    // ── S1 → S2 eligibility ────────────────────────────────────────────────────
+    const { rows: s1Rows } = await query(`
+      SELECT
+        pp.user_id,
+        pp.missions_completed,
+        pp.missions_on_time,
+        pp.double_rejections,
+        CASE WHEN pp.admin_score_count > 0
+          THEN ROUND(pp.admin_score_total::numeric / pp.admin_score_count, 2)
+          ELSE 0 END AS admin_avg,
+        CASE WHEN pp.missions_completed > 0
+          THEN ROUND(pp.missions_on_time::numeric / pp.missions_completed, 2)
+          ELSE 0 END AS on_time_rate,
+        GREATEST(0, EXTRACT(MONTH FROM AGE(NOW(), u.created_at))::int) AS months_active,
+        u.email, pp.full_name
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE (pp.pac_tier = 'S1' OR pp.pac_tier = 's1')
+        AND (u.pac_status = 'approved' OR pp.kyc_status = 'approved')
+        AND pp.eligible_for_s2 = FALSE
+    `)
+
+    let s2EligibleCount = 0
+    for (const agent of s1Rows) {
+      const eligible =
+        agent.missions_completed >= 10 &&
+        agent.admin_avg >= 4.0 &&
+        agent.on_time_rate >= 0.85 &&
+        agent.double_rejections === 0 &&
+        agent.months_active >= 6
+
+      if (!eligible) continue
+
+      await query(
+        `UPDATE pac_profiles SET
+           eligible_for_s2    = TRUE,
+           eligible_notified_at = NOW()
+         WHERE user_id = $1`,
+        [agent.user_id]
+      )
+      sendS2Eligible({
+        email:     agent.email,
+        full_name: agent.full_name,
+        admin_avg: agent.admin_avg,
+        missions:  agent.missions_completed,
+      }).catch(() => {})
+      s2EligibleCount++
+    }
+
+    // ── S2 → S3 eligibility ────────────────────────────────────────────────────
+    const { rows: s2Rows } = await query(`
+      SELECT
+        pp.user_id,
+        pp.missions_completed,
+        pp.l2_missions_completed,
+        pp.supervised_s1_completed,
+        pp.months_as_s2,
+        CASE WHEN pp.admin_score_count > 0
+          THEN ROUND(pp.admin_score_total::numeric / pp.admin_score_count, 2)
+          ELSE 0 END AS admin_avg,
+        CASE WHEN pp.client_score_count > 0
+          THEN ROUND(pp.client_score_total::numeric / pp.client_score_count, 2)
+          ELSE 0 END AS client_avg,
+        CASE WHEN pp.missions_completed > 0
+          THEN ROUND(pp.missions_on_time::numeric / pp.missions_completed, 2)
+          ELSE 0 END AS on_time_rate,
+        u.email, pp.full_name
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE (pp.pac_tier = 'S2' OR pp.pac_tier = 's2')
+        AND (u.pac_status = 'approved' OR pp.kyc_status = 'approved')
+        AND pp.eligible_for_s3 = FALSE
+        AND pp.is_founder = FALSE
+        AND pp.membership_active = TRUE
+    `)
+
+    let s3EligibleCount = 0
+    for (const agent of s2Rows) {
+      const eligible =
+        agent.missions_completed >= 25 &&
+        agent.l2_missions_completed >= 10 &&
+        agent.admin_avg >= 4.5 &&
+        agent.client_avg >= 4.3 &&
+        agent.on_time_rate >= 0.90 &&
+        agent.supervised_s1_completed >= 3 &&
+        agent.months_as_s2 >= 12
+
+      if (!eligible) continue
+
+      await query(
+        `UPDATE pac_profiles SET
+           eligible_for_s3    = TRUE,
+           eligible_notified_at = NOW()
+         WHERE user_id = $1`,
+        [agent.user_id]
+      )
+      sendS3Eligible({
+        email:     agent.email,
+        full_name: agent.full_name,
+        admin_avg: agent.admin_avg,
+      }).catch(() => {})
+      s3EligibleCount++
+    }
+
+    console.log(JSON.stringify({ event: 'cron.achievements.done', s2EligibleCount, s3EligibleCount }))
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'cron.achievements.error', err: err.message }))
+  }
+}
+
+// ── PAC License Renewal Reminders — daily ─────────────────────────────────────
+// Fires at J-30, J-7, and J-1 before tier_anniversary for S2/S3 agents.
+// Only sends if eligible_notified_at is outside the 24h window to prevent duplicates.
+const PAC_RENEWAL_AMOUNTS = { S2: 399, S3: 799, s2: 399, s3: 799 }
+
+const runPacRenewalReminders = async () => {
+  try {
+    for (const daysOut of [30, 7, 1]) {
+      const { rows } = await query(`
+        SELECT pp.user_id, pp.pac_tier, pp.full_name, pp.tier_anniversary, u.email
+        FROM pac_profiles pp
+        JOIN users u ON u.id = pp.user_id
+        WHERE pp.tier_anniversary = (CURRENT_DATE + INTERVAL '${daysOut} days')::date
+          AND pp.membership_active = TRUE
+          AND (pp.pac_tier = 'S2' OR pp.pac_tier = 's2'
+            OR pp.pac_tier = 'S3' OR pp.pac_tier = 's3')
+          AND pp.is_founder = FALSE
+      `)
+      for (const agent of rows) {
+        sendLicenseRenewalReminder({
+          email:            agent.email,
+          full_name:        agent.full_name,
+          tier:             agent.pac_tier,
+          anniversary_date: agent.tier_anniversary,
+          days_remaining:   daysOut,
+          amount_usd:       PAC_RENEWAL_AMOUNTS[agent.pac_tier] || 0,
+        }).catch(() => {})
+      }
+      if (rows.length) {
+        console.log(JSON.stringify({ event: 'pac.renewal.reminders.sent', daysOut, count: rows.length }))
+      }
+    }
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'cron.pac_renewals.error', err: err.message }))
+  }
+}
+
 const startCronJobs = () => {
   // Token cleanup — runs immediately, then every hour
   runTokenCleanup()
@@ -315,6 +482,14 @@ const startCronJobs = () => {
 
   // PAC supervision task reminders — every Monday at 09:00 UTC
   schedulePacSupervisionReminders()
+
+  // PAC achievement check — delayed 20 min from boot, then every 24 h
+  setTimeout(runAchievementCheck,   20 * 60 * 1000)
+  setInterval(runAchievementCheck, 24 * 60 * 60 * 1000)
+
+  // PAC license renewal reminders — delayed 22 min from boot, then every 24 h
+  setTimeout(runPacRenewalReminders,   22 * 60 * 1000)
+  setInterval(runPacRenewalReminders, 24 * 60 * 60 * 1000)
 }
 
 module.exports = { startCronJobs, runPiiRetention }

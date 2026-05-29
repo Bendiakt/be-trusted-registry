@@ -26,6 +26,8 @@ export default function PACPortal() {
   const [upgradeMsg, setUpgradeMsg]       = useState(null) // { text, type }
   const [upgrading, setUpgrading]         = useState(false)
   const [upgradeBanner, setUpgradeBanner] = useState(null) // retour Stripe
+  const [progress, setProgress]           = useState(null) // GET /api/pac/progress
+  const [earnings, setEarnings]           = useState(null) // GET /api/pac/earnings
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -54,6 +56,10 @@ export default function PACPortal() {
 
     api.get('/api/pac/missions')
       .then(res => setMissions(res.data)).catch(() => {})
+    api.get('/api/pac/progress')
+      .then(res => setProgress(res.data)).catch(() => {})
+    api.get('/api/pac/earnings')
+      .then(res => setEarnings(res.data)).catch(() => {})
     api.get('/api/pac/profile')
       .then(res => {
         if (res.data && Object.keys(res.data).length > 0) {
@@ -83,27 +89,47 @@ export default function PACPortal() {
     } catch { setMsg({ text: t('pac.missions.error_accept'), type: 'error' }) }
   }
 
+  // ── Structured report sections ────────────────────────────────────────────
+  const REPORT_SECTIONS = [
+    { key: 'executive_summary',      label: 'Executive Summary',            required: true,  rows: 4, hint: 'Brief overall conclusion of the audit visit.' },
+    { key: 'identity_verification',  label: 'Identity & Legal Verification', required: true,  rows: 3, hint: 'Existence légale, documents officiels, concordance.' },
+    { key: 'physical_inspection',    label: 'Physical Inspection',           required: false, rows: 3, hint: 'Premises, equipment, operational activity observed on site.' },
+    { key: 'management_assessment',  label: 'Management & Team',             required: false, rows: 3, hint: 'Key contacts, responsiveness, organizational structure.' },
+    { key: 'documentation_review',   label: 'Documentation Review',          required: false, rows: 3, hint: 'Documents received, completeness, anomalies.' },
+    { key: 'risk_indicators',        label: 'Risk Indicators',               required: false, rows: 2, hint: 'Any flags or concerns noted. Write "None" if all clear.' },
+    { key: 'recommendation',         label: 'Recommendation & Next Steps',   required: false, rows: 2, hint: 'Suggested actions for the client or platform.' },
+  ]
+  const EMPTY_SECTIONS = Object.fromEntries(REPORT_SECTIONS.map(s => [s.key, '']))
+
   const toggleReportForm = (id) => {
     setReportForms(prev => ({
       ...prev,
       [id]: prev[id]?.open
         ? { ...prev[id], open: false }
-        : { open: true, text: '', outcome: 'pass', submitting: false },
+        : { open: true, sections: { ...EMPTY_SECTIONS }, outcome: 'pass', submitting: false },
     }))
   }
 
   const submitReport = async (mission) => {
     const form = reportForms[mission.id]
-    if (!form?.text?.trim()) return
+    const summary = form?.sections?.executive_summary?.trim() || ''
+    if (!summary) return
     setReportForms(prev => ({ ...prev, [mission.id]: { ...prev[mission.id], submitting: true } }))
+    // Serialize structured sections as JSON v2
+    const report_text = JSON.stringify({
+      v: 2,
+      sections: Object.fromEntries(
+        Object.entries(form.sections).filter(([, v]) => v.trim())
+      ),
+    })
     try {
       await api.post(`/api/pac/missions/${mission.id}/complete`, {
-        report_text: form.text,
-        outcome:     form.outcome,
+        report_text,
+        outcome: form.outcome,
       })
       setMsg({ text: t('pac.missions.mission_completed'), type: 'success' })
       setMissions(prev => prev.map(m => m.id === mission.id
-        ? { ...m, status: 'completed', reportText: form.text, outcome: form.outcome }
+        ? { ...m, status: 'completed', reportText: report_text, outcome: form.outcome }
         : m
       ))
       setReportForms(prev => ({ ...prev, [mission.id]: { open: false } }))
@@ -136,11 +162,12 @@ export default function PACPortal() {
   const TABS = [
     { id: 'missions',    label: t('pac.tabs.missions') },
     { id: 'profile',     label: t('pac.tabs.profile') },
+    { id: 'earnings',    label: t('pac.tabs.earnings') },
     ...(pacTier === 'S2' || pacTier === 'S3'
       ? [{ id: 'supervision', label: pacTier === 'S3' ? 'Mentoring S3' : 'Supervision S2' }]
       : []),
     ...(pacTier === 'S1' || pacTier === 'S2'
-      ? [{ id: 'progression', label: '🎯 Progression' }]
+      ? [{ id: 'progression', label: t('pac.tabs.progression') }]
       : []),
   ]
 
@@ -308,19 +335,36 @@ export default function PACPortal() {
                             </div>
                           </div>
 
+                          {/* ── Structured report sections ─── */}
                           <div style={{ marginBottom: '1rem' }}>
-                            <label style={lbl}>{t('pac.missions.report_text')}</label>
-                            <textarea rows={4} placeholder={t('pac.missions.report_text_placeholder')}
-                              style={{ ...inp, resize: 'vertical' }}
-                              value={rf.text || ''}
-                              onChange={e => setReportForms(prev => ({ ...prev, [m.id]: { ...prev[m.id], text: e.target.value } }))}
-                            />
+                            <div style={{ color: '#C9A84C', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                              Audit Report — Structured Template
+                            </div>
+                            {REPORT_SECTIONS.map(sec => (
+                              <div key={sec.key} style={{ marginBottom: '0.9rem' }}>
+                                <label style={{ ...lbl, display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                                  {sec.label}
+                                  {sec.required && <span style={{ color: '#e74c3c', fontSize: '0.65rem' }}>*</span>}
+                                  <span style={{ color: '#333', fontSize: '0.68rem', fontWeight: '400', marginLeft: '0.25rem' }}>— {sec.hint}</span>
+                                </label>
+                                <textarea
+                                  rows={sec.rows}
+                                  placeholder={sec.required ? `${sec.label} (required)` : `${sec.label} (optional)`}
+                                  style={{ ...inp, resize: 'vertical' }}
+                                  value={rf.sections?.[sec.key] || ''}
+                                  onChange={e => setReportForms(prev => ({
+                                    ...prev,
+                                    [m.id]: { ...prev[m.id], sections: { ...prev[m.id].sections, [sec.key]: e.target.value } },
+                                  }))}
+                                />
+                              </div>
+                            ))}
                           </div>
 
                           <button
                             onClick={() => submitReport(m)}
-                            disabled={rf.submitting || !rf.text?.trim()}
-                            style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.7rem 1.75rem', borderRadius: '8px', border: 'none', fontWeight: '700', cursor: rf.submitting || !rf.text?.trim() ? 'default' : 'pointer', fontSize: '0.875rem', opacity: rf.submitting || !rf.text?.trim() ? 0.6 : 1 }}>
+                            disabled={rf.submitting || !rf.sections?.executive_summary?.trim()}
+                            style={{ background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.7rem 1.75rem', borderRadius: '8px', border: 'none', fontWeight: '700', cursor: rf.submitting || !rf.sections?.executive_summary?.trim() ? 'default' : 'pointer', fontSize: '0.875rem', opacity: rf.submitting || !rf.sections?.executive_summary?.trim() ? 0.6 : 1 }}>
                             {rf.submitting ? '…' : t('pac.missions.submit_report_btn')}
                           </button>
                         </div>
@@ -363,6 +407,128 @@ export default function PACPortal() {
                 {t('pac.profile.save')}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* ── Earnings tab ──────────────────────────────────────────────────── */}
+        {tab === 'earnings' && (
+          <div style={{ padding: '0 2rem 2rem' }}>
+            {!earnings ? (
+              <div style={{ color: '#555', fontSize: '0.85rem', padding: '2rem 0', textAlign: 'center' }}>{t('pac.earnings.loading')}</div>
+            ) : (
+              <>
+                {/* ── Summary stats ─────────────────────────────────────────── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                  {[
+                    {
+                      label: t('pac.earnings.total_earned'),
+                      value: `$${earnings.summary.totalEarnedUsd.toFixed(2)}`,
+                      color: '#2ecc71',
+                      sub: `${earnings.summary.paidCount} ${t('pac.earnings.paid_missions')}`,
+                    },
+                    {
+                      label: t('pac.earnings.pending'),
+                      value: `$${earnings.summary.pendingUsd.toFixed(2)}`,
+                      color: '#f39c12',
+                      sub: `${earnings.summary.completedCount - earnings.summary.paidCount} ${t('pac.earnings.completed_missions')}`,
+                    },
+                    {
+                      label: t('pac.earnings.commission_rate'),
+                      value: `${earnings.summary.commissionPct}%`,
+                      color: earnings.summary.pacTier === 'S3' ? '#e056fd' : earnings.summary.pacTier === 'S2' ? '#C9A84C' : '#4a90e2',
+                      sub: `Tier ${earnings.summary.pacTier}`,
+                    },
+                    {
+                      label: t('pac.earnings.total_missions'),
+                      value: earnings.summary.completedCount,
+                      color: '#aaa',
+                      sub: t('pac.earnings.assigned'),
+                    },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.25rem 1.5rem' }}>
+                      <div style={{ color: '#555', fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>{stat.label}</div>
+                      <div style={{ color: stat.color, fontSize: '1.6rem', fontWeight: '900', lineHeight: 1.1, marginBottom: '0.3rem' }}>{stat.value}</div>
+                      <div style={{ color: '#444', fontSize: '0.7rem' }}>{stat.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Mission breakdown table ────────────────────────────────── */}
+                <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#fff', fontWeight: '700', fontSize: '0.9rem' }}>{t('pac.earnings.detail_title')}</div>
+                    <div style={{ color: '#555', fontSize: '0.75rem' }}>{earnings.missions.length} {t('pac.earnings.entries')}</div>
+                  </div>
+
+                  {earnings.missions.length === 0 ? (
+                    <div style={{ padding: '2rem', color: '#555', textAlign: 'center', fontSize: '0.85rem' }}>
+                      {t('pac.earnings.no_missions')}
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #222' }}>
+                            {['#', 'Entreprise', 'Lieu', 'Honoraires', 'Commission', 'Paiement', 'Statut'].map(h => (
+                              <th key={h} style={{ padding: '0.6rem 1rem', textAlign: 'left', color: '#555', fontWeight: '600', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {earnings.missions.map((m, i) => {
+                            const isPaid    = !!m.paymentConfirmedAt
+                            const isComplete = m.status === 'completed'
+                            return (
+                              <tr key={m.id} style={{ borderBottom: '1px solid #1a1a1a', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                                <td style={{ padding: '0.7rem 1rem', color: '#444', fontWeight: '700' }}>#{m.id}</td>
+                                <td style={{ padding: '0.7rem 1rem', color: '#ccc', fontWeight: '600', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {m.companyName || '—'}
+                                </td>
+                                <td style={{ padding: '0.7rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>{m.location || '—'}</td>
+                                <td style={{ padding: '0.7rem 1rem', color: '#C9A84C', fontWeight: '700', whiteSpace: 'nowrap' }}>${m.feeUsd}</td>
+                                <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ color: isPaid ? '#2ecc71' : '#f39c12', fontWeight: '700' }}>
+                                    ${m.commissionUsd.toFixed(2)}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
+                                  {isPaid ? (
+                                    <span style={{ background: 'rgba(46,204,113,0.1)', color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
+                                      {t('pac.earnings.paid_badge')} {new Date(m.paymentConfirmedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                                    </span>
+                                  ) : isComplete ? (
+                                    <span style={{ background: 'rgba(243,156,18,0.1)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
+                                      {t('pac.earnings.pending_badge')}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: '#444', fontSize: '0.68rem' }}>—</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.7rem 1rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{
+                                    fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px', textTransform: 'uppercase',
+                                    background: m.status === 'completed' ? 'rgba(46,204,113,0.08)' : m.status === 'in_progress' ? 'rgba(74,144,226,0.1)' : 'rgba(255,255,255,0.05)',
+                                    color:      m.status === 'completed' ? '#2ecc71'               : m.status === 'in_progress' ? '#4a90e2'              : '#555',
+                                  }}>
+                                    {m.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Payout note ───────────────────────────────────────────── */}
+                <div style={{ marginTop: '1.25rem', padding: '1rem 1.25rem', background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: '8px', color: '#666', fontSize: '0.78rem', lineHeight: '1.6' }}>
+                  💡 <strong style={{ color: '#C9A84C' }}>{t('pac.earnings.commission_note')}</strong><br />
+                  {t('pac.earnings.commission_desc', { pct: earnings.summary.commissionPct, tier: earnings.summary.pacTier })}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -416,7 +582,124 @@ export default function PACPortal() {
               </div>
             </div>
 
-            {/* Upgrade path */}
+            {/* Achievement progress — fetched from /api/pac/progress */}
+            {progress && progress.criteria && progress.criteria.length > 0 && (
+              <div style={{ background: '#161616', border: '1px solid #222', borderRadius: '12px', padding: '1.75rem 2rem', marginBottom: '1.25rem' }}>
+                {/* Header row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    🎯 Critères — vers {progress.target_tier}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div style={{ color: progress.progress_pct === 100 ? '#2ecc71' : '#C9A84C', fontWeight: '900', fontSize: '1.35rem', letterSpacing: '-0.02em' }}>
+                      {progress.progress_pct}%
+                    </div>
+                    <div style={{ color: '#444', fontSize: '0.72rem' }}>complétés</div>
+                  </div>
+                </div>
+
+                {/* Global progress bar */}
+                <div style={{ height: '6px', background: '#1a1a1a', borderRadius: '3px', marginBottom: '1.5rem', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${progress.progress_pct}%`,
+                    background: progress.progress_pct === 100
+                      ? 'linear-gradient(90deg,#2ecc71,#27ae60)'
+                      : 'linear-gradient(90deg,#C9A84C,#9A7B2E)',
+                    borderRadius: '3px',
+                    transition: 'width 0.6s ease',
+                  }} />
+                </div>
+
+                {/* Criteria list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {progress.criteria.map((c) => {
+                    const fmtVal = (val, fmt) => {
+                      if (fmt === 'percent')  return `${Math.round(val * 100)}%`
+                      if (fmt === 'boolean')  return val ? 'Oui' : 'Non'
+                      return val
+                    }
+                    const fmtTarget = (tgt, fmt) => {
+                      if (fmt === 'percent')  return `${Math.round(tgt * 100)}%`
+                      if (fmt === 'boolean')  return 'Oui'
+                      return tgt
+                    }
+                    const barPct = c.format === 'boolean'
+                      ? (c.met ? 100 : 0)
+                      : Math.min(Math.round((c.value / c.target) * 100), 100)
+                    const icon = c.met ? '✅' : c.value > 0 ? '⏳' : '⚠️'
+
+                    return (
+                      <div key={c.key} style={{
+                        background: c.met ? 'rgba(46,204,113,0.04)' : '#111',
+                        border: `1px solid ${c.met ? 'rgba(46,204,113,0.15)' : '#1a1a1a'}`,
+                        borderRadius: '8px',
+                        padding: '0.85rem 1rem',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                            <span style={{ fontSize: '0.9rem', lineHeight: 1 }}>{icon}</span>
+                            <span style={{ fontSize: '0.85rem', color: c.met ? '#bbb' : '#777', fontWeight: c.met ? '500' : '400' }}>
+                              {c.label}
+                            </span>
+                          </div>
+                          <div style={{
+                            fontSize: '0.8rem', fontWeight: '700',
+                            color: c.met ? '#2ecc71' : barPct >= 50 ? '#C9A84C' : '#666',
+                            whiteSpace: 'nowrap', marginLeft: '0.75rem',
+                          }}>
+                            {fmtVal(c.value, c.format)}
+                            <span style={{ color: '#333', fontWeight: '400' }}> / {fmtTarget(c.target, c.format)}</span>
+                          </div>
+                        </div>
+                        {/* Per-criterion bar — only when not met and not boolean */}
+                        {!c.met && c.format !== 'boolean' && (
+                          <div style={{ height: '3px', background: '#1a1a1a', borderRadius: '2px', marginTop: '0.55rem', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%',
+                              width: `${barPct}%`,
+                              background: barPct >= 70 ? '#C9A84C' : barPct >= 40 ? '#4a90e2' : '#2c3e50',
+                              borderRadius: '2px',
+                              transition: 'width 0.4s ease',
+                            }} />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* All-criteria-met banner */}
+                {progress.progress_pct === 100 && (
+                  <div style={{
+                    marginTop: '1.25rem', padding: '1rem 1.25rem',
+                    background: 'rgba(46,204,113,0.08)', border: '1px solid rgba(46,204,113,0.25)',
+                    borderRadius: '10px', display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                  }}>
+                    <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🎉</span>
+                    <div>
+                      <div style={{ color: '#2ecc71', fontWeight: '700', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+                        Tous les critères sont remplis !
+                      </div>
+                      <div style={{ color: '#666', fontSize: '0.8rem', lineHeight: '1.5' }}>
+                        Votre dossier sera examiné lors de la prochaine revue mensuelle de l'équipe B&E.
+                        Vous recevrez un e-mail de confirmation dès la décision.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Anniversary date when active */}
+                {progress.tier_anniversary && (
+                  <div style={{ marginTop: '1rem', color: '#444', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>🗓</span>
+                    <span>Renouvellement le {new Date(progress.tier_anniversary).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upgrade path — Stripe checkout (self-initiated) */}
             {(() => {
               const nextTier = pacTier === 'S1' ? 'S2' : 'S3'
               const requiredMissions = pacTier === 'S1' ? 5 : 10
@@ -447,13 +730,12 @@ export default function PACPortal() {
                     </div>
                   </div>
 
-                  {/* Requirements */}
+                  {/* Minimal requirement reminder */}
                   <div style={{ background: '#111', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
                     <div style={{ color: '#555', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                      Conditions d'éligibilité
+                      Pré-requis minimum pour postuler
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                      {/* Missions requirement */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <span style={{ color: meetsRequirement ? '#2ecc71' : '#333', fontSize: '1rem', width: '20px' }}>
                           {meetsRequirement ? '✓' : '○'}
@@ -472,7 +754,6 @@ export default function PACPortal() {
                           )}
                         </div>
                       </div>
-                      {/* Profile complete */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <span style={{ color: profile.name ? '#2ecc71' : '#333', fontSize: '1rem', width: '20px' }}>
                           {profile.name ? '✓' : '○'}

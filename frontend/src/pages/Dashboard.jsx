@@ -7,6 +7,7 @@ import MetricsDashboard from '../components/MetricsDashboard'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Skeleton from '../components/Skeleton'
 import { useToast, ToastContainer } from '../components/Toast'
+import { useMobile } from '../lib/useMobile'
 
 const LEVEL_CONFIG = {
   0: { color: '#666',    bg: 'rgba(102,102,102,0.1)' },
@@ -16,11 +17,13 @@ const LEVEL_CONFIG = {
 }
 
 // ── Onboarding stepper ────────────────────────────────────────────────────────
-function OnboardingProgress({ company, certLevel, t, onRegister, onPricing }) {
+function OnboardingProgress({ company, certLevel, docsUploaded, kycApproved, t, onRegister, onDocs, onPricing }) {
   const steps = [
-    { key: 'step_account',  done: true },
-    { key: 'step_profile',  done: Boolean(company), action: onRegister },
-    { key: 'step_certified',done: certLevel > 0,    action: onPricing  },
+    { key: 'step_account',  done: true,                        label: '✓ Compte créé',        action: null },
+    { key: 'step_profile',  done: Boolean(company),            label: 'Profil entreprise',     action: onRegister },
+    { key: 'step_docs',     done: Boolean(docsUploaded),       label: 'Documents déposés',     action: onDocs },
+    { key: 'step_kyc',      done: Boolean(kycApproved),        label: 'KYC validé',            action: null },
+    { key: 'step_certified',done: certLevel > 0,               label: 'Première certification', action: onPricing },
   ]
   const doneCount = steps.filter(s => s.done).length
   const pct = Math.round((doneCount / steps.length) * 100)
@@ -371,6 +374,8 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false)
   const [toasts,         showToast]         = useToast()
   const [billingLoading, setBillingLoading] = useState(false)
+  const [companyMissions, setCompanyMissions] = useState([])
+  const [missionsLoaded,  setMissionsLoaded]  = useState(false)
   const navigate = useNavigate()
 
   const PLANS = [
@@ -390,9 +395,10 @@ export default function Dashboard() {
     fetchProfile()
     const params = new URLSearchParams(window.location.search)
     if (params.get('payment') === 'success') {
-      setTab('overview')
+      setTab(params.get('mission') ? 'missions' : 'overview')
       window.history.replaceState({}, '', '/dashboard')
       fetchProfile()
+      fetchCompanyMissions()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -430,6 +436,15 @@ export default function Dashboard() {
     }
   }
 
+  const fetchCompanyMissions = async () => {
+    if (missionsLoaded) return
+    try {
+      const res = await api.get('/api/companies/missions?limit=50')
+      setCompanyMissions(res.data.missions || [])
+      setMissionsLoaded(true)
+    } catch { /* silent */ }
+  }
+
   const handleCheckout = async (planId) => {
     setPaymentError('')
     setCheckoutPlanId(planId)
@@ -462,23 +477,25 @@ export default function Dashboard() {
     navigate('/login')
   }
 
+  const isMobile = useMobile()
+
   const G = {
     page: { minHeight: '100vh', background: '#111', fontFamily: 'sans-serif', color: '#eee' },
-    nav: { background: '#1a1a1a', borderBottom: '1px solid #333', padding: '0 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' },
+    nav: { background: '#1a1a1a', borderBottom: '1px solid #333', padding: isMobile ? '0 1rem' : '0 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' },
     logo: { color: '#C9A84C', fontWeight: '900', fontSize: '1.2rem', letterSpacing: '0.1em' },
-    main: { maxWidth: '1100px', margin: '0 auto', padding: '2rem 1.5rem' },
-    card: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' },
-    tabs: { display: 'flex', gap: '0.5rem', marginBottom: '2rem', flexWrap: 'wrap' },
+    main: { maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '1.25rem 0.75rem' : '2rem 1.5rem' },
+    card: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: isMobile ? '1rem' : '1.5rem', marginBottom: '1.5rem' },
+    tabs: { display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '4px' },
     planCard: { background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', padding: '1.5rem', flex: '1', minWidth: '240px', display: 'flex', flexDirection: 'column' },
-    btn: { background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.875rem' },
-    outlineBtn: { background: 'transparent', color: '#C9A84C', padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #C9A84C', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem' },
+    btn: { background: 'linear-gradient(135deg,#C9A84C,#9A7B2E)', color: '#111', padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.875rem', whiteSpace: 'nowrap' },
+    outlineBtn: { background: 'transparent', color: '#C9A84C', padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #C9A84C', fontWeight: '600', cursor: 'pointer', fontSize: '0.875rem', whiteSpace: 'nowrap' },
   }
 
   const lvl = company?.certificationLevel || 0
   const lconf = LEVEL_CONFIG[lvl] || LEVEL_CONFIG[0]
 
-  const TabBtn = ({ id, label }) => (
-    <button onClick={() => setTab(id)} style={tab === id ? { ...G.btn } : { ...G.outlineBtn }}>
+  const TabBtn = ({ id, label, onClick }) => (
+    <button onClick={() => { setTab(id); onClick && onClick() }} style={tab === id ? { ...G.btn } : { ...G.outlineBtn }}>
       {label}
     </button>
   )
@@ -511,9 +528,9 @@ export default function Dashboard() {
             <div style={{ color: '#444', fontSize: '0.6rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t('brand.tagline_short')}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '1rem' }}>
           <LanguageSwitcher />
-          <span style={{ color: '#666', fontSize: '0.8rem' }}>{user?.name || user?.email}</span>
+          {!isMobile && <span style={{ color: '#666', fontSize: '0.8rem' }}>{user?.name || user?.email}</span>}
           {lvl > 0 && (
             <button onClick={handleBillingPortal} disabled={billingLoading} style={{ background: 'transparent', color: '#555', border: '1px solid #2a2a2a', padding: '0.4rem 0.9rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', opacity: billingLoading ? 0.5 : 1 }}>
               {billingLoading ? '…' : t('dashboard.billing')}
@@ -529,14 +546,16 @@ export default function Dashboard() {
           <EmailVerifyBanner t={t} />
         )}
 
-        <div style={G.tabs}>
+        <div style={G.tabs} className="scroll-x">
           <TabBtn id="overview"   label={t('dashboard.tabs.overview')} />
           <TabBtn id="register"   label={t('dashboard.tabs.register')} />
           <TabBtn id="pricing"    label={t('dashboard.tabs.pricing')} />
           <TabBtn id="documents"  label={t('dashboard.tabs.documents')} />
           <TabBtn id="billing"    label={t('dashboard.tabs.billing', 'Billing')} />
-          <TabBtn id="developer"  label={t('dashboard.tabs.developer', 'Developer')} />
-          <TabBtn id="metrics"    label={t('dashboard.tabs.metrics')} />
+          <TabBtn id="missions"   label={t('dashboard.tabs.audits')} onClick={fetchCompanyMissions} />
+          <TabBtn id="developer"      label={t('dashboard.tabs.developer', 'Developer')} />
+          <TabBtn id="notifications" label={t('dashboard.tabs.notifications', 'Notifications')} />
+          <TabBtn id="metrics"       label={t('dashboard.tabs.metrics')} />
         </div>
 
         {/* ── Overview ─────────────────────────────────────────────────────── */}
@@ -548,8 +567,11 @@ export default function Dashboard() {
                 <OnboardingProgress
                   company={company}
                   certLevel={lvl}
+                  docsUploaded={(company?.docsCount || 0) > 0}
+                  kycApproved={Boolean(company?.verifiedAt)}
                   t={t}
                   onRegister={() => setTab('register')}
+                  onDocs={() => setTab('documents')}
                   onPricing={() => setTab('pricing')}
                 />
               )}
@@ -718,10 +740,53 @@ export default function Dashboard() {
           <DeveloperTab G={G} t={t} />
         )}
 
+        {/* ── Notifications ─────────────────────────────────────────────── */}
+        {tab === 'notifications' && (
+          <NotificationsPanel G={G} t={t} />
+        )}
+
         {/* ── Metrics ──────────────────────────────────────────────────────── */}
         {tab === 'metrics' && (
           <div style={G.card}>
             <MetricsDashboard />
+          </div>
+        )}
+
+        {/* ── Audits (company missions) ─────────────────────────────────── */}
+        {tab === 'missions' && (
+          <div>
+            <div style={{ color: '#C9A84C', fontSize: '0.72rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
+              {t('dashboard.audits.title')}
+            </div>
+
+            {companyMissions.length === 0 && (
+              <div style={{ ...G.card, textAlign: 'center', padding: '3rem 1.5rem' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔍</div>
+                <div style={{ color: '#C9A84C', fontWeight: '700', marginBottom: '0.5rem' }}>Aucun audit en cours</div>
+                <div style={{ color: '#555', fontSize: '0.875rem' }}>
+                  {t('dashboard.audits.empty')}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {companyMissions.map(m => {
+                const STATUS_STYLE = {
+                  available:  { bg: 'rgba(74,144,226,0.12)',  text: '#4a90e2' },
+                  assigned:   { bg: 'rgba(243,156,18,0.12)',  text: '#f39c12' },
+                  completed:  { bg: 'rgba(46,204,113,0.12)',  text: '#2ecc71' },
+                  cancelled:  { bg: 'rgba(150,150,150,0.12)', text: '#666' },
+                }
+                const OUTCOME_STYLE = {
+                  pass:        { bg: 'rgba(46,204,113,0.12)',  text: '#2ecc71' },
+                  fail:        { bg: 'rgba(231,76,60,0.12)',   text: '#ff6b6b' },
+                  conditional: { bg: 'rgba(243,156,18,0.12)',  text: '#f39c12' },
+                }
+                const sc = STATUS_STYLE[m.status] || STATUS_STYLE.available
+                const oc = m.outcome ? (OUTCOME_STYLE[m.outcome] || OUTCOME_STYLE.pass) : null
+                return <MissionCard key={m.id} m={m} sc={sc} oc={oc} G={G} />
+              })}
+            </div>
           </div>
         )}
       </main>
@@ -736,6 +801,7 @@ function BillingTab({ G, t, onManageBilling, billingLoading }) {
   const [payments, setPayments]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
+  const isMobile = useMobile()
 
   useEffect(() => {
     api.get('/api/payments/history')
@@ -807,8 +873,23 @@ function BillingTab({ G, t, onManageBilling, billingLoading }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {payments.map(p => {
               const s = STATUS_STYLE[p.status] || STATUS_STYLE.pending
-              return (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222', flexWrap: 'wrap' }}>
+              return isMobile ? (
+                <div key={p.id} style={{ padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                    <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem' }}>{p.plan_label}</div>
+                    <div style={{ color: '#C9A84C', fontWeight: '700', fontSize: '0.95rem' }}>${p.amount_usd}</div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#555', fontSize: '0.75rem' }}>
+                      {new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                    <div style={{ display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', background: s.bg, color: s.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {s.label}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.85rem 1rem', background: '#1a1a1a', borderRadius: '8px', border: '1px solid #222' }}>
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <div style={{ color: '#eee', fontWeight: '600', fontSize: '0.875rem' }}>{p.plan_label}</div>
                     <div style={{ color: '#555', fontSize: '0.75rem', marginTop: '0.15rem' }}>
@@ -1236,6 +1317,508 @@ function RegisterCompanyForm({ company, onSaved, onError }) {
 
         <button style={G.btn} type="submit" disabled={saving}>{saving ? t('dashboard.company_form.saving') : t('dashboard.company_form.save')}</button>
       </form>
+    </div>
+  )
+}
+
+// ── MissionCard — company audit view ─────────────────────────────────────────
+function MissionCard({ m, sc, oc, G }) {
+  const { t } = useTranslation()
+  const [open, setOpen]             = useState(false)
+  const [rateModal, setRateModal]   = useState(false)
+  const [hoverStar, setHoverStar]   = useState(0)
+  const [selectedStar, setSelectedStar] = useState(0)
+  const [rateSaving, setRateSaving] = useState(false)
+  const [rateError, setRateError]   = useState('')
+  const [localScore, setLocalScore] = useState(m.clientScore || null)
+  // Dispute state
+  const [disputeModal, setDisputeModal] = useState(false)
+  const [disputeReason, setDisputeReason] = useState('')
+  const [disputeSaving, setDisputeSaving] = useState(false)
+  const [disputeError, setDisputeError]   = useState('')
+  const [disputeSubmitted, setDisputeSubmitted] = useState(false)
+  // Mission fee payment
+  const [feeLoading, setFeeLoading]   = useState(false)
+  const [feePaid, setFeePaid]         = useState(!!m.paymentConfirmedAt)
+
+  const TIER_COLOR = { S1: '#4a90e2', S2: '#C9A84C', S3: '#e056fd' }
+  const tc = TIER_COLOR[m.tierRequired] || '#555'
+  const canRate = m.status === 'completed' && localScore === null
+  const canDispute = m.status === 'completed' && m.outcome === 'fail' && !disputeSubmitted
+
+  async function handlePayFee() {
+    setFeeLoading(true)
+    try {
+      const res = await api.post('/api/payments/mission-checkout', { missionId: m.id })
+      window.location.href = res.data.url
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Erreur lors du paiement')
+      setFeeLoading(false)
+    }
+  }
+
+  const submitDispute = async () => {
+    if (disputeReason.trim().length < 20) return
+    setDisputeSaving(true)
+    setDisputeError('')
+    try {
+      await api.patch(`/api/companies/missions/${m.id}/dispute`, { reason: disputeReason.trim() })
+      setDisputeSubmitted(true)
+      setDisputeModal(false)
+    } catch (err) {
+      const msg = err?.response?.data?.error || 'Erreur lors de l\'envoi'
+      setDisputeError(msg)
+      if (err?.response?.status === 409) setDisputeSubmitted(true)
+    } finally {
+      setDisputeSaving(false)
+    }
+  }
+
+  const submitRating = async () => {
+    if (!selectedStar) return
+    setRateSaving(true)
+    setRateError('')
+    try {
+      await api.patch(`/api/companies/missions/${m.id}/rate`, { client_score: selectedStar })
+      setLocalScore(selectedStar)
+      setRateModal(false)
+    } catch (err) {
+      setRateError(err?.response?.data?.error || 'Erreur lors de la soumission')
+    } finally {
+      setRateSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '12px', overflow: 'hidden' }}>
+        {/* Main row */}
+        <div style={{ padding: '1.25rem 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+              <span style={{ color: '#888', fontSize: '0.7rem' }}>#{m.id}</span>
+              <span style={{ fontWeight: '700', color: '#eee', fontSize: '0.95rem' }}>{m.title || m.description?.slice(0, 50) || 'Audit'}</span>
+            </div>
+            <div style={{ color: '#666', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+              {m.location || '—'}{m.type ? ` · ${m.type}` : ''}
+            </div>
+            {m.pacName && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ color: '#555', fontSize: '0.72rem' }}>Agent :</span>
+                <span style={{ color: '#bbb', fontSize: '0.78rem', fontWeight: '600' }}>{m.pacName}</span>
+                {m.pacTier && (
+                  <span style={{ fontSize: '0.62rem', background: `${tc}22`, color: tc, padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: '700' }}>{m.pacTier.toUpperCase()}</span>
+                )}
+              </div>
+            )}
+            {m.dueDate && (
+              <div style={{ color: '#444', fontSize: '0.7rem', marginTop: '0.3rem' }}>
+                📅 Échéance : {new Date(m.dueDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+            {/* Status */}
+            <span style={{ background: sc.bg, color: sc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {m.status}
+            </span>
+            {/* Outcome */}
+            {oc && (
+              <span style={{ background: oc.bg, color: oc.text, fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {m.outcome}
+              </span>
+            )}
+            {/* Scores row */}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+              {m.adminScore && (
+                <span title="Note B&E" style={{ background: 'rgba(224,86,253,0.1)', color: '#e056fd', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                  ⭐ {m.adminScore}/5
+                </span>
+              )}
+              {localScore ? (
+                <span title="Votre note" style={{ background: 'rgba(201,168,76,0.1)', color: '#C9A84C', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                  👤 {localScore}/5
+                </span>
+              ) : canRate ? (
+                <button
+                  onClick={() => { setSelectedStar(0); setRateError(''); setRateModal(true) }}
+                  style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.25)', color: '#C9A84C', fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⭐ Évaluer l'agent
+                </button>
+              ) : null}
+              {/* Dispute button — only on failed completed missions */}
+              {canDispute && (
+                <button
+                  onClick={() => { setDisputeReason(''); setDisputeError(''); setDisputeModal(true) }}
+                  style={{ background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.2)', color: '#ff6b6b', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⚠️ Contester
+                </button>
+              )}
+              {disputeSubmitted && m.outcome === 'fail' && (
+                <span style={{ background: 'rgba(243,156,18,0.08)', color: '#f39c12', fontSize: '0.65rem', fontWeight: '700', padding: '0.18rem 0.5rem', borderRadius: '4px' }}>
+                  ⏳ Contestation en cours
+                </span>
+              )}
+              {m.feeUsd && (
+                feePaid ? (
+                  <span style={{ color: '#2ecc71', fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(46,204,113,0.08)' }}>
+                    {t('dashboard.audits.fee_paid', { amount: m.feeUsd })}
+                  </span>
+                ) : (
+                  <button
+                    onClick={handlePayFee}
+                    disabled={feeLoading}
+                    style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.35)', color: '#C9A84C', fontSize: '0.68rem', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', cursor: feeLoading ? 'not-allowed' : 'pointer', opacity: feeLoading ? 0.6 : 1 }}
+                  >
+                    {feeLoading ? '…' : t('dashboard.audits.pay_fee', { amount: m.feeUsd })}
+                  </button>
+                )
+              )}
+            </div>
+            {/* Dates */}
+            {m.completedAt && (
+              <div style={{ color: '#444', fontSize: '0.68rem' }}>
+                Terminé le {new Date(m.completedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Description preview */}
+        {m.description && (
+          <div style={{ padding: '0 1.5rem 0.75rem', color: '#555', fontSize: '0.78rem', lineHeight: '1.5' }}>
+            {m.description.length > 120 ? m.description.slice(0, 120) + '…' : m.description}
+          </div>
+        )}
+
+        {/* Report expand */}
+        {m.reportText && (
+          <>
+            <div style={{ borderTop: '1px solid #252525' }}>
+              <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '0.6rem 1.5rem', cursor: 'pointer', color: '#555', fontSize: '0.75rem', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                {open ? '▲' : '▼'} Rapport d'audit
+              </button>
+            </div>
+            {open && (
+              <div style={{ borderTop: '1px solid #222', padding: '1rem 1.5rem', background: 'rgba(46,204,113,0.02)' }}>
+                <div style={{ color: '#444', fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.6rem' }}>Rapport</div>
+                <div style={{ color: '#888', fontSize: '0.82rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{m.reportText}</div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Rating modal ────────────────────────────────────────────────────── */}
+      {rateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '400px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '0.25rem' }}>Évaluer l'agent</div>
+                <div style={{ color: '#555', fontSize: '0.78rem' }}>Mission #{m.id} — {m.title || 'Audit'}</div>
+              </div>
+              <button onClick={() => setRateModal(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
+            </div>
+
+            {/* Agent info */}
+            {m.pacName && (
+              <div style={{ background: '#111', border: '1px solid #222', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: `${tc}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>👤</div>
+                <div>
+                  <div style={{ color: '#ddd', fontSize: '0.85rem', fontWeight: '700' }}>{m.pacName}</div>
+                  {m.pacTier && <div style={{ color: tc, fontSize: '0.68rem', fontWeight: '700' }}>{m.pacTier.toUpperCase()}</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Star picker */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ color: '#666', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Votre évaluation</div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    onMouseEnter={() => setHoverStar(star)}
+                    onMouseLeave={() => setHoverStar(0)}
+                    onClick={() => setSelectedStar(star)}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '2.2rem', lineHeight: 1, opacity: star <= (hoverStar || selectedStar) ? 1 : 0.2, transition: 'opacity 0.1s', filter: star <= (hoverStar || selectedStar) ? 'drop-shadow(0 0 6px #C9A84C88)' : 'none' }}
+                  >
+                    ⭐
+                  </button>
+                ))}
+              </div>
+              {selectedStar > 0 && (
+                <div style={{ textAlign: 'center', marginTop: '0.6rem', color: '#C9A84C', fontSize: '0.82rem', fontWeight: '600' }}>
+                  {['', 'Très insuffisant', 'Insuffisant', 'Satisfaisant', 'Bien', 'Excellent'][selectedStar]}
+                </div>
+              )}
+            </div>
+
+            {rateError && (
+              <div style={{ color: '#ff6b6b', fontSize: '0.78rem', marginBottom: '1rem', textAlign: 'center' }}>{rateError}</div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => setRateModal(false)}
+                style={{ flex: 1, background: '#111', border: '1px solid #2a2a2a', color: '#666', borderRadius: '8px', padding: '0.65rem', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={submitRating}
+                disabled={!selectedStar || rateSaving}
+                style={{ flex: 1, background: selectedStar ? 'linear-gradient(135deg,#C9A84C,#a8863c)' : '#1a1a1a', border: 'none', color: selectedStar ? '#000' : '#444', borderRadius: '8px', padding: '0.65rem', cursor: selectedStar ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: '700', opacity: rateSaving ? 0.7 : 1 }}
+              >
+                {rateSaving ? '…' : 'Soumettre'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Dispute modal ── */}
+      {disputeModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#161616', border: '1px solid #333', borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '480px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontWeight: '800', fontSize: '1rem', color: '#eee', marginBottom: '0.2rem' }}>Contester le résultat</div>
+                <div style={{ color: '#555', fontSize: '0.78rem' }}>Mission #{m.id} — {m.title || 'Audit'}</div>
+              </div>
+              <button onClick={() => setDisputeModal(false)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.3rem' }}>✕</button>
+            </div>
+
+            <div style={{ background: 'rgba(231,76,60,0.06)', border: '1px solid rgba(231,76,60,0.15)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', fontSize: '0.8rem', color: '#ff6b6b', lineHeight: 1.5 }}>
+              Une contestation sera examinée par l'équipe B&E dans un délai de 5 jours ouvrés. Si validée, un second audit peut être ordonné.
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', color: '#666', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem' }}>
+                Motif de la contestation *
+              </label>
+              <textarea
+                rows={5}
+                value={disputeReason}
+                onChange={e => setDisputeReason(e.target.value)}
+                placeholder="Décrivez précisément pourquoi vous contestez ce résultat (au moins 20 caractères)…"
+                style={{ width: '100%', boxSizing: 'border-box', background: '#111', border: '1px solid #252525', color: '#eee', borderRadius: '8px', padding: '0.75rem', fontSize: '0.82rem', lineHeight: 1.5, resize: 'vertical', outline: 'none' }}
+              />
+              <div style={{ color: disputeReason.trim().length < 20 ? '#444' : '#2ecc71', fontSize: '0.68rem', marginTop: '0.25rem', textAlign: 'right' }}>
+                {disputeReason.trim().length} / 20 min
+              </div>
+            </div>
+
+            {disputeError && (
+              <div style={{ color: '#ff6b6b', fontSize: '0.78rem', marginBottom: '1rem' }}>{disputeError}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setDisputeModal(false)} style={{ flex: 1, background: '#111', border: '1px solid #2a2a2a', color: '#666', borderRadius: '8px', padding: '0.65rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Annuler
+              </button>
+              <button
+                onClick={submitDispute}
+                disabled={disputeReason.trim().length < 20 || disputeSaving}
+                style={{ flex: 1, background: disputeReason.trim().length >= 20 ? 'linear-gradient(135deg,#e74c3c,#c0392b)' : '#1a1a1a', border: 'none', color: disputeReason.trim().length >= 20 ? '#fff' : '#444', borderRadius: '8px', padding: '0.65rem', cursor: disputeReason.trim().length >= 20 ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: '700', opacity: disputeSaving ? 0.7 : 1 }}
+              >
+                {disputeSaving ? '…' : 'Soumettre la contestation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── NotificationsPanel ────────────────────────────────────────────────────────
+function NotificationsPanel({ G, t }) {
+  const [notifs, setNotifs]       = useState(null)   // null = loading
+  const [unread, setUnread]       = useState(0)
+  const [err, setErr]             = useState('')
+  const [markingId, setMarkingId] = useState(null)
+  const [markingAll, setMarkingAll] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  // Fetch notifications
+  useEffect(() => {
+    let cancelled = false
+    setErr('')
+    api.get('/api/notifications')
+      .then(r => {
+        if (cancelled) return
+        setNotifs(r.data.notifications || [])
+        setUnread(r.data.unread || 0)
+      })
+      .catch(() => {
+        if (!cancelled) setErr(t('dashboard.notifications.error'))
+      })
+    return () => { cancelled = true }
+  }, [refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const markOne = async (id) => {
+    setMarkingId(id)
+    try {
+      await api.patch(`/api/notifications/${id}/read`)
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+      setUnread(prev => Math.max(0, prev - 1))
+    } catch { /* silent */ }
+    finally { setMarkingId(null) }
+  }
+
+  const markAll = async () => {
+    setMarkingAll(true)
+    try {
+      await api.patch('/api/notifications/read-all')
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })))
+      setUnread(0)
+    } catch { /* silent */ }
+    finally { setMarkingAll(false) }
+  }
+
+  // Relative time helper
+  const relTime = (iso) => {
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins  = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days  = Math.floor(diff / 86400000)
+    if (mins  <  1) return '< 1 min'
+    if (mins  < 60) return `${mins} min`
+    if (hours < 24) return `${hours}h`
+    return `${days}d`
+  }
+
+  // Icon per type
+  const typeIcon = (type = '') => {
+    if (type.includes('payment'))  return '💳'
+    if (type.includes('mission'))  return '🔍'
+    if (type.includes('dispute'))  return '⚠️'
+    if (type.includes('cert'))     return '🏆'
+    return '🔔'
+  }
+
+  // Styles
+  const S = {
+    wrap:    { maxWidth: '640px' },
+    header:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' },
+    title:   { fontWeight: '800', fontSize: '1.1rem', color: '#eee' },
+    badge:   { background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.3)', color: '#C9A84C', borderRadius: '10px', padding: '0.15rem 0.55rem', fontSize: '0.72rem', fontWeight: '700', marginLeft: '0.5rem' },
+    actions: { display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' },
+    iconBtn: { background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#888', borderRadius: '8px', padding: '0.35rem 0.75rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' },
+    row:     { display: 'flex', gap: '0.85rem', alignItems: 'flex-start', padding: '0.9rem 1rem', borderRadius: '10px', marginBottom: '0.5rem', border: '1px solid #252525', transition: 'background 0.15s' },
+    icon:    { fontSize: '1.2rem', flexShrink: 0, marginTop: '0.05rem' },
+    body:    { flex: 1, minWidth: 0 },
+    ntitle:  { color: '#eee', fontWeight: '600', fontSize: '0.875rem', lineHeight: 1.35 },
+    nbody:   { color: '#777', fontSize: '0.78rem', marginTop: '0.2rem', lineHeight: 1.4 },
+    meta:    { display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', flexWrap: 'wrap' },
+    time:    { color: '#444', fontSize: '0.7rem' },
+    markBtn: { background: 'transparent', border: '1px solid #2a2a2a', color: '#666', borderRadius: '6px', padding: '0.2rem 0.55rem', fontSize: '0.68rem', cursor: 'pointer' },
+    empty:   { textAlign: 'center', padding: '3rem 1rem', color: '#555' },
+  }
+
+  return (
+    <div style={S.wrap}>
+      {/* Header */}
+      <div style={S.header}>
+        <div>
+          <span style={S.title}>{t('dashboard.notifications.title')}</span>
+          {unread > 0 && (
+            <span style={S.badge}>{t('dashboard.notifications.unread_count', { count: unread })}</span>
+          )}
+        </div>
+        <div style={S.actions}>
+          <button
+            style={S.iconBtn}
+            onClick={() => setRefreshKey(k => k + 1)}
+            disabled={notifs === null}
+          >
+            ↺ {t('dashboard.notifications.refresh')}
+          </button>
+          {unread > 0 && (
+            <button
+              style={{ ...S.iconBtn, color: '#C9A84C', borderColor: 'rgba(201,168,76,0.3)' }}
+              onClick={markAll}
+              disabled={markingAll}
+            >
+              {markingAll ? '…' : t('dashboard.notifications.mark_all_read')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Loading */}
+      {notifs === null && !err && (
+        <div style={{ color: '#555', padding: '2rem 0', textAlign: 'center' }}>
+          {t('dashboard.notifications.loading')}
+        </div>
+      )}
+
+      {/* Error */}
+      {err && (
+        <div style={{ padding: '0.75rem 1rem', background: 'rgba(231,76,60,0.07)', border: '1px solid rgba(231,76,60,0.2)', borderRadius: '8px', color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '1rem' }}>
+          {err}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {notifs !== null && notifs.length === 0 && !err && (
+        <div style={S.empty}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔔</div>
+          <div style={{ fontWeight: '700', color: '#666', marginBottom: '0.4rem' }}>{t('dashboard.notifications.empty')}</div>
+          <div style={{ fontSize: '0.82rem', color: '#444', maxWidth: '320px', margin: '0 auto', lineHeight: 1.5 }}>
+            {t('dashboard.notifications.empty_sub')}
+          </div>
+        </div>
+      )}
+
+      {/* All caught up */}
+      {notifs !== null && notifs.length > 0 && unread === 0 && (
+        <div style={{ padding: '0.55rem 1rem', background: 'rgba(46,204,113,0.05)', border: '1px solid rgba(46,204,113,0.15)', borderRadius: '8px', color: '#2ecc71', fontSize: '0.8rem', fontWeight: '600', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          ✓ {t('dashboard.notifications.all_caught_up')}
+        </div>
+      )}
+
+      {/* Notification list */}
+      {notifs !== null && notifs.map(n => (
+        <div
+          key={n.id}
+          style={{
+            ...S.row,
+            background: n.read ? 'transparent' : 'rgba(201,168,76,0.04)',
+            borderColor: n.read ? '#252525' : 'rgba(201,168,76,0.15)',
+          }}
+        >
+          <div style={S.icon}>{typeIcon(n.type)}</div>
+          <div style={S.body}>
+            <div style={{ ...S.ntitle, color: n.read ? '#888' : '#eee' }}>{n.title}</div>
+            {n.body && <div style={S.nbody}>{n.body}</div>}
+            <div style={S.meta}>
+              <span style={S.time}>{relTime(n.createdAt)}</span>
+              {!n.read && (
+                <button
+                  style={S.markBtn}
+                  onClick={() => markOne(n.id)}
+                  disabled={markingId === n.id}
+                >
+                  {markingId === n.id ? '…' : t('dashboard.notifications.mark_read')}
+                </button>
+              )}
+              {n.link && (
+                <a href={n.link} style={{ color: '#C9A84C', fontSize: '0.7rem', textDecoration: 'none', fontWeight: '600' }}>→ View</a>
+              )}
+            </div>
+          </div>
+          {!n.read && (
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#C9A84C', flexShrink: 0, marginTop: '0.4rem' }} />
+          )}
+        </div>
+      ))}
     </div>
   )
 }

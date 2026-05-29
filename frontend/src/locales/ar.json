@@ -116,8 +116,11 @@
       "register": "تسجيل الشركة",
       "pricing": "الأسعار والترقية",
       "metrics": "المقاييس",
-      "documents": "Documents","billing": "الفواتير",
-      "developer": "المطور"
+      "documents": "Documents",
+      "billing": "الفواتير",
+      "developer": "المطور",
+      "audits": "🔍 التدقيقات",
+      "notifications": "الإشعارات"
     },
     "billing_title": "سجل المدفوعات",
     "billing_subtitle": "شهاداتك ومعاملات Stripe",
@@ -227,6 +230,28 @@
       "type_legal": "Legal",
       "empty": "No documents uploaded yet.",
       "register_first": "Please register your company profile before uploading documents."
+    },
+    "audits": {
+      "title": "تدقيقاتي في B&E",
+      "empty": "ستظهر مهام التدقيق PAC الخاصة بك هنا فور تعيينها من قِبَل فريق B&E.",
+      "pay_fee": "💳 ادفع ${{amount}}",
+      "fee_paid": "✓ مدفوع ${{amount}}",
+      "pay_loading": "…",
+      "dispute": "⚠️ اعتراض",
+      "rate_agent": "⭐ تقييم الوكيل",
+      "pending_dispute": "⏳ الاعتراض قيد المعالجة"
+    },
+    "notifications": {
+      "title": "الإشعارات",
+      "empty": "لا توجد إشعارات بعد",
+      "empty_sub": "ستظهر هنا تحديثات المهام وتأكيدات الدفع والتنبيهات.",
+      "mark_all_read": "تحديد الكل كمقروء",
+      "unread_count": "{{count}} غير مقروء",
+      "refresh": "تحديث",
+      "loading": "جارٍ التحميل…",
+      "error": "فشل تحميل الإشعارات",
+      "mark_read": "تحديد كمقروء",
+      "all_caught_up": "أنت على اطلاع بكل شيء!"
     }
   },
   "dev": {
@@ -257,7 +282,9 @@
     "portal": "بوابة وكيل PAC",
     "tabs": {
       "missions": "المهام المتاحة",
-      "profile": "ملفي الشخصي"
+      "profile": "ملفي الشخصي",
+      "earnings": "💰 الأرباح",
+      "progression": "🎯 التقدم"
     },
     "missions": {
       "status_title": "حالتك",
@@ -301,6 +328,23 @@
       "save": "حفظ الملف",
       "saved": "تم حفظ الملف بنجاح",
       "error": "خطأ أثناء الحفظ"
+    },
+    "earnings": {
+      "loading": "جارٍ التحميل…",
+      "total_earned": "إجمالي المكتسب",
+      "pending": "قيد الانتظار",
+      "commission_rate": "نسبة العمولة",
+      "total_missions": "إجمالي المهام",
+      "paid_missions": "مهمة(مهام) مدفوعة",
+      "completed_missions": "مهمة(مهام) مكتملة",
+      "assigned": "مُسنَدة أو مكتملة",
+      "paid_badge": "✓ مدفوع",
+      "pending_badge": "⏳ قيد الانتظار",
+      "no_missions": "لا توجد مهام مُسنَدة حتى الآن.",
+      "detail_title": "تفاصيل المهام",
+      "entries": "إدخال(ات)",
+      "commission_note": "كيف تُحسب عمولاتك؟",
+      "commission_desc": "لكل مهمة أتعاب ثابتة. تُحسب عمولتك ({{pct}}% كوكيل {{tier}}) فور تأكيد الشركة العميلة للدفع عبر Stripe. تُعالَج المدفوعات من قِبَل B&E Consult FZCO وفق دورتك الشهرية."
     }
   },
   "verify": {
@@ -377,7 +421,8 @@
       "users": "المستخدمون",
       "companies": "الشركات",
       "missions": "المهام",
-      "audit": "سجل التدقيق"
+      "audit": "سجل التدقيق",
+      "disputes": "النزاعات"
     },
     "stats": {
       "total_users": "إجمالي المستخدمين",
@@ -429,7 +474,20 @@
     "saving": "جارٍ الحفظ…",
     "saved": "تمّ الحفظ",
     "no_data": "لا توجد سجلات.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "disputes": {
+      "title": "نزاعات المهام",
+      "empty": "لا توجد نزاعات مفتوحة.",
+      "reason": "السبب",
+      "status": "الحالة",
+      "open": "مفتوح",
+      "resolved": "محلول",
+      "resolve": "حل",
+      "upheld": "مقبول",
+      "dismissed": "مرفوض",
+      "second_audit": "تدقيق ثانٍ",
+      "resolution": "القرار"
+    }
   },
   "metrics": {
     "title": "مقاييس الأعمال",
@@ -479,7 +537,8 @@
   },
   "cert_print": {
     "print_pdf": "طباعة / حفظ كـ PDF",
-    "copy_link": "نسخ رابط التحقق"
+    "copy_link": "نسخ رابط التحقق",
+    "download_pdf": "تنزيل PDF"
   },
   "cookie": {
     "title": "نستخدم ملفات تعريف الارتباط",
@@ -532,5 +591,111 @@
       "perk2": "Gold badge — maximum credibility",
       "perk3": "Featured placement in Registry search"
     }
+  },
+  "agents": {
+    "directory": {
+      "badge": "شبكة PAC المعتمدة",
+      "title_line1": "مدققو B&E",
+      "title_line2": "معتمدون وموثوقون",
+      "subtitle": "كل خبير PAC يتم اختياره وتدريبه واعتماده من قبل B&E Consulting. التدقيق الميداني، العناية الواجبة للموردين، الامتثال البيئي والاجتماعي — ثلاثة مستويات اعتماد لجميع احتياجاتك.",
+      "stat_agents": "خبراء نشطون",
+      "stat_tiers": "مستويات الاعتماد",
+      "stat_kyc": "KYC موثق",
+      "search_placeholder": "البحث بالاسم أو الموقع أو الخبرة…",
+      "search_btn": "بحث",
+      "filter_tier_label": "المستوى:",
+      "filter_reset": "✕ إعادة تعيين",
+      "error_load": "تعذر تحميل الدليل.",
+      "empty": "لم يتم العثور على خبراء لهذا البحث.",
+      "card_verified": "✔ موثق",
+      "card_view": "عرض الملف →",
+      "card_missions": "المهام",
+      "card_ontime": "في الوقت",
+      "prev": "→ السابق",
+      "next": "التالي ←"
+    },
+    "profile": {
+      "back": "→ جميع الخبراء",
+      "kyc_verified": "✔ KYC موثق",
+      "member_since": "عضو منذ",
+      "promoted_since_s3": "S3 منذ",
+      "error_load": "تعذر تحميل الملف الشخصي.",
+      "stat_missions": "المهام",
+      "stat_l2": "مهام L2+",
+      "stat_ontime": "في الوقت",
+      "stat_client": "تقييم العميل",
+      "stat_admin": "تقييم B&E",
+      "history_title": "سجل المهام",
+      "history_count": "آخر {{n}} مهمة",
+      "col_type": "النوع",
+      "col_zone": "المنطقة",
+      "col_tier": "المستوى",
+      "col_outcome": "النتيجة",
+      "col_client": "تق. العميل",
+      "col_admin": "تق. B&E",
+      "col_delay": "المهلة",
+      "col_date": "التاريخ",
+      "ontime_yes": "✓ في الوقت",
+      "ontime_late": "متأخر",
+      "outcome_pass": "مطابق",
+      "outcome_fail": "غير مطابق",
+      "outcome_cond": "مشروط",
+      "cta_title": "هل تحتاج إلى تدقيق معتمد؟",
+      "cta_desc": "احصل على شهادة L3 مع خبير مثل {{name}}.",
+      "cta_agents": "→ جميع الخبراء",
+      "cta_register": "بدء التوثيق"
+    }
+  },
+  "onboarding": {
+    "step1_eyebrow": "الخطوة 1 من 3",
+    "step1_heading": "أعدَّ ملف شركتك",
+    "step1_sub": "ستظهر هذه المعلومات في قائمة السجل العام وفي وثائق الاعتماد الخاصة بك.",
+    "step2_eyebrow": "الخطوة 2 من 3",
+    "step2_heading": "جهِّز مستنداتك",
+    "step2_sub": "ستقوم برفعها من لوحة التحكم. إعدادها مسبقاً يُسرِّع عملية التحقق بشكل كبير.",
+    "step3_eyebrow": "الخطوة 3 من 3",
+    "step3_heading": "اختر مستوى اعتمادك",
+    "step3_sub": "يمكنك تغيير ذلك لاحقاً. يحدد المستوى عمق التحقق والمستندات المطلوبة.",
+    "profile_label": "الملف الشخصي",
+    "documents_label": "المستندات",
+    "level_label": "المستوى",
+    "skip": "تخطي الآن",
+    "skip_bottom": "تخطي الإعداد والانتقال مباشرةً إلى لوحة التحكم →",
+    "back": "→ رجوع",
+    "continue": "→ متابعة",
+    "saving": "جارٍ الحفظ…",
+    "error_name_required": "اسم الشركة مطلوب.",
+    "error_save_failed": "تعذَّر حفظ الملف الشخصي. يرجى المحاولة مجدداً.",
+    "label_name": "اسم الشركة *",
+    "label_sector": "القطاع",
+    "label_country": "البلد",
+    "label_website": "الموقع الإلكتروني (اختياري)",
+    "placeholder_name": "مثال: Acme Trading LLC",
+    "placeholder_sector": "اختر القطاع",
+    "placeholder_country": "اختر البلد",
+    "placeholder_website": "https://yourcompany.com",
+    "docs_upload_title": "📁 أين يتم الرفع؟",
+    "docs_upload_body": "بعد الإعداد، انتقل إلى لوحة التحكم ← المستندات لرفع ملفاتك وتقديمها.",
+    "most_popular": "الأكثر شيوعاً",
+    "payment_title": "💳 الدفع لاحقاً",
+    "payment_body": "لن يتم محاسبتك الآن. بعد رفع مستنداتك، ستختار خطة وتدفع من لوحة التحكم.",
+    "finish_with_level": "→ البدء بـ {{level}}",
+    "go_to_dashboard": "→ الانتقال إلى لوحة التحكم"
+  },
+  "sector": {
+    "registry_link": "السجل",
+    "get_certified": "احصل على الاعتماد",
+    "certified_companies": "الشركات المعتمدة",
+    "view_all": "→ عرض كل النتائج",
+    "no_companies": "لا توجد شركات معتمدة في هذا القطاع حتى الآن.",
+    "be_first": "→ كن الأول",
+    "faq_heading": "الأسئلة الشائعة",
+    "cta_heading": "احصل على اعتماد شركتك اليوم.",
+    "cta_sub": "انضم إلى شركات {{name}} المُتحقَّق منها بالفعل على MyDD.",
+    "request_verification": "طلب التحقق",
+    "browse_registry": "تصفح السجل",
+    "other_sectors": "قطاعات أخرى",
+    "total_one": "{{count}} شركة معتمدة في هذا القطاع",
+    "total_other": "{{count}} شركات معتمدة في هذا القطاع"
   }
 }

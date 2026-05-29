@@ -197,6 +197,11 @@ const schemas = {
   renewalCheckout: z.object({
     planId: z.enum(['level1', 'level2', 'level3'], { required_error: 'planId required' }),
   }),
+
+  /** POST /api/payments/mission-checkout */
+  missionCheckout: z.object({
+    missionId: z.number().int().positive({ message: 'missionId must be a positive integer' }),
+  }),
 }
 
 // ── Middleware factory ────────────────────────────────────────────────────────

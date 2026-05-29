@@ -30,6 +30,14 @@ const pacWriteLimiter = rateLimit({
   validate: { keyGeneratorIpFallback: false },
   message: { error: 'Too many write requests. Please slow down.' },
 })
+// Public directory: unauthenticated callers — more lenient but still protected
+const pacPublicLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 60,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => `pac:public:${req.ip}`,
+  validate: { keyGeneratorIpFallback: false },
+  message: { error: 'Too many requests.' },
+})
 
 // ── GET /api/pac/missions ─────────────────────────────────────────────────────
 router.get('/missions', auth, pacReadLimiter, async (req, res) => {
@@ -105,6 +113,15 @@ router.get('/missions/:id/pdf', auth, pacReadLimiter, async (req, res) => {
     const row = result.rows[0]
     const m   = { ...mapMissionRow(row), pacAgentName: row.pac_agent_name || row.pac_full_name || null, pacLocation: row.pac_location || null }
 
+    // Extra data for v2 PDF: rating + dispute count
+    const [ratingRes, disputeRes] = await Promise.all([
+      query(`SELECT score FROM mission_ratings WHERE mission_id = $1 LIMIT 1`, [missionId]).catch(() => ({ rows: [] })),
+      query(`SELECT COUNT(*) AS cnt FROM mission_disputes WHERE mission_id = $1`, [missionId]).catch(() => ({ rows: [{ cnt: 0 }] })),
+    ])
+    const clientRating   = ratingRes.rows[0]?.score ?? null
+    const disputeCount   = parseInt(disputeRes.rows[0]?.cnt || 0, 10)
+    const commissionUsd  = m.commission_amount_cents ? (m.commission_amount_cents / 100).toFixed(2) : null
+
     let PDFDocument
     try { PDFDocument = require('pdfkit') } catch {
       return res.status(503).json({ error: 'PDF generation unavailable — run npm install in backend' })
@@ -164,12 +181,15 @@ router.get('/missions/:id/pdf', auth, pacReadLimiter, async (req, res) => {
     }
 
     const tableRows = [
-      ['Mission ID',    `#${String(m.id).padStart(5, '0')}`],
-      ['Type',          m.type ? m.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'],
-      ['Status',        (m.status || '').toUpperCase()],
+      ['Mission ID',     `#${String(m.id).padStart(5, '0')}`],
+      ['Type',           m.type ? m.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'],
+      ['Status',         (m.status || '').toUpperCase()],
       ['Assigned Agent', m.pacAgentName || '—'],
-      ['Completed On',  m.completedAt ? new Date(m.completedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'],
-      ['Fee',           m.fee ? `$${m.fee} USD` : '—'],
+      ['Completed On',   m.completedAt ? new Date(m.completedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'],
+      ['Fee',            m.feeUsd ? `$${m.feeUsd} USD` : (m.fee ? `$${m.fee} USD` : '—')],
+      ['Commission',     commissionUsd ? `$${commissionUsd} USD` : '—'],
+      ['Client Rating',  clientRating !== null ? `${clientRating} / 5` : '—'],
+      ['Disputes',       disputeCount > 0 ? String(disputeCount) : 'None'],
     ]
     const colW = (W - M * 2) / 2
     doc.roundedRect(M, y, W - M * 2, tableRows.length * 22, 4).fill('#f9f9f9')
@@ -327,14 +347,48 @@ router.post('/missions/:id/complete', auth, pacWriteLimiter, validate(schemas.su
 
     const result  = await query(
       `UPDATE missions SET status = 'completed', report_text = $1, outcome = $2, completed_at = NOW()
-       WHERE id = $3 AND assigned_to = $4 AND status = 'assigned' RETURNING *`,
+       WHERE id = $3 AND assigned_to = $4 AND status = 'assigned'
+       RETURNING *, (completed_at <= due_date OR due_date IS NULL) AS on_time`,
       [cleanReport, outcome, missionId, req.user.id],
     )
-    const mission = mapMissionRow(result.rows[0])
+    const missionRow = result.rows[0]
+    const mission = mapMissionRow(missionRow)
     if (!mission) return res.status(404).json({ error: 'Mission not found or not assigned to you' })
 
     res.json({ message: 'Mission completed', mission })
     logAudit(req.user.id, 'mission_completed', 'missions', req.ip, { missionId, outcome })
+
+    // ── Update achievement counters on pac_profiles (fire-and-forget) ────────
+    const isOnTime  = missionRow?.on_time !== false  // NULL due_date → on time
+    const isL2      = ['S2', 'S3'].includes(missionRow?.pac_tier_required)
+    query(`
+      UPDATE pac_profiles SET
+        missions_completed    = missions_completed + 1,
+        missions_on_time      = missions_on_time + $1,
+        l2_missions_completed = l2_missions_completed + $2,
+        updated_at            = NOW()
+      WHERE user_id = $3
+    `, [isOnTime ? 1 : 0, isL2 ? 1 : 0, req.user.id]).catch(e =>
+      console.error(JSON.stringify({ event: 'achievement_counter_error', message: e.message }))
+    )
+
+    // ── Increment supervisor's supervised_s1_completed (if agent is S1 with supervisor) ─
+    query(`
+      UPDATE pac_profiles SET
+        supervised_s1_completed = supervised_s1_completed + 1,
+        updated_at = NOW()
+      WHERE id = (
+        SELECT ps.supervisor_id
+        FROM pac_supervision ps
+        JOIN pac_profiles supervised ON supervised.id = ps.supervised_id
+        WHERE supervised.user_id = $1
+          AND ps.status = 'active'
+        LIMIT 1
+      )
+      AND pac_tier IN ('S2','S3')
+    `, [req.user.id]).catch(e =>
+      console.error(JSON.stringify({ event: 'supervisor_counter_error', message: e.message }))
+    )
 
     const companyUserQ = await query(
       `SELECT u.id, u.name, u.email FROM users u JOIN companies c ON c.user_id = u.id WHERE c.id = $1 LIMIT 1`,
@@ -354,6 +408,343 @@ router.post('/missions/:id/complete', auth, pacWriteLimiter, validate(schemas.su
   } catch (err) {
     console.error(JSON.stringify({ event: 'complete_mission_error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
     res.status(500).json({ error: 'Failed to complete mission' })
+  }
+})
+
+// ── GET /api/pac/progress — achievement progress for the logged-in agent ──────
+// Returns current stats vs. the next-tier thresholds so the frontend
+// can render the progress bars without computing anything.
+router.get('/progress', auth, pacReadLimiter, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') return res.status(403).json({ error: 'PAC agents only' })
+
+    const { rows } = await query(`
+      SELECT
+        pp.pac_tier, pp.eligible_for_s2, pp.eligible_for_s3,
+        pp.missions_completed, pp.missions_on_time,
+        pp.l2_missions_completed, pp.supervised_s1_completed,
+        pp.double_rejections, pp.months_as_s2,
+        pp.admin_score_total, pp.admin_score_count,
+        pp.client_score_total, pp.client_score_count,
+        pp.promotion_date_s2, pp.promotion_date_s3,
+        pp.tier_anniversary, pp.membership_active,
+        GREATEST(0, EXTRACT(MONTH FROM AGE(NOW(), u.created_at))::int) AS months_active
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE pp.user_id = $1
+      LIMIT 1
+    `, [req.user.id])
+
+    if (!rows.length) return res.status(404).json({ error: 'PAC profile not found' })
+    const p = rows[0]
+
+    const adminAvg  = p.admin_score_count  > 0 ? +(p.admin_score_total  / p.admin_score_count ).toFixed(2) : 0
+    const clientAvg = p.client_score_count > 0 ? +(p.client_score_total / p.client_score_count).toFixed(2) : 0
+    const onTimeRate = p.missions_completed > 0 ? +(p.missions_on_time / p.missions_completed).toFixed(2) : 0
+    const tier = (p.pac_tier || 'S1').toUpperCase()
+
+    // Build per-criterion progress for the relevant upgrade path
+    let criteria = null
+    let targetTier = null
+
+    if (tier === 'S1') {
+      targetTier = 'S2'
+      criteria = [
+        { key: 'missions',          label: 'Missions completed', value: p.missions_completed, target: 10,   met: p.missions_completed >= 10 },
+        { key: 'admin_score',       label: 'Admin score',        value: adminAvg,              target: 4.0,  met: adminAvg >= 4.0 },
+        { key: 'on_time_rate',      label: 'On-time rate',       value: onTimeRate,            target: 0.85, met: onTimeRate >= 0.85, format: 'percent' },
+        { key: 'double_rejections', label: 'Zero double rejections', value: p.double_rejections, target: 0, met: p.double_rejections === 0, inverse: true },
+        { key: 'seniority',         label: 'Platform seniority', value: p.months_active,       target: 6,   met: p.months_active >= 6, format: 'months' },
+      ]
+    } else if (tier === 'S2') {
+      targetTier = 'S3'
+      criteria = [
+        { key: 'missions',             label: 'Total missions',      value: p.missions_completed,      target: 25,  met: p.missions_completed >= 25 },
+        { key: 'l2_missions',          label: 'L2 missions',         value: p.l2_missions_completed,   target: 10,  met: p.l2_missions_completed >= 10 },
+        { key: 'admin_score',          label: 'Admin score',         value: adminAvg,                  target: 4.5, met: adminAvg >= 4.5 },
+        { key: 'client_score',         label: 'Client score',        value: clientAvg,                 target: 4.3, met: clientAvg >= 4.3 },
+        { key: 'on_time_rate',         label: 'On-time rate',        value: onTimeRate,                target: 0.90, met: onTimeRate >= 0.90, format: 'percent' },
+        { key: 'supervised_s1',        label: 'S1 agents supervised', value: p.supervised_s1_completed, target: 3,   met: p.supervised_s1_completed >= 3 },
+        { key: 'no_disputes',          label: 'Zero disputes',       value: p.double_rejections,       target: 0,   met: p.double_rejections === 0, inverse: true },
+        { key: 'months_as_s2',         label: 'Months as S2',        value: p.months_as_s2,            target: 12,  met: p.months_as_s2 >= 12, format: 'months' },
+      ]
+    }
+
+    const metCount   = criteria ? criteria.filter(c => c.met).length : 0
+    const totalCount = criteria ? criteria.length : 0
+    const pct = totalCount > 0 ? Math.round((metCount / totalCount) * 100) : 100
+
+    res.json({
+      current_tier:    tier,
+      target_tier:     targetTier,
+      eligible_for_s2: p.eligible_for_s2,
+      eligible_for_s3: p.eligible_for_s3,
+      progress_pct:    pct,
+      criteria,
+      tier_anniversary: p.tier_anniversary,
+      membership_active: p.membership_active,
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.progress.error', message: err.message }))
+    res.status(500).json({ error: 'Failed to load progress' })
+  }
+})
+
+// ── GET /api/pac/directory — public agent directory ──────────────────────────
+// No auth required. Returns approved, active PAC agents only.
+// Sorted S3 → S2 → S1, then missions_completed DESC within each tier.
+// Filters: tier, q (name/location/bio search).
+router.get('/directory', pacPublicLimiter, async (req, res) => {
+  try {
+    const page   = Math.max(1, parseInt(req.query.page  || '1',  10) || 1)
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit || '20', 10) || 20))
+    const offset = (page - 1) * limit
+    const tier   = req.query.tier ? String(req.query.tier).trim() : null
+    const q      = req.query.q    ? String(req.query.q).trim()    : null
+
+    const params = []
+    const where  = [`pp.kyc_status = 'approved'`, `pp.membership_active = TRUE`]
+
+    if (tier && ['S1','S2','S3'].includes(tier)) {
+      params.push(tier)
+      where.push(`pp.pac_tier = $${params.length}`)
+    }
+    if (q) {
+      params.push(`%${q}%`)
+      where.push(`(pp.full_name ILIKE $${params.length} OR pp.location ILIKE $${params.length} OR pp.bio ILIKE $${params.length} OR pp.expertise ILIKE $${params.length})`)
+    }
+
+    const whereClause  = `WHERE ${where.join(' AND ')}`
+    const dataParams   = [...params, limit, offset]
+
+    const TIER_ORDER = `CASE pp.pac_tier WHEN 'S3' THEN 1 WHEN 'S2' THEN 2 ELSE 3 END`
+
+    const [rows, countRow] = await Promise.all([
+      query(`
+        SELECT
+          pp.id,
+          COALESCE(pp.full_name, u.name)               AS name,
+          pp.pac_tier,
+          pp.location,
+          pp.bio,
+          pp.expertise,
+          pp.languages,
+          pp.certifications,
+          pp.missions_completed,
+          pp.missions_on_time,
+          CASE WHEN pp.admin_score_count > 0
+               THEN ROUND(pp.admin_score_total::numeric / pp.admin_score_count, 2)
+               ELSE NULL END                            AS avg_admin_score,
+          CASE WHEN pp.client_score_count > 0
+               THEN ROUND(pp.client_score_total::numeric / pp.client_score_count, 2)
+               ELSE NULL END                            AS avg_client_score,
+          pp.promotion_date_s2,
+          pp.promotion_date_s3
+        FROM pac_profiles pp
+        JOIN users u ON u.id = pp.user_id
+        ${whereClause}
+        ORDER BY ${TIER_ORDER}, pp.missions_completed DESC
+        LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+      `, dataParams),
+      query(`SELECT COUNT(*)::int AS total FROM pac_profiles pp ${whereClause}`, params),
+    ])
+
+    const total = countRow.rows[0]?.total || 0
+    res.json({
+      agents: rows.rows.map(r => ({
+        id:               r.id,
+        name:             r.name             || null,
+        tier:             r.pac_tier,
+        location:         r.location         || null,
+        bio:              r.bio              || null,
+        expertise:        r.expertise        || null,
+        languages:        r.languages        || null,
+        certifications:   r.certifications   || null,
+        missionsCompleted: r.missions_completed,
+        missionsOnTime:    r.missions_on_time,
+        avgAdminScore:    r.avg_admin_score  ? Number(r.avg_admin_score)  : null,
+        avgClientScore:   r.avg_client_score ? Number(r.avg_client_score) : null,
+        promotedS2:       r.promotion_date_s2 || null,
+        promotedS3:       r.promotion_date_s3 || null,
+      })),
+      pagination: { page, limit, total, pages: Math.max(Math.ceil(total / limit), 1) },
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.directory.error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to load directory' })
+  }
+})
+
+// ── GET /api/pac/directory/:id — public single agent profile ─────────────────
+// Returns full profile for one approved+active agent.
+// Includes anonymised mission history (company_name hidden, report_text hidden).
+router.get('/directory/:id', pacPublicLimiter, async (req, res) => {
+  try {
+    const agentId = parseInt(req.params.id, 10)
+    if (Number.isNaN(agentId)) return res.status(400).json({ error: 'Invalid agent id' })
+
+    const agentRes = await query(`
+      SELECT
+        pp.id,
+        COALESCE(pp.full_name, u.name)                AS name,
+        pp.pac_tier,
+        pp.location,
+        pp.bio,
+        pp.expertise,
+        pp.languages,
+        pp.certifications,
+        pp.missions_completed,
+        pp.missions_on_time,
+        pp.l2_missions_completed,
+        CASE WHEN pp.admin_score_count > 0
+             THEN ROUND(pp.admin_score_total::numeric / pp.admin_score_count, 2)
+             ELSE NULL END                            AS avg_admin_score,
+        CASE WHEN pp.client_score_count > 0
+             THEN ROUND(pp.client_score_total::numeric / pp.client_score_count, 2)
+             ELSE NULL END                            AS avg_client_score,
+        pp.promotion_date_s2,
+        pp.promotion_date_s3,
+        pp.created_at                                 AS member_since
+      FROM pac_profiles pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE pp.id = $1
+        AND pp.kyc_status = 'approved'
+        AND pp.membership_active = TRUE
+      LIMIT 1
+    `, [agentId])
+
+    if (!agentRes.rows.length) return res.status(404).json({ error: 'Agent not found' })
+    const agent = agentRes.rows[0]
+
+    // Anonymised mission history — no company names, no report text
+    const missionsRes = await query(`
+      SELECT
+        m.type,
+        m.location,
+        m.pac_tier_required,
+        m.status,
+        m.outcome,
+        m.admin_score,
+        m.client_score,
+        m.completed_at,
+        CASE WHEN m.due_date IS NULL OR m.completed_at IS NULL THEN NULL
+             WHEN m.completed_at::date <= m.due_date THEN true
+             ELSE false END AS on_time
+      FROM missions m
+      WHERE m.assigned_to = (SELECT user_id FROM pac_profiles WHERE id = $1)
+        AND m.status = 'completed'
+      ORDER BY m.completed_at DESC
+      LIMIT 20
+    `, [agentId])
+
+    res.json({
+      agent: {
+        id:               agent.id,
+        name:             agent.name             || null,
+        tier:             agent.pac_tier,
+        location:         agent.location         || null,
+        bio:              agent.bio              || null,
+        expertise:        agent.expertise        || null,
+        languages:        agent.languages        || null,
+        certifications:   agent.certifications   || null,
+        missionsCompleted: agent.missions_completed,
+        missionsOnTime:    agent.missions_on_time,
+        l2MissionsCompleted: agent.l2_missions_completed,
+        avgAdminScore:    agent.avg_admin_score  ? Number(agent.avg_admin_score)  : null,
+        avgClientScore:   agent.avg_client_score ? Number(agent.avg_client_score) : null,
+        promotedS2:       agent.promotion_date_s2 || null,
+        promotedS3:       agent.promotion_date_s3 || null,
+        memberSince:      agent.member_since,
+      },
+      missionHistory: missionsRes.rows.map(m => ({
+        type:        m.type        || null,
+        location:    m.location    || null,
+        tierRequired: m.pac_tier_required,
+        outcome:     m.outcome     || null,
+        adminScore:  m.admin_score || null,
+        clientScore: m.client_score || null,
+        completedAt: m.completed_at,
+        onTime:      m.on_time,
+      })),
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.directory.agent.error', reqId: req.reqId, message: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined }))
+    res.status(500).json({ error: 'Failed to load agent profile' })
+  }
+})
+
+// ── GET /api/pac/earnings ─────────────────────────────────────────────────────
+// Returns the agent's commission earnings per completed mission, plus aggregate
+// totals. Only missions assigned to the requesting PAC user are returned.
+router.get('/earnings', auth, pacReadLimiter, async (req, res) => {
+  try {
+    if (req.user.role !== 'pac') return res.status(403).json({ error: 'Forbidden' })
+
+    const [missionsResult, profileResult] = await Promise.all([
+      query(
+        `SELECT m.id, m.company_name, m.location, m.type,
+                m.fee_usd, m.commission_amount_cents,
+                m.payment_confirmed_at, m.status, m.outcome,
+                m.completed_at, m.created_at
+           FROM missions m
+          WHERE m.assigned_to = $1
+            AND m.status IN ('completed', 'in_progress', 'assigned')
+          ORDER BY m.created_at DESC
+          LIMIT 200`,
+        [req.user.id]
+      ),
+      query(
+        `SELECT commission_rate, pac_tier FROM pac_profiles WHERE user_id = $1 LIMIT 1`,
+        [req.user.id]
+      ),
+    ])
+
+    const rows           = missionsResult.rows
+    const profile        = profileResult.rows[0] || {}
+    const commissionRate = parseFloat(profile.commission_rate || 0.10)
+
+    // Aggregate totals
+    const totalEarnedCents = rows.reduce((sum, r) => {
+      if (r.payment_confirmed_at && r.commission_amount_cents) return sum + r.commission_amount_cents
+      return sum
+    }, 0)
+    const pendingCents = rows.reduce((sum, r) => {
+      if (!r.payment_confirmed_at && r.status === 'completed' && r.commission_amount_cents) return sum + r.commission_amount_cents
+      return sum
+    }, 0)
+    const completedCount = rows.filter(r => r.status === 'completed').length
+    const paidCount      = rows.filter(r => r.payment_confirmed_at).length
+
+    res.json({
+      summary: {
+        totalEarnedCents,
+        totalEarnedUsd:  +(totalEarnedCents / 100).toFixed(2),
+        pendingCents,
+        pendingUsd:      +(pendingCents / 100).toFixed(2),
+        commissionRate,
+        commissionPct:   Math.round(commissionRate * 100),
+        pacTier:         profile.pac_tier || 'S1',
+        completedCount,
+        paidCount,
+      },
+      missions: rows.map(r => ({
+        id:                   r.id,
+        companyName:          r.company_name || '',
+        location:             r.location     || '',
+        type:                 r.type         || '',
+        feeUsd:               r.fee_usd      || 500,
+        commissionCents:      r.commission_amount_cents || Math.round((r.fee_usd || 500) * commissionRate * 100),
+        commissionUsd:        +((r.commission_amount_cents || Math.round((r.fee_usd || 500) * commissionRate * 100)) / 100).toFixed(2),
+        paymentConfirmedAt:   r.payment_confirmed_at || null,
+        status:               r.status,
+        outcome:              r.outcome      || null,
+        completedAt:          r.completed_at || null,
+        createdAt:            r.created_at,
+      })),
+    })
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pac.earnings.error', reqId: req.reqId, message: err.message }))
+    res.status(500).json({ error: 'Failed to load earnings' })
   }
 })
 

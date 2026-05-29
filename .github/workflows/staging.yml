@@ -38,6 +38,10 @@ jobs:
           node --test tests/webhook.test.js
           node --test tests/validators.test.js
           node --test tests/lib.test.js
+          node --test tests/pac.test.js
+          node --test tests/payments.test.js
+          node --test tests/disputes.test.js
+          node --test tests/earnings.test.js
 
   # ── 2. Backend lint / syntax ─────────────────────────────────────────────────
   lint:

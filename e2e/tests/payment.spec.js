@@ -93,3 +93,67 @@ test.describe('Payments — pricing & checkout', () => {
     }
   })
 })
+
+test.describe('Payments — mission fee checkout', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 1, name: 'Alice Dupont', email: 'alice@acme.com', role: 'company' })
+  })
+
+  test('audits tab shows pay button for unpaid mission fee', async ({ page }) => {
+    await page.goto('/dashboard')
+
+    // Navigate to the audits tab
+    const auditsTab = page.getByRole('button', { name: /audit/i }).first()
+    await expect(auditsTab).toBeVisible({ timeout: 5000 })
+    await auditsTab.click()
+
+    // Stub returns mission id=42 with feeUsd=500 and no paymentConfirmedAt
+    // → pay button "💳 Payer $500" should be visible
+    await expect(
+      page.getByRole('button', { name: /payer|pay/i }).first()
+    ).toBeVisible({ timeout: 5000 })
+  })
+
+  test('pay button triggers mission-checkout API call', async ({ page }) => {
+    let checkoutCalled = false
+    let checkoutBody   = null
+
+    // Override mission-checkout stub to capture the request body
+    await page.route('**/api/payments/mission-checkout', async (route) => {
+      checkoutCalled = true
+      checkoutBody   = route.request().postDataJSON()
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ url: '/login?stripe-mission-redirect=1' }),
+      })
+    })
+
+    await page.goto('/dashboard')
+
+    const auditsTab = page.getByRole('button', { name: /audit/i }).first()
+    if (await auditsTab.isVisible()) await auditsTab.click()
+
+    const payBtn = page.getByRole('button', { name: /payer|pay/i }).first()
+    if (await payBtn.isVisible()) {
+      await payBtn.click()
+      await page.waitForTimeout(1000)
+      expect(checkoutCalled).toBe(true)
+      // missionId should be the ID of the unpaid mission (42)
+      expect(checkoutBody).toMatchObject({ missionId: 42 })
+    }
+  })
+
+  test('paid mission shows green paid badge instead of pay button', async ({ page }) => {
+    await page.goto('/dashboard')
+
+    const auditsTab = page.getByRole('button', { name: /audit/i }).first()
+    if (await auditsTab.isVisible()) await auditsTab.click()
+
+    // Mission id=43 has paymentConfirmedAt set → shows "✓ Paid $300" (EN) / "✓ Payé $300" (FR)
+    await expect(
+      page.getByText(/✓ pa[iy]/i).first()
+    ).toBeVisible({ timeout: 5000 })
+  })
+})

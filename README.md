@@ -104,7 +104,7 @@ node --test tests/encryption.test.js
 cd frontend && npm test
 ```
 
-Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 220 tests total.
+Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 331 tests across 27 files.
 
 ### E2E tests (Playwright)
 
@@ -114,7 +114,7 @@ npx playwright install --with-deps chromium
 npx playwright test
 ```
 
-All API calls are mocked — no running backend needed. Runs in CI on every push.
+75 tests covering auth, dashboard, onboarding, admin, PAC, payments, public pages, and sector pages. All API calls are mocked — no running backend needed. Runs in CI on every push.
 
 ---
 
@@ -125,22 +125,28 @@ backend/
   lib/             Core modules (auth, audit, fraud detection, webhooks…)
   routes/          Express routers (one file per resource)
   migrations/      Ordered SQL migrations (001_*.sql → 008_*.sql)
-  tests/           Node --test unit tests
+  tests/           Node --test unit tests (13 files)
   server.js        Entry point
   env.example      Environment variable documentation
 
 frontend/
   src/
-    pages/         Route-level components (Dashboard, Landing, Verify…)
-    components/    Shared UI components
-    locales/       i18n JSON files (en, fr, es, pt, ar, zh)
-    __tests__/     Vitest tests
+    pages/         Route-level components (Dashboard, Landing, Onboarding,
+                   SectorPage, TraderPortal, Verify, CertPrint, PACDirectory…)
+    components/    Shared UI components (ComparePanel, NotificationsPanel…)
+    locales/       i18n JSON files (en, fr, es, pt, ar, zh) — 573 keys each
+    __tests__/     Vitest tests (27 files, 331 tests)
+  public/
+    sw.js          Service worker (PWA — network-first + cache-first)
+    offline.html   Branded offline fallback page
 
 e2e/
-  tests/           Playwright specs
+  tests/           Playwright specs (75 tests — all API calls mocked)
+  helpers.js       seedSession, stubApi helpers; LIFO route-stub rules
 
 docs/
-  api-integration.md   B2B integration guide (API keys, webhooks, HMAC)
+  api-integration.md      B2B integration guide (API keys, webhooks, HMAC)
+  railway-staging-setup.md  Manual Railway staging checklist
 ```
 
 ---
@@ -151,12 +157,18 @@ docs/
 |---------|---------|
 | **3-tier certification** | Bronze (doc review), Silver (full KYC), Gold (on-site PAC inspection) |
 | **Public verification** | `/verify/:id` — buyers confirm supplier certification in seconds |
+| **Onboarding wizard** | Guided 3-step company setup (profile → documents → level), skippable |
+| **Sector pages** | SEO-optimised `/sectors/:slug` for Manufacturing, Logistics, Agribusiness, Technology, Trade Finance — schema.org structured data |
+| **Trader compare** | Side-by-side comparison of up to 3 suppliers (ComparePanel modal) |
+| **PWA** | Service worker with network-first/cache-first strategies, branded offline page |
 | **API keys** | SHA-256 hashed, scoped, rate-limited — B2B integrations without user sessions |
 | **Webhooks** | HMAC-SHA256 signed, retry with exp. back-off, `cert.status_changed` et al. |
 | **GDPR** | Data export (Art. 20), right to erasure (Art. 17), PII retention cron |
-| **i18n** | 6 languages, 443 keys, CI parity test |
+| **i18n** | 6 languages (EN/FR/ES/PT/AR/ZH), 573 keys, CI parity test |
 | **2FA** | TOTP (Google Authenticator / Authy) |
 | **Fraud detection** | 27-indicator trust score, disposable email detection, IP multi-account |
+| **PAC agent network** | Public directory + individual profiles; Level 3 missions assigned to certified agents |
+| **PDF certificates** | pdfkit A4 cert with QR code; PAC mission report PDF |
 
 ---
 
