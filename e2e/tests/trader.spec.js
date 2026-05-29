@@ -220,3 +220,80 @@ test.describe('Trader — stats panel', () => {
     await expect(page.getByText('3').first()).toBeVisible({ timeout: 5000 })
   })
 })
+
+// ── Compare panel ─────────────────────────────────────────────────────────────
+
+test.describe('Trader — compare panel', () => {
+  // Extended timeout: beforeEach does 2 navigations (login + trader) after Vite cold start
+  test.setTimeout(30000)
+
+  test.beforeEach(async ({ page }) => {
+    await stubTraderApi(page)
+    await page.goto('/login')
+    await seedSession(page, TRADER_USER)
+    await page.goto('/trader')
+    await expect(page).toHaveURL(/\/trader/, { timeout: 8000 })
+  })
+
+  test('compare sticky bar appears after selecting two companies', async ({ page }) => {
+    // Wait for companies to render, then click ⇌ on both cards
+    await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 6000 })
+    const compareBtns = page.locator('button').filter({ hasText: /^⇌$/ })
+    await compareBtns.nth(0).click()
+    await compareBtns.nth(1).click()
+
+    // Sticky bar should now show "Compare 2 companies →"
+    await expect(
+      page.getByRole('button', { name: /compare 2 companies/i })
+    ).toBeVisible({ timeout: 5000 })
+  })
+
+  test('compare panel opens with company names after clicking compare button', async ({ page }) => {
+    await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 6000 })
+    const compareBtns = page.locator('button').filter({ hasText: /^⇌$/ })
+    await compareBtns.nth(0).click()
+    await compareBtns.nth(1).click()
+
+    // Click the "Compare 2 companies →" button to open the panel
+    await page.getByRole('button', { name: /compare 2 companies/i }).click()
+
+    // ComparePanel renders both company names side-by-side
+    await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Beta Ltd').first()).toBeVisible({ timeout: 5000 })
+  })
+
+  test('closing compare panel hides it', async ({ page }) => {
+    await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 6000 })
+    const compareBtns = page.locator('button').filter({ hasText: /^⇌$/ })
+    await compareBtns.nth(0).click()
+    await compareBtns.nth(1).click()
+
+    await page.getByRole('button', { name: /compare 2 companies/i }).click()
+
+    // Close with the ✕ button inside the panel header.
+    // The sticky bar also has ✕ per company (2 of them), so use .last() to target the panel's close button.
+    await page.locator('button').filter({ hasText: '✕' }).last().click()
+
+    // Panel is gone — sticky bar with "Compare 2 companies →" returns
+    await expect(
+      page.getByRole('button', { name: /compare 2 companies/i })
+    ).toBeVisible({ timeout: 5000 })
+  })
+
+  test('clearing compare removes sticky bar', async ({ page }) => {
+    await expect(page.getByText('Acme Corp').first()).toBeVisible({ timeout: 6000 })
+    const compareBtns = page.locator('button').filter({ hasText: /^⇌$/ })
+    await compareBtns.nth(0).click()
+    await compareBtns.nth(1).click()
+
+    // Clear button in the sticky bar
+    const clearBtn = page.locator('button').filter({ hasText: /clear/i }).first()
+    await expect(clearBtn).toBeVisible({ timeout: 5000 })
+    await clearBtn.click()
+
+    // Sticky bar should be gone
+    await expect(
+      page.getByRole('button', { name: /compare 2 companies/i })
+    ).not.toBeVisible({ timeout: 3000 })
+  })
+})

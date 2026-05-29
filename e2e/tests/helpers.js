@@ -39,6 +39,44 @@
 //   CORRECT — locale-aware regex:  /Paid|Paye/i   /Pending|En attente/i
 //   WRONG   — French-only:         /Paye/i         /En attente/i
 //
+// RULE 4 — AMBIGUOUS TEXT → PREFER ROLE SELECTORS
+//   getByText() fails with a strict-mode violation when multiple elements share
+//   the same text (e.g. a heading AND a description containing "API keys").
+//   Use a role selector to be specific.
+//
+//   CORRECT:  page.getByRole('heading', { name: /API keys/i })
+//   WRONG:    page.getByText(/API keys/i)  // may match heading + paragraph
+//
+// RULE 5 — MULTIPLE IDENTICAL BUTTONS → .first() / .last()
+//   When several buttons share the same label (e.g. multiple "✕" close buttons),
+//   Playwright's strict mode raises an error. Disambiguate with .first()/.last()
+//   or scope to a parent container.
+//
+//   CORRECT:  page.getByRole('button', { name: '✕' }).last()   // panel close
+//   WRONG:    page.locator('button').filter({ hasText: '✕' }).click()  // 3 matches
+//
+// RULE 6 — COMPOUND API ROUTES → ONE HANDLER, INSPECT THE URL
+//   When a single URL prefix serves multiple shapes (list vs. :id profile), do
+//   NOT rely on two glob stubs — glob ordering is fragile across Playwright
+//   versions. Instead register one broad route and branch inside the handler:
+//
+//   await page.route('**/api/pac/directory**', (route) => {
+//     if (/\/api\/pac\/directory\/\d+/.test(route.request().url())) {
+//       return route.fulfill({ /* profile shape */ })
+//     }
+//     return route.fulfill({ /* list shape */ })
+//   })
+//
+// RULE 7 — STUB COMPLETENESS: INCLUDE EVERY FIELD THE COMPONENT READS
+//   A missing field causes setFoo(undefined) → foo.length crashes → error boundary.
+//   Before writing a stub, grep the component for every res.data.* access and
+//   include ALL of them, even if they're empty arrays / 0 / false.
+//
+//   Common pitfalls:
+//     missionHistory: []          // PACAgentProfile — not optional
+//     languages: 'FR,EN'          // comma-string, NOT an array
+//     pagination: { total, page, limit, pages }  // most list endpoints
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** sessionStorage key used by frontend/src/lib/session.js */
@@ -264,6 +302,147 @@ async function stubApi(page) {
       }),
     }),
   )
+
+  // API keys (Developer tab)
+  await page.route('**/api/keys', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        status: 201, contentType: 'application/json',
+        body: JSON.stringify({
+          id: 99, prefix: 'mydd_test', name: 'My CI Key',
+          key: 'mydd_test_abcdef1234567890abcdef1234567890',
+          createdAt: new Date().toISOString(),
+        }),
+      })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 1, prefix: 'mydd_live', name: 'Production', lastUsed: '2026-05-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' },
+          { id: 2, prefix: 'mydd_test', name: 'Staging',    lastUsed: null,                  createdAt: '2026-02-01T00:00:00Z' },
+        ],
+      }),
+    })
+  })
+  await page.route('**/api/keys/**', (route) =>
+    route.fulfill({ status: 204, body: '' }),
+  )
+
+  // Webhooks (Developer tab)
+  await page.route('**/api/webhooks', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        status: 201, contentType: 'application/json',
+        body: JSON.stringify({
+          id: 77, url: 'https://example.com/webhook',
+          events: ['cert.status_changed'], description: '',
+          secret: 'whsec_testsecret1234567890',
+          createdAt: new Date().toISOString(),
+        }),
+      })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 10, url: 'https://hooks.example.com/mydd', events: ['cert.status_changed', 'cert.issued'],
+            description: 'Prod hook', active: true, createdAt: '2026-03-01T00:00:00Z' },
+        ],
+      }),
+    })
+  })
+  // LIFO: register broad DELETE handler FIRST, then specific ping handler LAST
+  // so ping wins over the catch-all for /api/webhooks/:id/ping URLs.
+  await page.route('**/api/webhooks/**', (route) =>
+    route.fulfill({ status: 204, body: '' }),
+  )
+  await page.route('**/api/webhooks/*/ping', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ success: true, statusCode: 200 }),
+    }),
+  )
+
+  // PAC public directory + agent profile (/agents, /agents/:id)
+  // NOTE: PACDirectory.jsx calls agent.languages.split(',') — must be comma-separated string.
+  // Single route handler inspects the URL to differentiate list vs. profile:
+  //   /api/pac/directory            → list (with optional query string)
+  //   /api/pac/directory/<number>   → individual profile
+  await page.route('**/api/pac/directory**', (route) => {
+    const url = route.request().url()
+    if (/\/api\/pac\/directory\/\d+/.test(url)) {
+      // Individual agent profile — missionHistory MUST be an array (not undefined)
+      // because PACAgentProfile.jsx calls setHistory(res.data.missionHistory) and then
+      // renders history.length, which crashes if undefined.
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          agent: { id: 5, name: 'Sophie Diallo', country: 'SN', languages: 'FR,EN', specialties: 'Manufacturing,Agribusiness', missionsCompleted: 32, bio: 'Expert in West African supply chains.', active: true, memberSince: '2025-03-01T00:00:00Z' },
+          missionHistory: [],
+        }),
+      })
+    }
+    // Agent list (may include query string for search/pagination/tier filter)
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        agents: [
+          { id: 5, name: 'Sophie Diallo', country: 'SN', languages: 'FR,EN', specialties: 'Manufacturing,Agribusiness', missionsCompleted: 32, bio: 'Expert in West African supply chains.', active: true },
+          { id: 6, name: 'James Okafor',  country: 'NG', languages: 'EN',    specialties: 'Logistics,Trade Finance',    missionsCompleted: 18, bio: 'Former customs inspector.',              active: true },
+        ],
+        pagination: { total: 2, page: 1, limit: 20, pages: 1 },
+      }),
+    })
+  })
+
+  // Trader — watchlist (for trader.spec.js) + stats
+  await page.route('**/api/trader/watchlist**', (route) => {
+    if (route.request().method() === 'DELETE') {
+      return route.fulfill({ status: 204, body: '' })
+    }
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          { id: 10, name: 'Acme Corp', sector: 'Manufacturing', country: 'FR', level: 2 },
+        ],
+      }),
+    })
+  })
+  await page.route('**/api/trader/stats', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ totalVerified: 120, certifiedInSector: 18, avgLevel: 1.8 }),
+    }),
+  )
+
+  // Notifications (Dashboard tab)
+  // NotificationsPanel reads: r.data.notifications + r.data.unread
+  // mark-one: PATCH /api/notifications/:id/read
+  // mark-all: PATCH /api/notifications/read-all
+  await page.route('**/api/notifications**', (route) => {
+    if (route.request().method() === 'PATCH') {
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ updated: 2 }),
+      })
+    }
+    return route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        notifications: [
+          { id: 1, type: 'cert_approved',   title: 'Certification approved',        body: 'Your Level 1 certification was approved.',         read: false, createdAt: '2026-05-20T10:00:00Z' },
+          { id: 2, type: 'mission_assigned', title: 'PAC agent assigned',            body: 'A PAC agent has been assigned to your mission.',    read: false, createdAt: '2026-05-18T09:00:00Z' },
+          { id: 3, type: 'cert_expiring',    title: 'Certification expiring soon',   body: 'Your certification expires in 30 days.',            read: true,  createdAt: '2026-05-10T08:00:00Z' },
+        ],
+        unread: 2,
+      }),
+    })
+  })
 
 }
 
