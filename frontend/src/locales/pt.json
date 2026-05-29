@@ -422,7 +422,8 @@
       "companies": "Empresas",
       "missions": "Missões",
       "audit": "Log de auditoria",
-      "disputes": "Litígios"
+      "disputes": "Litígios",
+      "fraud": "Fraude"
     },
     "stats": {
       "total_users": "Total de usuários",
@@ -487,6 +488,20 @@
       "dismissed": "Indeferido",
       "second_audit": "Segunda auditoria",
       "resolution": "Resolução"
+    },
+    "fraud": {
+      "title": "Alertas de fraude",
+      "filter_open": "Abertas",
+      "filter_resolved": "Resolvidas",
+      "col_user": "Utilizador",
+      "col_rule": "Regra",
+      "col_severity": "Severidade",
+      "col_date": "Data",
+      "resolve_btn": "Resolver",
+      "resolving": "A resolver…",
+      "resolved_badge": "Resolvido",
+      "no_alerts": "Sem alertas nesta categoria.",
+      "export_csv": "Exportar CSV"
     }
   },
   "metrics": {

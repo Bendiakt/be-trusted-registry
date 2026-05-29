@@ -422,7 +422,8 @@
       "companies": "Companies",
       "missions": "Missions",
       "audit": "Audit Log",
-      "disputes": "Disputes"
+      "disputes": "Disputes",
+      "fraud": "Fraud"
     },
     "stats": {
       "total_users": "Total Users",
@@ -487,6 +488,20 @@
       "dismissed": "Dismissed",
       "second_audit": "Second Audit",
       "resolution": "Resolution"
+    },
+    "fraud": {
+      "title": "Fraud Alerts",
+      "filter_open": "Open",
+      "filter_resolved": "Resolved",
+      "col_user": "User",
+      "col_rule": "Rule",
+      "col_severity": "Severity",
+      "col_date": "Date",
+      "resolve_btn": "Resolve",
+      "resolving": "Resolving…",
+      "resolved_badge": "Resolved",
+      "no_alerts": "No fraud alerts in this category.",
+      "export_csv": "Export CSV"
     }
   },
   "not_found": {
