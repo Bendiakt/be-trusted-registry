@@ -422,7 +422,8 @@
       "companies": "الشركات",
       "missions": "المهام",
       "audit": "سجل التدقيق",
-      "disputes": "النزاعات"
+      "disputes": "النزاعات",
+      "fraud": "احتيال"
     },
     "stats": {
       "total_users": "إجمالي المستخدمين",
@@ -487,6 +488,20 @@
       "dismissed": "مرفوض",
       "second_audit": "تدقيق ثانٍ",
       "resolution": "القرار"
+    },
+    "fraud": {
+      "title": "تنبيهات الاحتيال",
+      "filter_open": "مفتوحة",
+      "filter_resolved": "محلولة",
+      "col_user": "مستخدم",
+      "col_rule": "قاعدة",
+      "col_severity": "الخطورة",
+      "col_date": "التاريخ",
+      "resolve_btn": "حل",
+      "resolving": "جار الحل…",
+      "resolved_badge": "محلول",
+      "no_alerts": "لا توجد تنبيهات في هذه الفئة.",
+      "export_csv": "تصدير CSV"
     }
   },
   "metrics": {

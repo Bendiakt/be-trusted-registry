@@ -66,6 +66,12 @@ export default function AdminPanel() {
   const [resolveModal, setResolveModal]   = useState(null)     // { id, mission_title, company_name }
   const [resolveForm, setResolveForm]     = useState({ resolution: 'upheld', resolution_note: '' })
   const [resolveSaving, setResolveSaving] = useState(false)
+  // Fraud alerts state
+  const [fraudAlerts, setFraudAlerts]       = useState([])
+  const [fraudPag, setFraudPag]             = useState({})
+  const [fraudFilter, setFraudFilter]       = useState('open')  // 'open' | 'resolved'
+  const [fraudResolving, setFraudResolving] = useState({})
+  const [exportingCSV, setExportingCSV]     = useState(false)
 
   useEffect(() => {
     const user = getSession()
@@ -80,6 +86,7 @@ export default function AdminPanel() {
     if (tab === 'audit')     fetchAuditLog(1)
     if (tab === 'pac')       fetchPacAgents()
     if (tab === 'disputes')  fetchDisputes(1, disputeFilter)
+    if (tab === 'fraud')     fetchFraudAlerts(1, fraudFilter)
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -156,6 +163,42 @@ export default function AdminPanel() {
       fetchDisputes(1, disputeFilter)
     } catch { /* silent */ }
     finally { setResolveSaving(false) }
+  }
+
+  // ── Fraud alerts ───────────────────────────────────────────────────────────
+  const fetchFraudAlerts = useCallback(async (page = 1, filter = 'open') => {
+    try {
+      const resolved = filter === 'resolved'
+      const res = await api.get(`/api/admin/fraud-alerts?page=${page}&limit=50&resolved=${resolved}`)
+      setFraudAlerts(res.data.data || [])
+      setFraudPag(res.data.pagination || {})
+    } catch { /* silent */ }
+  }, [])
+
+  const resolveFraudAlert = async (alertId) => {
+    setFraudResolving(s => ({ ...s, [alertId]: true }))
+    try {
+      await api.patch(`/api/admin/fraud-alerts/${alertId}/resolve`, {})
+      setFraudAlerts(prev => prev.filter(a => a.id !== alertId))
+    } catch { /* silent */ }
+    finally { setFraudResolving(s => ({ ...s, [alertId]: false })) }
+  }
+
+  // ── CSV export ─────────────────────────────────────────────────────────────
+  const exportCompaniesCSV = async () => {
+    setExportingCSV(true)
+    try {
+      const res = await api.get('/api/admin/export/companies', { responseType: 'blob' })
+      const url  = URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `mydd-companies-${new Date().toISOString().slice(0, 10)}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch { /* silent */ }
+    finally { setExportingCSV(false) }
   }
 
   const setCompanyLevel = async (companyId, level) => {
@@ -427,6 +470,7 @@ export default function AdminPanel() {
     { id: 'missions',  label: t('admin.tabs.missions') },
     { id: 'pac',       label: 'PAC Network' },
     { id: 'disputes',  label: 'Disputes' },
+    { id: 'fraud',     label: t('admin.tabs.fraud') },
     { id: 'audit',     label: t('admin.tabs.audit') },
   ]
 
@@ -578,10 +622,19 @@ export default function AdminPanel() {
           <div style={G.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div style={{ fontWeight: '700', fontSize: '1rem' }}>{t('admin.companies.title')}</div>
-              <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem' }}>
-                <input style={G.inp} placeholder={t('admin.search_placeholder')} value={q} onChange={e => setQ(e.target.value)} />
-                <button type="submit" style={G.btn}>⌕</button>
-              </form>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={exportCompaniesCSV}
+                  disabled={exportingCSV}
+                  style={{ ...G.outline, padding: '0.4rem 0.9rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  {exportingCSV ? '…' : '↓'} {t('admin.fraud.export_csv')}
+                </button>
+                <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input style={G.inp} placeholder={t('admin.search_placeholder')} value={q} onChange={e => setQ(e.target.value)} />
+                  <button type="submit" style={G.btn}>⌕</button>
+                </form>
+              </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1482,6 +1535,84 @@ export default function AdminPanel() {
               </div>
             )}
             <PaginationBar pag={pagination.audit} onPage={p => fetchAuditLog(p, auditQ)} G={G} />
+          </div>
+        )}
+
+        {/* ── Fraud Alerts ─────────────────────────────────────────────────── */}
+        {tab === 'fraud' && (
+          <div style={G.card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem' }}>{t('admin.fraud.title')}</div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {['open', 'resolved'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => { setFraudFilter(f); fetchFraudAlerts(1, f) }}
+                    style={{
+                      padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.8rem',
+                      background: fraudFilter === f ? 'linear-gradient(135deg,#C9A84C,#9A7B2E)' : '#1f1f1f',
+                      color: fraudFilter === f ? '#111' : '#888', fontWeight: fraudFilter === f ? '700' : '400',
+                    }}
+                  >
+                    {f === 'open' ? t('admin.fraud.filter_open') : t('admin.fraud.filter_resolved')}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={G.th}>ID</th>
+                    <th style={G.th}>{t('admin.fraud.col_user')}</th>
+                    <th style={G.th}>{t('admin.fraud.col_rule')}</th>
+                    <th style={G.th}>{t('admin.fraud.col_severity')}</th>
+                    <th style={G.th}>{t('admin.fraud.col_date')}</th>
+                    <th style={G.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fraudAlerts.length === 0 && (
+                    <tr><td colSpan={6} style={{ ...G.td, textAlign: 'center', color: '#444', padding: '2rem' }}>{t('admin.fraud.no_alerts')}</td></tr>
+                  )}
+                  {fraudAlerts.map(alert => {
+                    const sevColor = alert.severity === 'high' ? '#ff6b6b' : alert.severity === 'medium' ? '#f39c12' : '#888'
+                    return (
+                      <tr key={alert.id}>
+                        <td style={{ ...G.td, color: '#555', fontSize: '0.72rem' }}>{alert.id}</td>
+                        <td style={G.td}>
+                          <div style={{ fontSize: '0.8rem' }}>{alert.user_name || '—'}</div>
+                          <div style={{ fontSize: '0.7rem', color: '#555' }}>{alert.user_email || `uid:${alert.user_id}`}</div>
+                        </td>
+                        <td style={{ ...G.td, fontFamily: 'monospace', fontSize: '0.75rem' }}>{alert.rule}</td>
+                        <td style={{ ...G.td }}>
+                          <span style={{ background: sevColor + '22', color: sevColor, padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: '600', textTransform: 'uppercase' }}>
+                            {alert.severity}
+                          </span>
+                        </td>
+                        <td style={{ ...G.td, color: '#555', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                          {new Date(alert.created_at).toLocaleString()}
+                        </td>
+                        <td style={G.td}>
+                          {alert.resolved ? (
+                            <span style={{ color: '#27ae60', fontSize: '0.75rem', fontWeight: '600' }}>✓ {t('admin.fraud.resolved_badge')}</span>
+                          ) : (
+                            <button
+                              onClick={() => resolveFraudAlert(alert.id)}
+                              disabled={fraudResolving[alert.id]}
+                              style={{ ...G.outline, padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
+                            >
+                              {fraudResolving[alert.id] ? t('admin.fraud.resolving') : t('admin.fraud.resolve_btn')}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar pag={fraudPag} onPage={p => fetchFraudAlerts(p, fraudFilter)} G={G} />
           </div>
         )}
       </main>
