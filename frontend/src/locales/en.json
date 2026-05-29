@@ -120,7 +120,8 @@
       "billing": "Billing",
       "developer": "Developer",
       "audits": "🔍 Audits",
-      "notifications": "Notifications"
+      "notifications": "Notifications",
+      "settings": "Settings"
     },
     "billing_title": "Payment History",
     "billing_subtitle": "Your certification payments and Stripe transactions",
@@ -252,6 +253,20 @@
       "error": "Failed to load notifications",
       "mark_read": "Mark as read",
       "all_caught_up": "You're all caught up!"
+    },
+    "settings": {
+      "title": "Company Settings",
+      "subtitle": "Update your company profile information.",
+      "company_name": "Company Name",
+      "sector": "Sector",
+      "sector_placeholder": "e.g. Manufacturing",
+      "country": "Country",
+      "country_placeholder": "e.g. France",
+      "website": "Website",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "saved": "Profile updated successfully.",
+      "save_error": "Save failed. Please try again."
     }
   },
   "dev": {

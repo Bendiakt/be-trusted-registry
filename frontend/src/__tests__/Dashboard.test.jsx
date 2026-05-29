@@ -466,3 +466,105 @@ describe('Dashboard — notifications tab', () => {
     })
   })
 })
+
+// ── Profile Settings tab ──────────────────────────────────────────────────────
+
+const COMPANY_WITH_PROFILE = {
+  data: {
+    company: { id: 1, name: 'Acme Corp', companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', website: 'https://acme.com', certificationLevel: 1, status: 'active' },
+    user:    { id: 10, name: 'Acme Corp', email: 'ceo@acme.com', role: 'company', emailVerified: true },
+  },
+}
+
+describe('Dashboard — Profile Settings tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getSession.mockReturnValue(COMPANY_SESSION)
+    api.get.mockImplementation((url) => {
+      if (url === '/api/companies/me') return Promise.resolve(COMPANY_WITH_PROFILE)
+      if (url === '/api/documents')    return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+  })
+
+  it('renders Settings tab button', async () => {
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    expect(screen.getByText('dashboard.tabs.settings')).toBeInTheDocument()
+  })
+
+  it('shows settings form with pre-filled company name', async () => {
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    fireEvent.click(screen.getByText('dashboard.tabs.settings'))
+    await waitFor(() => {
+      const input = screen.getByTestId('settings-company-name')
+      expect(input).toBeInTheDocument()
+      expect(input.value).toBe('Acme Corp')
+    })
+  })
+
+  it('pre-fills sector and country from company profile', async () => {
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    fireEvent.click(screen.getByText('dashboard.tabs.settings'))
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-sector').value).toBe('Manufacturing')
+      expect(screen.getByTestId('settings-country').value).toBe('FR')
+    })
+  })
+
+  it('pre-fills website from company profile', async () => {
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    fireEvent.click(screen.getByText('dashboard.tabs.settings'))
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-website').value).toBe('https://acme.com')
+    })
+  })
+
+  it('PATCH /api/companies/me is called on form submit', async () => {
+    api.patch.mockResolvedValueOnce({
+      data: { company: { ...COMPANY_WITH_PROFILE.data.company, companyName: 'Acme Corp Updated' } },
+    })
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    fireEvent.click(screen.getByText('dashboard.tabs.settings'))
+    await waitFor(() => screen.getByTestId('settings-save-btn'))
+    fireEvent.click(screen.getByTestId('settings-save-btn'))
+    await waitFor(() => {
+      expect(api.patch).toHaveBeenCalledWith('/api/companies/me', expect.objectContaining({
+        companyName: 'Acme Corp',
+        sector:      'Manufacturing',
+        country:     'FR',
+        website:     'https://acme.com',
+      }))
+    })
+  })
+
+  it('shows success banner after successful PATCH', async () => {
+    api.patch.mockResolvedValueOnce({ data: { company: COMPANY_WITH_PROFILE.data.company } })
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    fireEvent.click(screen.getByText('dashboard.tabs.settings'))
+    await waitFor(() => screen.getByTestId('settings-save-btn'))
+    fireEvent.click(screen.getByTestId('settings-save-btn'))
+    await waitFor(() => {
+      expect(screen.getByText(/dashboard\.settings\.saved/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows error message when PATCH fails', async () => {
+    api.patch.mockRejectedValueOnce({
+      response: { data: { error: 'Website must start with http://' } },
+    })
+    render(<Dashboard />)
+    await waitFor(() => screen.getByText('dashboard.tabs.settings'))
+    fireEvent.click(screen.getByText('dashboard.tabs.settings'))
+    await waitFor(() => screen.getByTestId('settings-save-btn'))
+    fireEvent.click(screen.getByTestId('settings-save-btn'))
+    await waitFor(() => {
+      expect(screen.getByText('Website must start with http://')).toBeInTheDocument()
+    })
+  })
+})

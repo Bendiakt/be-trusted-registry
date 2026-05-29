@@ -120,7 +120,8 @@
       "billing": "Facturación",
       "developer": "Desarrollador",
       "audits": "🔍 Auditorías",
-      "notifications": "Notificaciones"
+      "notifications": "Notificaciones",
+      "settings": "Configuración"
     },
     "billing_title": "Historial de pagos",
     "billing_subtitle": "Sus certificaciones y transacciones de Stripe",
@@ -252,6 +253,20 @@
       "error": "Error al cargar notificaciones",
       "mark_read": "Marcar como leído",
       "all_caught_up": "¡Todo al día!"
+    },
+    "settings": {
+      "title": "Configuración de la empresa",
+      "subtitle": "Actualice la información de su perfil empresarial.",
+      "company_name": "Nombre de la empresa",
+      "sector": "Sector",
+      "sector_placeholder": "p.ej. Manufactura",
+      "country": "País",
+      "country_placeholder": "p.ej. Francia",
+      "website": "Sitio web",
+      "save": "Guardar cambios",
+      "saving": "Guardando…",
+      "saved": "Perfil actualizado correctamente.",
+      "save_error": "Error al guardar. Inténtelo de nuevo."
     }
   },
   "dev": {
