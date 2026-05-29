@@ -104,7 +104,7 @@ node --test tests/encryption.test.js
 cd frontend && npm test
 ```
 
-Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 331 tests across 27 files.
+Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 409 tests across 30 files.
 
 ### E2E tests (Playwright)
 
@@ -114,7 +114,7 @@ npx playwright install --with-deps chromium
 npx playwright test
 ```
 
-75 tests covering auth, dashboard, onboarding, admin, PAC, payments, public pages, and sector pages. All API calls are mocked — no running backend needed. Runs in CI on every push.
+102 tests covering auth, dashboard, onboarding, admin, PAC (portal + directory + agent profile + supervision), payments, public pages, sector pages, developer tab, notifications, and compare panel. All API calls are mocked — no running backend needed. Runs in CI on every push.
 
 ---
 
@@ -135,13 +135,13 @@ frontend/
                    SectorPage, TraderPortal, Verify, CertPrint, PACDirectory…)
     components/    Shared UI components (ComparePanel, NotificationsPanel…)
     locales/       i18n JSON files (en, fr, es, pt, ar, zh) — 573 keys each
-    __tests__/     Vitest tests (27 files, 331 tests)
+    __tests__/     Vitest tests (28 files, 354 tests)
   public/
     sw.js          Service worker (PWA — network-first + cache-first)
     offline.html   Branded offline fallback page
 
 e2e/
-  tests/           Playwright specs (75 tests — all API calls mocked)
+  tests/           Playwright specs (102 tests — all API calls mocked)
   helpers.js       seedSession, stubApi helpers; LIFO route-stub rules
 
 docs/

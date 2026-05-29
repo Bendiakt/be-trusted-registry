@@ -59,9 +59,13 @@ describe('Landing', () => {
   it('shows certified count after fetch resolves', async () => {
     mockFetch(128)
     render(<Landing />)
+    // Wait for the stat block to appear (rendered only when certCount !== null).
+    // Use getAllByText to avoid throwing when the value appears in multiple nodes,
+    // and anchor on the label so we know the whole block is present.
     await waitFor(() => {
-      expect(screen.getByText('128')).toBeInTheDocument()
+      expect(screen.getByText('Entreprises vérifiées')).toBeInTheDocument()
     })
+    expect(screen.getAllByText('128').length).toBeGreaterThanOrEqual(1)
   })
 
   it('hides certified count stat block while fetch is pending', () => {
