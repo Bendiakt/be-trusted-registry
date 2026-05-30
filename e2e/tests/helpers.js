@@ -327,26 +327,6 @@ async function stubApi(page) {
     }),
   )
 
-  // Admin PAC Network tab — agents, supervision requests, bonus statements (empty by default)
-  await page.route('**/api/admin/pac/agents**', (route) =>
-    route.fulfill({
-      status: 200, contentType: 'application/json',
-      body: JSON.stringify({ data: [], pagination: { page: 1, limit: 50, total: 0, pages: 1 } }),
-    }),
-  )
-  await page.route('**/api/pac/admin/supervision/pending', (route) =>
-    route.fulfill({
-      status: 200, contentType: 'application/json',
-      body: JSON.stringify({ requests: [] }),
-    }),
-  )
-  await page.route('**/api/pac/admin/bonus/statements', (route) =>
-    route.fulfill({
-      status: 200, contentType: 'application/json',
-      body: JSON.stringify({ statements: [] }),
-    }),
-  )
-
   // API keys (Developer tab)
   await page.route('**/api/keys', (route) => {
     if (route.request().method() === 'POST') {

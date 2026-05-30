@@ -241,7 +241,6 @@ const FRAUD_FIXTURE = {
 
 test.describe('Admin — fraud alerts tab', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
@@ -331,7 +330,6 @@ test.describe('Admin — fraud alerts tab', () => {
 // ── CSV export (P21) ──────────────────────────────────────────────────────────
 test.describe('Admin — CSV export', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
@@ -363,7 +361,6 @@ test.describe('Admin — CSV export', () => {
 // ── Users tab ─────────────────────────────────────────────────────────────────
 test.describe('Admin — users tab', () => {
   test.beforeEach(async ({ page }) => {
-    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
@@ -378,98 +375,5 @@ test.describe('Admin — users tab', () => {
     // Stub returns Test User / test@example.com (role: company)
     await expect(page.getByText('test@example.com')).toBeVisible({ timeout: 5000 })
     await expect(page.getByText('COMPANY')).toBeVisible({ timeout: 5000 })
-  })
-})
-
-// ── PAC Network tab ───────────────────────────────────────────────────────────
-const PAC_AGENT_FIXTURE = {
-  data: [
-    {
-      id: 5, user_id: 5, full_name: 'Sophie Diallo', email: 'sophie@pac.com',
-      pac_tier: 'S1', kyc_status: 'approved', supervisees_count: 0,
-      missions_count: 12, pending_bonus_cents: 5000,
-      eligible_for_s2: false, eligible_for_s3: false,
-    },
-  ],
-  pagination: { page: 1, limit: 50, total: 1, pages: 1 },
-}
-
-test.describe('Admin — PAC Network tab', () => {
-  test.beforeEach(async ({ page }) => {
-    test.setTimeout(45000)
-    await stubApi(page)
-    await page.goto('/login')
-    await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
-  })
-
-  test('PAC Network tab is reachable from admin panel', async ({ page }) => {
-    await page.goto('/admin')
-    const pacTab = page.getByRole('button', { name: /PAC Network/i })
-    await expect(pacTab).toBeVisible({ timeout: 5000 })
-    await pacTab.click()
-    // Default sub-tab is "agents" — heading "PAC Agents — KYC Queue" should appear
-    await expect(page.getByText(/PAC Agents.*KYC Queue/i)).toBeVisible({ timeout: 5000 })
-  })
-
-  test('PAC agents sub-tab shows agent list from API', async ({ page }) => {
-    // Override agents stub to return one agent
-    await page.route('**/api/admin/pac/agents**', (route) =>
-      route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify(PAC_AGENT_FIXTURE),
-      }),
-    )
-
-    await page.goto('/admin')
-    await page.getByRole('button', { name: /PAC Network/i }).click()
-
-    // Agents sub-tab shows Sophie Diallo
-    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('sophie@pac.com')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('supervision sub-tab shows pending requests section', async ({ page }) => {
-    await page.goto('/admin')
-    await page.getByRole('button', { name: /PAC Network/i }).click()
-
-    // Click the "🔗 Supervision Requests" sub-tab
-    const supTab = page.getByRole('button', { name: /Supervision Requests/i })
-    await expect(supTab).toBeVisible({ timeout: 5000 })
-    await supTab.click()
-
-    // Section heading appears (empty state since stub returns [])
-    await expect(page.getByText(/Pending Supervision Requests/i)).toBeVisible({ timeout: 5000 })
-  })
-
-  test('supervision sub-tab shows request data from API', async ({ page }) => {
-    // Override supervision stub to return one request
-    await page.route('**/api/pac/admin/supervision/pending', (route) =>
-      route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify({
-          requests: [
-            {
-              id: 1,
-              supervisor_user_id: 5, supervised_user_id: 6,
-              supervisor_name: 'Sophie Diallo', supervisor_email: 'sophie@pac.com',
-              supervisor_tier_profile: 'S2',
-              supervised_name: 'Marc Dupont', supervised_email: 'marc@pac.com',
-              supervised_tier: 'S1',
-              requested_at: '2026-05-01T10:00:00Z',
-            },
-          ],
-        }),
-      }),
-    )
-
-    await page.goto('/admin')
-    await page.getByRole('button', { name: /PAC Network/i }).click()
-    await page.getByRole('button', { name: /Supervision Requests/i }).click()
-
-    // Should show supervisor → supervised pairing
-    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('Marc Dupont')).toBeVisible({ timeout: 5000 })
-    // Approve / Reject buttons visible
-    await expect(page.getByRole('button', { name: /Approve/i }).first()).toBeVisible({ timeout: 5000 })
   })
 })

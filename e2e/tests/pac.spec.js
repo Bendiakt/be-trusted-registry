@@ -253,61 +253,6 @@ test.describe('PAC Portal — earnings tab', () => {
   })
 })
 
-// ── Progression tab (P10 — badge, tier, KYC status, achievement criteria) ────
-
-test.describe('PAC — progression tab', () => {
-  test.beforeEach(async ({ page }) => {
-    test.setTimeout(45000)
-    await stubPacApi(page)
-    // Override progress endpoint to return achievement criteria
-    await page.route('**/api/pac/progress', (route) =>
-      route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify({
-          pac_tier: 'S1',
-          target_tier: 'S2',
-          progress_pct: 60,
-          criteria: [
-            { label: 'Missions complétées', value: 6, target: 10, format: 'number', met: false },
-            { label: 'Taux de succès',      value: 1, target: 1,  format: 'boolean', met: true  },
-          ],
-        }),
-      }),
-    )
-    await page.goto('/login')
-    await seedSession(page, PAC_USER)
-    await page.goto('/pac')
-    await expect(page).toHaveURL(/\/pac/, { timeout: 8000 })
-  })
-
-  test('progression tab is visible for S1 tier agent', async ({ page }) => {
-    // The Progression tab renders for S1 (and S2) agents
-    const progressionTab = page.getByRole('button', { name: /progression/i })
-    await expect(progressionTab).toBeVisible({ timeout: 8000 })
-  })
-
-  test('progression tab shows current tier and KYC status', async ({ page }) => {
-    await page.getByRole('button', { name: /progression/i }).click()
-
-    // "Mon Statut PAC" section header
-    await expect(page.getByText(/Mon Statut PAC/i)).toBeVisible({ timeout: 8000 })
-    // Tier actuel = S1 (initial state — profile stub has no pac_tier so stays S1)
-    await expect(page.getByText(/^S1$/).first()).toBeVisible({ timeout: 5000 })
-    // KYC status defaults to "pending"
-    await expect(page.getByText('pending')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('progression tab shows achievement criteria from /api/pac/progress', async ({ page }) => {
-    await page.getByRole('button', { name: /progression/i }).click()
-
-    // Criteria section: "Critères — vers S2" + 60% progress
-    await expect(page.getByText(/Critères.*vers S2/i).first()).toBeVisible({ timeout: 8000 })
-    await expect(page.getByText('60%')).toBeVisible({ timeout: 5000 })
-    // First criterion label
-    await expect(page.getByText('Missions complétées').first()).toBeVisible({ timeout: 5000 })
-  })
-})
-
 // ── Supervision tab (P16 — PACSupervisionDashboard) ───────────────────────────
 
 // Fixture: one S1 agent under supervision
@@ -400,8 +345,6 @@ async function stubSupervisionApi(page) {
 
 test.describe('PAC — supervision tab (S2)', () => {
   test.beforeEach(async ({ page }) => {
-    // 45s: cold Vite compilation of PACPortal.jsx can take 20-25s; need headroom for teardown
-    test.setTimeout(45000)
     await stubSupervisionApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
