@@ -303,6 +303,26 @@ async function stubApi(page) {
     }),
   )
 
+  // Admin fraud alerts — empty by default (tests override inline when needed)
+  await page.route('**/api/admin/fraud-alerts**', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        pagination: { page: 1, limit: 50, total: 0, pages: 1 },
+      }),
+    }),
+  )
+
+  // Admin CSV export — returns a minimal CSV blob
+  // NOTE: registered AFTER **/api/admin/companies** so LIFO gives it priority for /export/companies URLs
+  await page.route('**/api/admin/export/companies', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'text/csv',
+      body: 'id,company_name,sector,country,certification_level\n10,Acme Corp,Manufacturing,FR,2\n',
+    }),
+  )
+
   // API keys (Developer tab)
   await page.route('**/api/keys', (route) => {
     if (route.request().method() === 'POST') {
