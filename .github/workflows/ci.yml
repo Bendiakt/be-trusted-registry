@@ -37,6 +37,7 @@ jobs:
           node --test tests/validators.test.js
           node --test tests/lib.test.js
           node --test tests/pac.test.js
+          node --test tests/pacSupervision.test.js
           node --test tests/payments.test.js
           node --test tests/disputes.test.js
           node --test tests/earnings.test.js
