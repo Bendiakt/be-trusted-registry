@@ -104,7 +104,7 @@ node --test tests/encryption.test.js
 cd frontend && npm test
 ```
 
-Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 424 tests across 31 files.
+Includes i18n parity test — verifies all 6 locale files (EN/FR/ES/PT/AR/ZH) are in sync. 446 tests across 31 files.
 
 ### E2E tests (Playwright)
 
@@ -134,8 +134,8 @@ frontend/
     pages/         Route-level components (Dashboard, Landing, Onboarding,
                    SectorPage, TraderPortal, Verify, CertPrint, PACDirectory…)
     components/    Shared UI components (ComparePanel, NotificationsPanel…)
-    locales/       i18n JSON files (en, fr, es, pt, ar, zh) — 573 keys each
-    __tests__/     Vitest tests (28 files, 354 tests)
+    locales/       i18n JSON files (en, fr, es, pt, ar, zh) — 603 keys each
+    __tests__/     Vitest tests (31 files, 446 tests)
   public/
     sw.js          Service worker (PWA — network-first + cache-first)
     offline.html   Branded offline fallback page
@@ -204,9 +204,9 @@ Two GitHub Actions workflows:
 | Workflow | Trigger | Jobs |
 |----------|---------|------|
 | `ci.yml` | Push/PR → `main` | Backend tests, lint, frontend tests, E2E, Railway config guard, prod health probe |
-| `staging.yml` | Push/PR → `staging` | Same suite + staging health probe (activate by setting `STAGING_API_URL` in GitHub vars) |
+| `staging.yml` | Push/PR → `staging` | Same suite + staging health probe (active — `STAGING_API_URL` set) |
 
-**Deploy:** every push to `main` auto-deploys to Railway. Migrations run as `preDeployCommand` before the new instance receives traffic.
+**Deploy:** every push to `main` auto-deploys to Railway (production + staging). Staging backend: `https://backend-staging-staging-a158.up.railway.app`. Migrations run via `NIXPACKS_START_CMD=npm run start:preprod` on each staging deploy.
 
 ---
 
