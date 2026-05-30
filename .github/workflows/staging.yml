@@ -44,6 +44,7 @@ jobs:
           node --test tests/payments.test.js
           node --test tests/disputes.test.js
           node --test tests/earnings.test.js
+          node --test tests/admin.test.js
 
   # ── 2. Backend lint / syntax ─────────────────────────────────────────────────
   lint:
