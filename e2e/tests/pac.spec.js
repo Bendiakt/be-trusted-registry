@@ -65,6 +65,8 @@ const PAC_USER = { id: 5, name: 'Alice PAC', email: 'alice@pac.com', role: 'pac'
 
 test.describe('PAC — access control', () => {
   test('pac-role user loads portal', async ({ page }) => {
+    // Increase timeout — PACPortal.jsx triggers cold Vite compilation on first load
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
@@ -93,6 +95,8 @@ test.describe('PAC — access control', () => {
 
 test.describe('PAC — missions tab', () => {
   test.beforeEach(async ({ page }) => {
+    // 45s: 2 navigations + cold Vite compile can consume up to 20s; need headroom for teardown
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
@@ -161,6 +165,7 @@ test.describe('PAC — missions tab', () => {
 
 test.describe('PAC — profile tab', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
@@ -207,6 +212,7 @@ test.describe('PAC — profile tab', () => {
 
 test.describe('PAC Portal — earnings tab', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 2, name: 'Jean Martin', email: 'jean@pac.com', role: 'pac' })
@@ -240,6 +246,61 @@ test.describe('PAC Portal — earnings tab', () => {
     await expect(page.getByText(/✓.*(Paid|Payé)/i).first()).toBeVisible({ timeout: 4000 })
     // Pending badge — EN: "⏳ Pending", FR: "En attente"
     await expect(page.getByText(/Pending|En attente/i).first()).toBeVisible({ timeout: 4000 })
+  })
+})
+
+// ── Progression tab (P10 — badge, tier, KYC status, achievement criteria) ────
+
+test.describe('PAC — progression tab', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
+    await stubPacApi(page)
+    // Override progress endpoint to return achievement criteria
+    await page.route('**/api/pac/progress', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          pac_tier: 'S1',
+          target_tier: 'S2',
+          progress_pct: 60,
+          criteria: [
+            { label: 'Missions complétées', value: 6, target: 10, format: 'number', met: false },
+            { label: 'Taux de succès',      value: 1, target: 1,  format: 'boolean', met: true  },
+          ],
+        }),
+      }),
+    )
+    await page.goto('/login')
+    await seedSession(page, PAC_USER)
+    await page.goto('/pac')
+    await expect(page).toHaveURL(/\/pac/, { timeout: 8000 })
+  })
+
+  test('progression tab is visible for S1 tier agent', async ({ page }) => {
+    // The Progression tab renders for S1 (and S2) agents
+    const progressionTab = page.getByRole('button', { name: /progression/i })
+    await expect(progressionTab).toBeVisible({ timeout: 8000 })
+  })
+
+  test('progression tab shows current tier and KYC status', async ({ page }) => {
+    await page.getByRole('button', { name: /progression/i }).click()
+
+    // "Mon Statut PAC" section header
+    await expect(page.getByText(/Mon Statut PAC/i)).toBeVisible({ timeout: 8000 })
+    // Tier actuel = S1 (initial state — profile stub has no pac_tier so stays S1)
+    await expect(page.getByText(/^S1$/).first()).toBeVisible({ timeout: 5000 })
+    // KYC status defaults to "pending"
+    await expect(page.getByText('pending')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('progression tab shows achievement criteria from /api/pac/progress', async ({ page }) => {
+    await page.getByRole('button', { name: /progression/i }).click()
+
+    // Criteria section: "Critères — vers S2" + 60% progress
+    await expect(page.getByText(/Critères.*vers S2/i).first()).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText('60%')).toBeVisible({ timeout: 5000 })
+    // First criterion label
+    await expect(page.getByText('Missions complétées').first()).toBeVisible({ timeout: 5000 })
   })
 })
 
