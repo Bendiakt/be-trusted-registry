@@ -190,6 +190,71 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
 
+  staging-smoke:
+    name: Staging smoke tests
+    runs-on: ubuntu-latest
+    # Only on push to main (staging deploys on merge, not on PRs).
+    # Skip if STAGING_API_URL is not configured — avoids blocking CI for forks.
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.STAGING_API_URL != ''
+    # Run after E2E (~8 min) so Railway's staging deploy (~5 min) is complete.
+    needs: [unit-tests, test, frontend-tests, e2e-tests]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Wait for staging deploy to be healthy
+        # Railway deploy takes ~3–5 min after a push; E2E gives us an 8-min
+        # head-start, but we still poll to avoid testing a mid-rollover instance.
+        # Polls /api/health every 20 s for up to 3 minutes.
+        id: wait
+        run: |
+          URL="${{ vars.STAGING_API_URL }}/api/health"
+          MAX=180
+          INTERVAL=20
+          ELAPSED=0
+          echo "Waiting for staging at $URL"
+          while [ $ELAPSED -le $MAX ]; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" 2>/dev/null || echo "000")
+            echo "  [${ELAPSED}s] HTTP $CODE"
+            if [[ "$CODE" == "200" ]]; then
+              echo "Staging healthy after ${ELAPSED}s"
+              echo "healthy=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            ELAPSED=$((ELAPSED + INTERVAL))
+            [ $ELAPSED -le $MAX ] && sleep $INTERVAL
+          done
+          echo "::warning::Staging did not become healthy within ${MAX}s — skipping smoke tests"
+          echo "healthy=false" >> $GITHUB_OUTPUT
+
+      - name: Run smoke tests against staging
+        if: steps.wait.outputs.healthy == 'true'
+        working-directory: backend
+        env:
+          API_URL: ${{ vars.STAGING_API_URL }}
+        run: node --test tests/smoke.test.js
+
+      - name: Annotate skipped run
+        if: steps.wait.outputs.healthy == 'false'
+        run: |
+          echo "::notice::Smoke tests skipped — staging service not reachable."
+          echo "::notice::This does NOT fail CI. Check Railway Dashboard for deploy status."
+
   railway-config-guard:
     name: Railway config integrity check
     runs-on: ubuntu-latest
