@@ -495,7 +495,7 @@ export default function Dashboard() {
   const lconf = LEVEL_CONFIG[lvl] || LEVEL_CONFIG[0]
 
   const TabBtn = ({ id, label, onClick }) => (
-    <button onClick={() => { setTab(id); onClick && onClick() }} style={tab === id ? { ...G.btn } : { ...G.outlineBtn }}>
+    <button data-testid={`tab-${id}`} onClick={() => { setTab(id); onClick && onClick() }} style={tab === id ? { ...G.btn } : { ...G.outlineBtn }}>
       {label}
     </button>
   )

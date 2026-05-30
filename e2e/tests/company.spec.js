@@ -399,4 +399,195 @@ test.describe('Company — notifications tab', () => {
     await page.getByRole('button', { name: /mark all as read/i }).click()
     await expect(async () => { expect(markAllCalled).toBe(true) }).toPass({ timeout: 4000 })
   })
+
+  test('delete button sends DELETE /api/notifications/:id', async ({ page }) => {
+    let deletedId = null
+    // Use page.on('request') to observe the DELETE without intercepting it.
+    // stubApi already stubs DELETE /api/notifications/** → { deleted: 1 }, so no
+    // extra route handler is needed. page.on('request') fires before any route
+    // handler fulfills the request, giving us access to the URL and method.
+    page.on('request', req => {
+      if (req.method() === 'DELETE' && /\/api\/notifications\/\d+$/.test(req.url())) {
+        const match = req.url().match(/\/api\/notifications\/(\d+)$/)
+        if (match) deletedId = Number(match[1])
+      }
+    })
+
+    await page.goto('/dashboard')
+    await page.getByRole('button', { name: /notifications/i }).click()
+    await expect(page.getByText('Certification approved')).toBeVisible({ timeout: 6000 })
+
+    // Click the delete button for notification id=1
+    await page.getByTestId('notif-delete-1').click()
+
+    // Verify the DELETE call was made with the correct notification id
+    await expect(async () => { expect(deletedId).toBe(1) }).toPass({ timeout: 5000 })
+  })
+
+  test('"Clear read" button sends DELETE /api/notifications and removes read rows only', async ({ page }) => {
+    let bulkDeleteCalled = false
+    // LIFO: intercept DELETE /api/notifications (bulk clear-read).
+    // For GET we re-serve the same fixture — do NOT call route.continue() (no real backend).
+    await page.route('**/api/notifications', async (route) => {
+      const method = route.request().method()
+      if (method === 'DELETE') {
+        bulkDeleteCalled = true
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ deleted: 1 }) })
+      }
+      // GET /api/notifications — same fixture as stubApi
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          notifications: [
+            { id: 1, type: 'cert_approved',    title: 'Certification approved',      body: 'Your Level 1 certification was approved.', read: false, createdAt: '2026-05-20T10:00:00Z' },
+            { id: 2, type: 'mission_assigned',  title: 'PAC agent assigned',          body: 'A PAC agent has been assigned.',           read: false, createdAt: '2026-05-18T09:00:00Z' },
+            { id: 3, type: 'cert_expiring',     title: 'Certification expiring soon', body: 'Your certification expires in 30 days.',   read: true,  createdAt: '2026-05-10T08:00:00Z' },
+          ],
+          unread: 2,
+        }),
+      })
+    })
+
+    await page.goto('/dashboard')
+    await page.getByRole('button', { name: /notifications/i }).click()
+    await expect(page.getByText('Certification expiring soon')).toBeVisible({ timeout: 6000 })
+
+    // "Clear read" is visible because notification id=3 is read=true
+    await page.getByTestId('notif-clear-read').click()
+
+    // The read notification is removed
+    await expect(page.getByText('Certification expiring soon')).not.toBeVisible({ timeout: 4000 })
+    // Unread notifications remain
+    await expect(page.getByText('Certification approved')).toBeVisible({ timeout: 4000 })
+    await expect(async () => { expect(bulkDeleteCalled).toBe(true) }).toPass({ timeout: 4000 })
+  })
+})
+
+test.describe('Company — settings tab', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 1, name: 'Acme Corp', email: 'alice@acme.com', role: 'company' })
+  })
+
+  // Helper: click the Settings tab — it lives in an overflowX:auto tab bar and can be
+  // off-screen to the right. The tab button has data-testid="tab-settings" (added to
+  // TabBtn in Dashboard.jsx), so we use getByTestId to find it reliably, then
+  // evaluate(el => el.click()) to fire the React onClick without viewport scroll checks.
+  async function clickSettingsTab (page) {
+    await page.getByTestId('tab-settings').evaluate(el => el.click())
+  }
+
+  test('settings tab is reachable from dashboard', async ({ page }) => {
+    await page.goto('/dashboard')
+    await clickSettingsTab(page)
+    await expect(page.getByTestId('settings-company-name')).toBeVisible({ timeout: 8000 })
+  })
+
+  test('settings form is pre-filled with current company values', async ({ page }) => {
+    await page.goto('/dashboard')
+    await clickSettingsTab(page)
+
+    // Pre-filled from stubApi companies/me: companyName='Acme Corp', sector='Manufacturing', country='FR'
+    await expect(page.getByTestId('settings-company-name')).toHaveValue('Acme Corp', { timeout: 8000 })
+    await expect(page.getByTestId('settings-sector')).toHaveValue('Manufacturing')
+    await expect(page.getByTestId('settings-country')).toHaveValue('FR')
+  })
+
+  test('save button sends PATCH /api/companies/me with updated values', async ({ page }) => {
+    let patchBody = null
+    // LIFO: register PATCH override AFTER stubApi so this handler fires first.
+    // For GET, re-serve the company fixture to avoid route.continue() hitting the network.
+    await page.route('**/api/companies/me', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        patchBody = JSON.parse(route.request().postData() || '{}')
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({
+            company: { id: 10, name: 'New Name', companyName: 'New Name', sector: 'Technology', country: 'DE', status: 'active', certificationLevel: 2 },
+          }),
+        })
+      }
+      // GET — same fixture as stubApi so the dashboard loads correctly
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          company: { id: 10, name: 'Acme Corp', companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', status: 'active', certificationLevel: 2 },
+          user: { id: 1, name: 'Test User', email: 'test@example.com', role: 'company' },
+        }),
+      })
+    })
+
+    await page.goto('/dashboard')
+    await clickSettingsTab(page)
+    await expect(page.getByTestId('settings-company-name')).toBeVisible({ timeout: 8000 })
+
+    await page.getByTestId('settings-company-name').fill('New Name')
+    await page.getByTestId('settings-sector').fill('Technology')
+    await page.getByTestId('settings-country').fill('DE')
+    await page.getByTestId('settings-save-btn').click()
+
+    await expect(async () => {
+      expect(patchBody).not.toBeNull()
+      expect(patchBody.companyName).toBe('New Name')
+    }).toPass({ timeout: 5000 })
+  })
+
+  test('settings form shows success banner after save', async ({ page }) => {
+    await page.route('**/api/companies/me', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({
+            company: { id: 10, name: 'Acme Corp', companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', status: 'active', certificationLevel: 2 },
+          }),
+        })
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          company: { id: 10, name: 'Acme Corp', companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', status: 'active', certificationLevel: 2 },
+          user: { id: 1, name: 'Test User', email: 'test@example.com', role: 'company' },
+        }),
+      })
+    })
+
+    await page.goto('/dashboard')
+    await clickSettingsTab(page)
+    await expect(page.getByTestId('settings-company-name')).toBeVisible({ timeout: 8000 })
+    await page.getByTestId('settings-save-btn').click()
+
+    // Success banner — i18n: dashboard.settings.saved = "Profile updated successfully."
+    // Use .first() because the parent container also matches the regex (strict mode)
+    await expect(page.getByText(/profile updated/i).first()).toBeVisible({ timeout: 5000 })
+  })
+
+  test('settings form shows error banner on PATCH failure', async ({ page }) => {
+    await page.route('**/api/companies/me', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        return route.fulfill({
+          status: 422, contentType: 'application/json',
+          body: JSON.stringify({ error: 'Company name is required' }),
+        })
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          company: { id: 10, name: 'Acme Corp', companyName: 'Acme Corp', sector: 'Manufacturing', country: 'FR', status: 'active', certificationLevel: 2 },
+          user: { id: 1, name: 'Test User', email: 'test@example.com', role: 'company' },
+        }),
+      })
+    })
+
+    await page.goto('/dashboard')
+    await clickSettingsTab(page)
+    await expect(page.getByTestId('settings-company-name')).toBeVisible({ timeout: 8000 })
+    // Clear required field — disable browser's native validation first so the form
+    // actually submits and reaches our mocked 422 PATCH response
+    await page.evaluate(() => { document.querySelector('form').noValidate = true })
+    await page.getByTestId('settings-company-name').fill('')
+    await page.getByTestId('settings-save-btn').click()
+
+    await expect(page.getByText(/company name is required/i)).toBeVisible({ timeout: 5000 })
+  })
 })

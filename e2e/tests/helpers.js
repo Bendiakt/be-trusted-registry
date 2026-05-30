@@ -422,13 +422,22 @@ async function stubApi(page) {
 
   // Notifications (Dashboard tab)
   // NotificationsPanel reads: r.data.notifications + r.data.unread
-  // mark-one: PATCH /api/notifications/:id/read
-  // mark-all: PATCH /api/notifications/read-all
+  // mark-one:   PATCH /api/notifications/:id/read
+  // mark-all:   PATCH /api/notifications/read-all
+  // delete-one: DELETE /api/notifications/:id
+  // clear-read: DELETE /api/notifications (bulk)
   await page.route('**/api/notifications**', (route) => {
-    if (route.request().method() === 'PATCH') {
+    const method = route.request().method()
+    if (method === 'PATCH') {
       return route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({ updated: 2 }),
+      })
+    }
+    if (method === 'DELETE') {
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ deleted: 1 }),
       })
     }
     return route.fulfill({
