@@ -98,6 +98,10 @@ async function seedSession(page, user) {
     ([key, value]) => sessionStorage.setItem(key, value),
     [SESSION_KEY, JSON.stringify(user)],
   )
+  // Pre-dismiss the cookie consent banner so it never blocks pointer events.
+  // CookieBanner reads localStorage['mydd_cookie_consent'] on mount —
+  // setting it before any page load prevents the 800 ms delayed banner.
+  await page.addInitScript(() => localStorage.setItem('mydd_cookie_consent', 'accepted'))
 }
 
 /**
@@ -298,6 +302,17 @@ async function stubApi(page) {
 
   // Admin disputes — empty by default
   await page.route('**/api/admin/disputes**', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        pagination: { page: 1, limit: 50, total: 0, pages: 1 },
+      }),
+    }),
+  )
+
+  // Admin audit log — empty by default (tests override inline when needed)
+  await page.route('**/api/admin/audit-log**', (route) =>
     route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({

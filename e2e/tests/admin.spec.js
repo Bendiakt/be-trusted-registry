@@ -113,6 +113,39 @@ test.describe('Admin — companies tab', () => {
       expect(patchCalled).toBe(true)
     }
   })
+
+  test('company suspend button opens modal and confirm calls PATCH /suspend', async ({ page }) => {
+    let suspendCalled = false
+    // Override companies stub to return one active (non-suspended) company
+    await page.route('**/api/admin/companies**', (route) => {
+      if (route.request().url().includes('/suspend')) {
+        suspendCalled = true
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: [{ id: 10, company_name: 'Acme Corp', sector: 'Manufacturing', country: 'FR', certification_level: 2, status: 'active', suspended_at: null }],
+          pagination: { page: 1, limit: 50, total: 1, pages: 1 },
+        }),
+      })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /companies|entreprises/i }).first().click()
+
+    // Click the "Suspend" button
+    const suspendBtn = page.getByRole('button', { name: /^Suspend$/i }).first()
+    await expect(suspendBtn).toBeVisible({ timeout: 5000 })
+    await suspendBtn.click()
+
+    // Modal opens with "Confirm Suspension" button
+    const confirmBtn = page.getByRole('button', { name: /Confirm Suspension/i })
+    await expect(confirmBtn).toBeVisible({ timeout: 3000 })
+    await confirmBtn.click()
+
+    await expect(async () => { expect(suspendCalled).toBe(true) }).toPass({ timeout: 5000 })
+  })
 })
 
 test.describe('Admin — disputes tab', () => {
