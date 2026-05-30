@@ -13,6 +13,7 @@ const { seedSession, stubApi } = require('./helpers')
 
 test.describe('Admin — access control', () => {
   test('admin panel loads for admin role', async ({ page }) => {
+    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
@@ -25,6 +26,9 @@ test.describe('Admin — access control', () => {
   })
 
   test('company-role user is redirected from /admin to /login', async ({ page }) => {
+    // 90s: navigates login → /admin → /dashboard (redirect), potentially triggering
+    // cold Vite compilation for BOTH the admin and dashboard bundles on first run
+    test.setTimeout(90000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 1, name: 'Corp User', email: 'corp@test.com', role: 'company' })
@@ -35,6 +39,7 @@ test.describe('Admin — access control', () => {
   })
 
   test('unauthenticated user is redirected from /admin to /login', async ({ page }) => {
+    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/admin')
     await expect(page).toHaveURL(/\/login/, { timeout: 6000 })
@@ -43,6 +48,8 @@ test.describe('Admin — access control', () => {
 
 test.describe('Admin — overview stats', () => {
   test.beforeEach(async ({ page }) => {
+    // 45s: cold AdminPanel.jsx Vite compilation can take 20-25s; need headroom for teardown
+    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
@@ -58,6 +65,7 @@ test.describe('Admin — overview stats', () => {
 
 test.describe('Admin — companies tab', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
@@ -109,6 +117,7 @@ test.describe('Admin — companies tab', () => {
 
 test.describe('Admin — disputes tab', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
     await stubApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })

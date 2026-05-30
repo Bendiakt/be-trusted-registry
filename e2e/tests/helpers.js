@@ -90,7 +90,11 @@ const SESSION_KEY = 'mydd_user'
  * @param {object} user - { id, name, email, role }
  */
 async function seedSession(page, user) {
-  await page.evaluate(
+  // addInitScript re-runs on every page load (including Vite HMR hot-reloads).
+  // page.evaluate() only runs once — if Vite triggers a full-page reload during
+  // cold bundle compilation it clears sessionStorage, losing the seeded session.
+  // addInitScript fires before each navigation's scripts, so the session survives.
+  await page.addInitScript(
     ([key, value]) => sessionStorage.setItem(key, value),
     [SESSION_KEY, JSON.stringify(user)],
   )

@@ -65,6 +65,10 @@ const PAC_USER = { id: 5, name: 'Alice PAC', email: 'alice@pac.com', role: 'pac'
 
 test.describe('PAC — access control', () => {
   test('pac-role user loads portal', async ({ page }) => {
+    // 90s: this is the FIRST test — it triggers cold Vite compilation for BOTH
+    // the login page AND PACPortal.jsx (two sequential cold navigations each up to 25s).
+    // seedSession now uses addInitScript so session survives any Vite HMR hot-reload.
+    test.setTimeout(90000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
@@ -93,6 +97,8 @@ test.describe('PAC — access control', () => {
 
 test.describe('PAC — missions tab', () => {
   test.beforeEach(async ({ page }) => {
+    // 45s: 2 navigations + cold Vite compile can consume up to 20s; need headroom for teardown
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
@@ -122,9 +128,10 @@ test.describe('PAC — missions tab', () => {
     await expect(acceptBtn).toBeVisible({ timeout: 5000 })
     await acceptBtn.click()
 
-    expect(acceptCalled).toBe(true)
+    // toPass() polls until the API route fires (click is async — don't assert synchronously)
+    await expect(async () => { expect(acceptCalled).toBe(true) }).toPass({ timeout: 5000 })
     // Success message appears
-    await expect(page.getByText(/accepted/i)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/Mission accepted!/i)).toBeVisible({ timeout: 5000 })
   })
 
   test('report form opens and submit triggers POST', async ({ page }) => {
@@ -152,8 +159,9 @@ test.describe('PAC — missions tab', () => {
     const submitBtn = page.getByRole('button', { name: /submit/i }).last()
     await submitBtn.click()
 
-    expect(completeCalled).toBe(true)
-    await expect(page.getByText(/Report submitted/i).first()).toBeVisible({ timeout: 5000 })
+    // toPass() polls until the API route fires (click is async — don't assert synchronously)
+    await expect(async () => { expect(completeCalled).toBe(true) }).toPass({ timeout: 5000 })
+    await expect(page.getByText(/Report submitted successfully/i).first()).toBeVisible({ timeout: 5000 })
   })
 })
 
@@ -161,6 +169,7 @@ test.describe('PAC — missions tab', () => {
 
 test.describe('PAC — profile tab', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, PAC_USER)
@@ -207,6 +216,7 @@ test.describe('PAC — profile tab', () => {
 
 test.describe('PAC Portal — earnings tab', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
     await stubPacApi(page)
     await page.goto('/login')
     await seedSession(page, { id: 2, name: 'Jean Martin', email: 'jean@pac.com', role: 'pac' })
