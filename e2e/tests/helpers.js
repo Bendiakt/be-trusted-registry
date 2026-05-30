@@ -90,7 +90,11 @@ const SESSION_KEY = 'mydd_user'
  * @param {object} user - { id, name, email, role }
  */
 async function seedSession(page, user) {
-  await page.evaluate(
+  // addInitScript re-runs on every page load (including Vite HMR hot-reloads).
+  // page.evaluate() only runs once — if Vite triggers a full-page reload during
+  // cold bundle compilation it clears sessionStorage, losing the seeded session.
+  // addInitScript fires before each navigation's scripts, so the session survives.
+  await page.addInitScript(
     ([key, value]) => sessionStorage.setItem(key, value),
     [SESSION_KEY, JSON.stringify(user)],
   )
@@ -320,6 +324,26 @@ async function stubApi(page) {
     route.fulfill({
       status: 200, contentType: 'text/csv',
       body: 'id,company_name,sector,country,certification_level\n10,Acme Corp,Manufacturing,FR,2\n',
+    }),
+  )
+
+  // Admin PAC Network tab — agents, supervision requests, bonus statements (empty by default)
+  await page.route('**/api/admin/pac/agents**', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ data: [], pagination: { page: 1, limit: 50, total: 0, pages: 1 } }),
+    }),
+  )
+  await page.route('**/api/pac/admin/supervision/pending', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ requests: [] }),
+    }),
+  )
+  await page.route('**/api/pac/admin/bonus/statements', (route) =>
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ statements: [] }),
     }),
   )
 
