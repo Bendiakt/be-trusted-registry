@@ -377,3 +377,265 @@ test.describe('Admin — users tab', () => {
     await expect(page.getByText('COMPANY')).toBeVisible({ timeout: 5000 })
   })
 })
+
+// ── PAC Network tab ───────────────────────────────────────────────────────────
+const PAC_AGENT_FIXTURE = {
+  data: [
+    {
+      id: 5, user_id: 5, full_name: 'Sophie Diallo', email: 'sophie@pac.com',
+      pac_tier: 'S1', kyc_status: 'approved', supervisees_count: 0,
+      missions_count: 12, pending_bonus_cents: 5000,
+      eligible_for_s2: false, eligible_for_s3: false,
+    },
+  ],
+  pagination: { page: 1, limit: 50, total: 1, pages: 1 },
+}
+
+test.describe('Admin — PAC Network tab', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(45000)
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
+  })
+
+  test('PAC Network tab is reachable from admin panel', async ({ page }) => {
+    await page.goto('/admin')
+    const pacTab = page.getByRole('button', { name: /PAC Network/i })
+    await expect(pacTab).toBeVisible({ timeout: 5000 })
+    await pacTab.click()
+    // Default sub-tab is "agents" — heading "PAC Agents — KYC Queue" should appear
+    await expect(page.getByText(/PAC Agents.*KYC Queue/i)).toBeVisible({ timeout: 5000 })
+  })
+
+  test('PAC agents sub-tab shows agent list from API', async ({ page }) => {
+    // Override agents stub to return one agent
+    await page.route('**/api/admin/pac/agents**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(PAC_AGENT_FIXTURE),
+      }),
+    )
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+
+    // Agents sub-tab shows Sophie Diallo
+    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('sophie@pac.com')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('supervision sub-tab shows pending requests section', async ({ page }) => {
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+
+    // Click the "🔗 Supervision Requests" sub-tab
+    const supTab = page.getByRole('button', { name: /Supervision Requests/i })
+    await expect(supTab).toBeVisible({ timeout: 5000 })
+    await supTab.click()
+
+    // Section heading appears (empty state since stub returns [])
+    await expect(page.getByText(/Pending Supervision Requests/i)).toBeVisible({ timeout: 5000 })
+  })
+
+  test('supervision sub-tab shows request data from API', async ({ page }) => {
+    // Override supervision stub to return one request
+    await page.route('**/api/pac/admin/supervision/pending', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          requests: [
+            {
+              id: 1,
+              supervisor_user_id: 5, supervised_user_id: 6,
+              supervisor_name: 'Sophie Diallo', supervisor_email: 'sophie@pac.com',
+              supervisor_tier_profile: 'S2',
+              supervised_name: 'Marc Dupont', supervised_email: 'marc@pac.com',
+              supervised_tier: 'S1',
+              requested_at: '2026-05-01T10:00:00Z',
+            },
+          ],
+        }),
+      }),
+    )
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+    await page.getByRole('button', { name: /Supervision Requests/i }).click()
+
+    // Should show supervisor → supervised pairing
+    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Marc Dupont')).toBeVisible({ timeout: 5000 })
+    // Approve / Reject buttons visible
+    await expect(page.getByRole('button', { name: /Approve/i }).first()).toBeVisible({ timeout: 5000 })
+  })
+
+  test('supervision approve button sends POST to approve endpoint', async ({ page }) => {
+    let approveCalled = false
+    // Override supervision stub with one pending request
+    await page.route('**/api/pac/admin/supervision/pending', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          requests: [
+            {
+              id: 1,
+              supervisor_user_id: 5, supervised_user_id: 6,
+              supervisor_name: 'Sophie Diallo', supervisor_email: 'sophie@pac.com',
+              supervisor_tier_profile: 'S2',
+              supervised_name: 'Marc Dupont', supervised_email: 'marc@pac.com',
+              supervised_tier: 'S1',
+              requested_at: '2026-05-01T10:00:00Z',
+            },
+          ],
+        }),
+      }),
+    )
+    // Intercept the approve POST (LIFO — registered after the broad /api/** catch-all)
+    await page.route('**/api/pac/admin/supervision/1/approve', (route) => {
+      approveCalled = true
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+    await page.getByRole('button', { name: /Supervision Requests/i }).click()
+
+    const approveBtn = page.getByRole('button', { name: /✓ Approve/i }).first()
+    await expect(approveBtn).toBeVisible({ timeout: 5000 })
+    await approveBtn.click()
+
+    await expect(async () => { expect(approveCalled).toBe(true) }).toPass({ timeout: 5000 })
+  })
+
+  test('KYC Review modal opens and PATCH is sent on Submit Decision', async ({ page }) => {
+    let kycPatchCalled = false
+    // Override agents stub to return one agent with pending KYC
+    await page.route('**/api/admin/pac/agents**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(PAC_AGENT_FIXTURE),
+      }),
+    )
+    // Intercept the KYC PATCH
+    await page.route(`**/api/admin/pac/agents/${PAC_AGENT_FIXTURE.data[0].user_id}/kyc`, (route) => {
+      kycPatchCalled = true
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+
+    // Click "KYC Review" on the agent row
+    const kycReviewBtn = page.getByRole('button', { name: /KYC Review/i }).first()
+    await expect(kycReviewBtn).toBeVisible({ timeout: 5000 })
+    await kycReviewBtn.click()
+
+    // Modal should open
+    await expect(page.getByText(/PAC KYC Review/i)).toBeVisible({ timeout: 3000 })
+
+    // Submit the default decision (approved)
+    const submitBtn = page.getByRole('button', { name: /Submit Decision/i })
+    await expect(submitBtn).toBeVisible({ timeout: 3000 })
+    await submitBtn.click()
+
+    await expect(async () => { expect(kycPatchCalled).toBe(true) }).toPass({ timeout: 5000 })
+  })
+
+  test('Bonus Statements sub-tab is reachable and shows data from API', async ({ page }) => {
+    // Fixture fields must match AdminPanel.jsx: full_name, period_year, period_month (numeric),
+    // bonus_level, missions_count, net_be_revenue_cents, bonus_rate, task_completion_pct
+    const BONUS_FIXTURE = {
+      statements: [
+        {
+          id: 1, supervisor_id: 5,
+          full_name: 'Sophie Diallo', pac_tier: 'S2',
+          period_year: 2026, period_month: 5,
+          bonus_level: 'L1', missions_count: 4,
+          net_be_revenue_cents: 20000, bonus_rate: 0.05,
+          task_completion_pct: 80,
+          bonus_multiplier: 1, final_bonus_cents: 1000,
+          status: 'draft',
+        },
+      ],
+    }
+    await page.route('**/api/pac/admin/bonus/statements', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(BONUS_FIXTURE) }),
+    )
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+    const bonusTab = page.getByRole('button', { name: /Bonus Statements/i })
+    await expect(bonusTab).toBeVisible({ timeout: 5000 })
+    await bonusTab.click()
+
+    await expect(page.getByText('Sophie Diallo')).toBeVisible({ timeout: 5000 })
+    // Validate button visible for draft statement
+    await expect(page.getByRole('button', { name: /Validate/i }).first()).toBeVisible({ timeout: 5000 })
+  })
+
+  test('bonus Validate button calls POST /api/pac/admin/bonus/:id/validate', async ({ page }) => {
+    let validateCalled = false
+    await page.route('**/api/pac/admin/bonus/statements', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          statements: [
+            { id: 7, supervisor_id: 5, full_name: 'Sophie Diallo', pac_tier: 'S2',
+              period_year: 2026, period_month: 5, bonus_level: 'L1', missions_count: 4,
+              net_be_revenue_cents: 20000, bonus_rate: 0.05, task_completion_pct: 80,
+              bonus_multiplier: 1, final_bonus_cents: 1000, status: 'draft' },
+          ],
+        }),
+      }),
+    )
+    await page.route('**/api/pac/admin/bonus/7/validate', (route) => {
+      validateCalled = true
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+    await page.getByRole('button', { name: /Bonus Statements/i }).click()
+
+    const validateBtn = page.getByRole('button', { name: /^Validate$/i }).first()
+    await expect(validateBtn).toBeVisible({ timeout: 5000 })
+    await validateBtn.click()
+
+    await expect(async () => { expect(validateCalled).toBe(true) }).toPass({ timeout: 5000 })
+  })
+
+  test('bonus Mark Paid button calls POST /api/pac/admin/bonus/:id/pay', async ({ page }) => {
+    let payCalled = false
+    await page.route('**/api/pac/admin/bonus/statements', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          statements: [
+            { id: 8, supervisor_id: 5, full_name: 'Sophie Diallo', pac_tier: 'S2',
+              period_year: 2026, period_month: 5, bonus_level: 'L1', missions_count: 4,
+              net_be_revenue_cents: 20000, bonus_rate: 0.05, task_completion_pct: 80,
+              bonus_multiplier: 1, final_bonus_cents: 1000, status: 'validated' },
+          ],
+        }),
+      }),
+    )
+    await page.route('**/api/pac/admin/bonus/8/pay', (route) => {
+      payCalled = true
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /PAC Network/i }).click()
+    await page.getByRole('button', { name: /Bonus Statements/i }).click()
+
+    // Mock window.prompt so it returns a payment reference without showing a dialog
+    await page.evaluate(() => { window.prompt = () => 'SWIFT-TEST-REF-2026' })
+
+    const payBtn = page.getByRole('button', { name: /Mark Paid/i }).first()
+    await expect(payBtn).toBeVisible({ timeout: 5000 })
+    await payBtn.click()
+
+    await expect(async () => { expect(payCalled).toBe(true) }).toPass({ timeout: 5000 })
+  })
+})
