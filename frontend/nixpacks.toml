@@ -1,0 +1,8 @@
+# Nixpacks configuration for the frontend (Vite + React) service.
+# Railway uses this when root directory is set to /frontend.
+
+[phases.build]
+cmds = ["npm ci", "npm run build"]
+
+[start]
+cmd = "npm run start"
