@@ -210,3 +210,161 @@ test.describe('Admin — disputes tab', () => {
     }
   })
 })
+
+// ── Fraud Alerts tab (P21) ────────────────────────────────────────────────────
+const FRAUD_FIXTURE = {
+  data: [
+    {
+      id: 1, user_id: 7,
+      user_name: 'Suspicious Corp', user_email: 'fraud@suspicious.com',
+      rule: 'multi_account', severity: 'high', resolved: false,
+      created_at: '2026-05-01T10:00:00Z',
+    },
+    {
+      id: 2, user_id: 8,
+      user_name: 'Dodgy Ltd', user_email: 'dodgy@example.com',
+      rule: 'rapid_cert_request', severity: 'medium', resolved: true,
+      created_at: '2026-04-15T08:00:00Z',
+    },
+  ],
+  pagination: { page: 1, limit: 50, total: 2, pages: 1 },
+}
+
+test.describe('Admin — fraud alerts tab', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
+  })
+
+  test('fraud alerts tab is reachable from admin panel', async ({ page }) => {
+    await page.goto('/admin')
+    const fraudTab = page.getByRole('button', { name: /^Fraud$/i })
+    await expect(fraudTab).toBeVisible({ timeout: 5000 })
+    await fraudTab.click()
+    // Panel heading "Fraud Alerts" should appear
+    await expect(page.getByText(/Fraud Alerts/i).first()).toBeVisible({ timeout: 5000 })
+  })
+
+  test('fraud alerts tab shows alert data from API', async ({ page }) => {
+    // Override default stub to return our fixture alerts
+    await page.route('**/api/admin/fraud-alerts**', (route) =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(FRAUD_FIXTURE),
+      }),
+    )
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /^Fraud$/i }).click()
+
+    // Both alerts' data should appear in the table
+    await expect(page.getByText('fraud@suspicious.com')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('multi_account')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('resolve button sends PATCH /api/admin/fraud-alerts/:id/resolve', async ({ page }) => {
+    let resolvedId = null
+
+    // Broad fraud-alerts handler — LIFO: registered first so the specific resolve route (below)
+    // takes priority for /resolve URLs; this handles the GET list.
+    await page.route('**/api/admin/fraud-alerts**', (route) => {
+      if (route.request().method() === 'PATCH') {
+        const match = route.request().url().match(/\/fraud-alerts\/(\d+)\/resolve/)
+        if (match) resolvedId = Number(match[1])
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ message: 'Resolved' }),
+        })
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(FRAUD_FIXTURE),
+      })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /^Fraud$/i }).click()
+    await expect(page.getByText('fraud@suspicious.com')).toBeVisible({ timeout: 5000 })
+
+    // Click Resolve for alert id=1 (first button labelled "Resolve" in the fraud tab)
+    await page.getByRole('button', { name: /^Resolve$/i }).first().click()
+
+    await expect(async () => { expect(resolvedId).toBe(1) }).toPass({ timeout: 5000 })
+  })
+
+  test('filter toggle sends request with resolved=true', async ({ page }) => {
+    const requestedUrls = []
+    await page.route('**/api/admin/fraud-alerts**', (route) => {
+      requestedUrls.push(route.request().url())
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ data: [], pagination: { page: 1, limit: 50, total: 0, pages: 1 } }),
+      })
+    })
+
+    await page.goto('/admin')
+    await page.getByRole('button', { name: /^Fraud$/i }).click()
+
+    // Click the "Resolved" filter button inside the fraud tab
+    const resolvedFilter = page.getByRole('button', { name: /^Resolved$/i }).first()
+    await expect(resolvedFilter).toBeVisible({ timeout: 5000 })
+    await resolvedFilter.click()
+
+    // A new GET request with resolved=true should have been made
+    await expect(async () => {
+      expect(requestedUrls.some(u => u.includes('resolved=true'))).toBe(true)
+    }).toPass({ timeout: 5000 })
+  })
+})
+
+// ── CSV export (P21) ──────────────────────────────────────────────────────────
+test.describe('Admin — CSV export', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
+  })
+
+  test('Export CSV button in companies tab triggers GET /api/admin/export/companies', async ({ page }) => {
+    let exportCalled = false
+    page.on('request', req => {
+      if (req.method() === 'GET' && req.url().includes('/api/admin/export/companies')) {
+        exportCalled = true
+      }
+    })
+
+    await page.goto('/admin')
+
+    // Navigate to Companies tab
+    const companiesTab = page.getByRole('button', { name: /companies|entreprises/i }).first()
+    await companiesTab.click()
+
+    // Export CSV button should be visible and clickable
+    const exportBtn = page.getByRole('button', { name: /export csv/i })
+    await expect(exportBtn).toBeVisible({ timeout: 5000 })
+    await exportBtn.click()
+
+    await expect(async () => { expect(exportCalled).toBe(true) }).toPass({ timeout: 5000 })
+  })
+})
+
+// ── Users tab ─────────────────────────────────────────────────────────────────
+test.describe('Admin — users tab', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubApi(page)
+    await page.goto('/login')
+    await seedSession(page, { id: 99, name: 'Super Admin', email: 'admin@mydd.work', role: 'admin' })
+  })
+
+  test('users tab lists user name and email from API', async ({ page }) => {
+    await page.goto('/admin')
+    // Click Users tab (exact match to avoid matching "Overview" or other tabs)
+    const usersTab = page.getByRole('button', { name: /^users$/i }).first()
+    await expect(usersTab).toBeVisible({ timeout: 5000 })
+    await usersTab.click()
+    // Stub returns Test User / test@example.com (role: company)
+    await expect(page.getByText('test@example.com')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('COMPANY')).toBeVisible({ timeout: 5000 })
+  })
+})
