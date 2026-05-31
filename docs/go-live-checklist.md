@@ -37,6 +37,12 @@ Le risque n'est pas le code — c'est la **configuration prod**.
 
 ## 2. 🔴 Variables d'environnement prod (audit complet)
 
+> 💡 **Vérification automatique** : depuis le service backend (ou en local avec
+> les vars prod chargées), lancer `npm run preflight`. Le script
+> `scripts/preflight-env.js` vérifie présence ET format (clé `sk_live_`,
+> `ENCRYPTION_KEY` 64-hex, secrets ≥ 32 chars et distincts, URLs https hors
+> localhost) **sans jamais afficher de valeur**. Exit ≠ 0 = pas prêt.
+
 Confirmer que TOUTES sont définies en prod (Railway backend) :
 
 **Critiques :**

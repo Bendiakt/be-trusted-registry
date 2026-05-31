@@ -45,6 +45,7 @@ jobs:
           node --test tests/mailer.test.js
           node --test tests/rateLimiter.test.js
           node --test tests/admin.test.js
+          node --test tests/preflight.test.js
 
   test:
     name: Backend lint & health check
