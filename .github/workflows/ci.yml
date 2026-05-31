@@ -47,6 +47,7 @@ jobs:
           node --test tests/admin.test.js
           node --test tests/preflight.test.js
           node --test tests/cronRetention.test.js
+          node --test tests/migrations.test.js
 
   test:
     name: Backend lint & health check
@@ -76,6 +77,10 @@ jobs:
       - name: Security audit (high+ vulnerabilities)
         working-directory: backend
         run: npm audit --audit-level=high
+
+      - name: Migration safety check (forward-only guard)
+        working-directory: backend
+        run: npm run check:migrations
 
       - name: Verify required env vars documented
         run: |

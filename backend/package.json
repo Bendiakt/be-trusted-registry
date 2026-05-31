@@ -10,6 +10,7 @@
     "dev": "node server.js",
     "migrate": "node scripts/migrate.js",
     "preflight": "node scripts/preflight-env.js",
+    "check:migrations": "node scripts/check-migrations.js",
     "start:preprod": "npm run migrate && node server.js",
     "test": "node --test tests/encryption.test.js tests/fraud.test.js tests/lib.test.js tests/unit.test.js tests/validators.test.js tests/webhook.test.js tests/payments.test.js tests/disputes.test.js tests/earnings.test.js",
     "test:smoke": "API_URL=https://api.mydd.work node --test tests/smoke.test.js",

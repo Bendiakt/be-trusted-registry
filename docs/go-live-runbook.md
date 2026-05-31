@@ -177,6 +177,10 @@ l'architecture réelle (Railway + migrations forward-only).
     le déploiement, puis redéployer l'ancienne image.
 - 🟢 Bonne pratique : garder les migrations **additives** et faire les suppressions
   en 2 temps (déprécier puis supprimer au déploiement suivant).
+- 🛡️ **Garde-fou CI** : `npm run check:migrations` (lancé automatiquement en CI)
+  **bloque** toute migration destructive (DROP/TRUNCATE/DELETE sans WHERE) non
+  annotée. Pour une suppression délibérée et revue, ajouter en tête du fichier :
+  `-- @destructive-ok: <raison>`.
 
 ### 4.2 Test de restauration de sauvegarde (à faire 1× avant go-live)
 1. Railway → service **Postgres** → onglet **Backups** : vérifie que les backups
