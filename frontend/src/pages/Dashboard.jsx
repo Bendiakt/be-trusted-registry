@@ -536,6 +536,7 @@ export default function Dashboard() {
               {billingLoading ? '…' : t('dashboard.billing')}
             </button>
           )}
+          <button onClick={() => navigate('/settings')} title="Paramètres du compte" style={{ background: 'transparent', color: '#555', border: '1px solid #2a2a2a', padding: '0.4rem 0.9rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>⚙︎</button>
           <button onClick={handleLogout} style={{ ...G.outlineBtn, padding: '0.4rem 0.9rem', fontSize: '0.8rem' }}>{t('nav.logout')}</button>
         </div>
       </nav>
