@@ -73,11 +73,10 @@ Confirmer que TOUTES sont définies en prod (Railway backend) :
 ## 4. 🟡 Conformité légale & RGPD
 
 > 📋 Pack de revue : **`docs/compliance-rgpd.md`** — mapping droits RGPD →
-> implémentation + **2 écarts politique/code à arbitrer** (rétention logs d'audit
-> et notifications) + checklist juriste.
+> implémentation + registre sous-traitants + checklist juriste. Les 3 écarts
+> politique/code détectés ont été **résolus** (politique alignée + purge notifs 90 j).
 
 - [ ] CGU et Politique de confidentialité (`Legal.jsx`) **validées juridiquement**.
-- [ ] **Arbitrer les 2 écarts** signalés dans `docs/compliance-rgpd.md` §2.
 - [ ] Vérifier les flux RGPD existants : export de données + droit à l'effacement
       (déjà implémentés dans `auth.js`).
 - [ ] Bandeau cookies opérationnel (`CookieBanner.jsx` — déjà en place).

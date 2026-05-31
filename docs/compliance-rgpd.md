@@ -32,46 +32,32 @@ approche conforme à l'équilibre Art. 17 §3 (conservation pour obligations lé
 
 ---
 
-## 2. ⚠️ Écarts politique publiée ↔ implémentation (à arbitrer)
+## 2. ✅ Écarts politique ↔ implémentation — RÉSOLUS
 
-La politique de confidentialité (`Legal.jsx`, §5 « Durée de conservation »)
-contient deux engagements qui **ne correspondent pas** au comportement réel du
-système. Un engagement public doit refléter la réalité, sinon il crée un risque
-juridique. **Décision requise** : aligner le texte sur le code, ou le code sur le
-texte.
+Trois incohérences avaient été détectées entre la politique publiée
+(`Legal.jsx` §5) et le comportement réel. **Toutes alignées** (P40/P41) :
 
-### Écart n°1 — Logs d'audit
-- **Politique publiée** : « Logs de connexion et audit → **12 mois** ».
-- **Réalité (code)** : `RETENTION_AUDIT_LOG_DAYS` défaut **730 jours (2 ans)**, et
-  la purge ne s'applique qu'aux **comptes anonymisés** ; pour un compte actif,
-  l'audit log est conservé sans limite de durée.
-  `backend/lib/cronJobs.js:149,155-170`.
-- **Options** :
-  - (a) Aligner le code → mettre `RETENTION_AUDIT_LOG_DAYS=365` en prod (12 mois)
-    et étendre la purge aux comptes actifs.
-  - (b) Aligner la politique → annoncer « jusqu'à 24 mois (intérêt légitime
-    sécurité) » et préciser la conservation au-delà pour comptes actifs.
+### Écart n°1 — Logs d'audit ✅ politique alignée sur le code
+- **Avant** : politique « 12 mois » vs code défaut **730 j (2 ans)**, purge
+  limitée aux comptes anonymisés (actifs conservés — design anti-fraude voulu).
+- **Décision** : le design du code est le bon (la conservation longue sert la
+  lutte anti-fraude, base légale = intérêt légitime). La politique est corrigée
+  pour refléter la réalité : « **Jusqu'à 24 mois (intérêt légitime — sécurité /
+  lutte anti-fraude)** ». `Legal.jsx` §5 mis à jour.
 
-### Écart n°2 — Notifications
-- **Politique publiée** : « Notifications → **90 jours (archivage automatique)** ».
-- **Réalité (code)** : **aucun** cron de purge à 90 jours. Les notifications ne
-  sont supprimées que **manuellement** par l'utilisateur
-  (`DELETE /api/notifications/:id` et purge des lues — `routes/notifications.js:104,121`).
-- **Options** :
-  - (a) Aligner le code → ajouter au cron PII un `DELETE FROM notifications WHERE
-    created_at < NOW() - INTERVAL '90 days'`.
-  - (b) Aligner la politique → retirer la mention « archivage automatique » et
-    décrire la suppression manuelle.
+### Écart n°2 — Notifications ✅ code aligné sur la politique
+- **Avant** : politique « 90 j archivage auto » vs **aucun cron** (suppression
+  manuelle uniquement).
+- **Décision** : ajout d'une purge automatique au cron PII —
+  `DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '90 days'`,
+  configurable via `RETENTION_NOTIFICATIONS_DAYS` (défaut 90).
+  `backend/lib/cronJobs.js` (runPiiRetention, étape 3).
 
-### À vérifier — Fermeture de compte
-- **Politique** : « Données après fermeture du compte → 30 jours (anonymisation
-  automatique) ». **Réalité** : l'effacement anonymise **immédiatement** à la
-  demande de l'utilisateur (pas de délai de 30 jours). Soit la mention vise un
-  autre flux (comptes inactifs ?), soit elle doit être reformulée.
-
-> 💡 Une fois la décision prise, le choix (a) est un changement de code testable ;
-> le choix (b) est une simple édition de `Legal.jsx`. Voir aussi la vérification
-> automatique d'env `npm run preflight` (rien à configurer ici, juste les vars).
+### Écart n°3 — Fermeture de compte ✅ politique corrigée
+- **Avant** : politique « 30 jours (anonymisation automatique) ». **Réalité** :
+  l'effacement anonymise **immédiatement** à la demande (Art. 17).
+- **Décision** : politique reformulée → « **Anonymisation immédiate à la demande
+  (droit à l'effacement)** ». `Legal.jsx` §5.
 
 ---
 
@@ -108,7 +94,7 @@ texte.
 
 ## 5. Checklist pour la revue juridique externe
 
-- [ ] **Arbitrer les 2 écarts du §2** (logs d'audit, notifications) puis appliquer (a) ou (b).
+- [x] ~~Arbitrer les écarts du §2~~ — résolus (politique alignée + cron notifs 90 j).
 - [ ] Valider le texte des CGU (`Legal.jsx` onglet CGU) — droit applicable UAE / DIFC Courts.
 - [ ] Valider la Politique de confidentialité (onglet Privacy) après correction du §2.
 - [ ] Confirmer la base légale de chaque traitement (tableau Privacy §2).

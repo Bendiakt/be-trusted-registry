@@ -147,13 +147,15 @@ const runCertExpiryCleanup = async () => {
 //
 //   RETENTION_API_KEY_USAGE_DAYS  default 90  — api_key_usage rows older than N days
 //   RETENTION_AUDIT_LOG_DAYS      default 730 — audit_log rows older than N days (2 yr)
+//   RETENTION_NOTIFICATIONS_DAYS  default 90  — notifications older than N days
 //
 // Soft-deleted user data (anonymised email = *@deleted.invalid) is purged
 // from the audit_log after the window to close the last PII vector.
 const runPiiRetention = async () => {
   try {
-    const apiKeyUsageDays = parseInt(process.env.RETENTION_API_KEY_USAGE_DAYS || '90', 10)
-    const auditLogDays    = parseInt(process.env.RETENTION_AUDIT_LOG_DAYS    || '730', 10)
+    const apiKeyUsageDays = parseInt(process.env.RETENTION_API_KEY_USAGE_DAYS  || '90',  10)
+    const auditLogDays    = parseInt(process.env.RETENTION_AUDIT_LOG_DAYS      || '730', 10)
+    const notifDays       = parseInt(process.env.RETENTION_NOTIFICATIONS_DAYS  || '90',  10)
 
     // 1. Purge old API key usage counters (non-sensitive, but keeps the table lean)
     const r1 = await query(
@@ -172,12 +174,20 @@ const runPiiRetention = async () => {
       [auditLogDays]
     )
 
-    if ((r1.rowCount + r2.rowCount) > 0) {
+    // 3. Auto-archive (purge) notifications older than the retention window.
+    //    Honours the privacy policy commitment ("90 jours, archivage automatique").
+    const r3 = await query(
+      `DELETE FROM notifications WHERE created_at < NOW() - ($1 || ' days')::interval`,
+      [notifDays]
+    )
+
+    if ((r1.rowCount + r2.rowCount + r3.rowCount) > 0) {
       console.log(JSON.stringify({
         event:           'pii_retention_run',
         api_key_usage:   r1.rowCount,
         audit_log:       r2.rowCount,
-        retentionDays:   { apiKeyUsage: apiKeyUsageDays, auditLog: auditLogDays },
+        notifications:   r3.rowCount,
+        retentionDays:   { apiKeyUsage: apiKeyUsageDays, auditLog: auditLogDays, notifications: notifDays },
       }))
     }
   } catch (e) {

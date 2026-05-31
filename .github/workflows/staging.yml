@@ -46,6 +46,7 @@ jobs:
           node --test tests/earnings.test.js
           node --test tests/admin.test.js
           node --test tests/preflight.test.js
+          node --test tests/cronRetention.test.js
 
   # ── 2. Backend lint / syntax ─────────────────────────────────────────────────
   lint:

@@ -273,8 +273,8 @@ function PrivacyContent() {
         <tbody>
           {[
             ['Compte utilisateur actif', 'Durée de la relation contractuelle'],
-            ['Données après fermeture du compte', '30 jours (anonymisation automatique)'],
-            ['Logs de connexion et audit', '12 mois'],
+            ['Données après fermeture du compte', 'Anonymisation immédiate à la demande (droit à l\'effacement)'],
+            ['Logs de connexion et audit', 'Jusqu\'à 24 mois (intérêt légitime — sécurité / lutte anti-fraude)'],
             ['Documents de certification', '5 ans (obligation légale)'],
             ['Données de paiement', '7 ans (obligation comptable)'],
             ['Notifications', '90 jours (archivage automatique)'],

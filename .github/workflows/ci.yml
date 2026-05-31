@@ -46,6 +46,7 @@ jobs:
           node --test tests/rateLimiter.test.js
           node --test tests/admin.test.js
           node --test tests/preflight.test.js
+          node --test tests/cronRetention.test.js
 
   test:
     name: Backend lint & health check
