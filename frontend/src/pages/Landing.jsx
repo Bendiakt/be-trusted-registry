@@ -765,6 +765,8 @@ export default function Landing() {
             </div>
             <div style={{ color: T.muted, fontSize: '0.8rem', lineHeight: '1.6' }}>
               B&amp;E Consult FZCO — Dubai, UAE<br />
+              <a href="mailto:support@mydd.work" style={{ color: T.muted, textDecoration: 'none' }}>support@mydd.work</a>
+              {' · '}
               <a href="mailto:legal@mydd.work" style={{ color: T.muted, textDecoration: 'none' }}>legal@mydd.work</a>
             </div>
             <div style={{ marginTop: '0.75rem', fontSize: '0.72rem', color: T.faint }}>
@@ -793,7 +795,7 @@ export default function Landing() {
         foundingDate: '2024',
         legalName: 'B&E Consult FZCO',
         address: { '@type': 'PostalAddress', addressLocality: 'Dubai', addressCountry: 'AE' },
-        contactPoint: { '@type': 'ContactPoint', email: 'legal@mydd.work', contactType: 'customer service' },
+        contactPoint: { '@type': 'ContactPoint', email: 'support@mydd.work', contactType: 'customer service' },
         sameAs: ['https://mydd.work/registry', 'https://mydd.work/agents'],
         copyrightHolder: { '@type': 'Organization', name: 'B&E Consult FZCO' },
         copyrightYear: new Date().getFullYear(),
