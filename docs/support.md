@@ -67,8 +67,8 @@ les alertes P1 sont traitées (cf. astreinte §4).
 - [ ] Responsable du suivi désigné + plage d'astreinte P1 définie.
 - [ ] Modèles de réponse RGPD prêts (accusé + réponse sous 30 jours).
 - [ ] SLA publié ou communiqué aux premiers clients (soft-launch).
-- [ ] Lien « Support » / contact visible depuis l'app (footer ou page dédiée).
+- [x] Lien « Support » / contact visible depuis l'app → page **`/support`**
+      (`frontend/src/pages/Support.jsx`), liée depuis les footers Landing & Legal.
 
-> 💡 La dernière case est la seule qui peut demander un petit développement
-> front (lien footer vers `mailto:support@mydd.work` ou page `/support`). Les
-> autres sont opérationnelles.
+> ✅ La page `/support` regroupe canaux, SLA et droits RGPD self-service. Les
+> autres cases sont opérationnelles (boîtes à relever, astreinte, modèles).

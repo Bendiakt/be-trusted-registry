@@ -392,6 +392,8 @@ export default function Legal({ tab: initialTab }) {
         B&amp;E Consult FZCO · Dubai, UAE ·{' '}
         <a href="mailto:legal@mydd.work" style={S.link}>legal@mydd.work</a>
         {' · '}
+        <Link to="/support" style={S.link}>Support</Link>
+        {' · '}
         <Link to="/" style={S.link}>← Accueil</Link>
       </div>
     </div>
