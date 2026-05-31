@@ -20,6 +20,7 @@ import NotFound from './pages/NotFound'
 import MissionReport from './pages/MissionReport'
 import VerifyEmail from './pages/VerifyEmail'
 import Legal from './pages/Legal'
+import Support from './pages/Support'
 import SectorPage from './pages/SectorPage'
 import Onboarding from './pages/Onboarding'
 
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/privacy"                 element={<Legal tab="privacy" />} />
         <Route path="/terms"                   element={<Legal tab="cgu" />} />
         <Route path="/legal"                   element={<Legal />} />
+        <Route path="/support"                 element={<Support />} />
         <Route path="/sectors/:sector"         element={<SectorPage />} />
         <Route path="/onboarding"              element={<PrivateRoute><Onboarding /></PrivateRoute>} />
         <Route path="/dashboard" element={<RoleRoute role="company"><Dashboard /></RoleRoute>} />

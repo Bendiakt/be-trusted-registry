@@ -769,6 +769,9 @@ export default function Landing() {
               {' · '}
               <a href="mailto:legal@mydd.work" style={{ color: T.muted, textDecoration: 'none' }}>legal@mydd.work</a>
             </div>
+            <div style={{ marginTop: '0.4rem', fontSize: '0.8rem' }}>
+              <Link to="/support" style={{ color: T.muted, textDecoration: 'none' }}>Support &amp; Contact</Link>
+            </div>
             <div style={{ marginTop: '0.75rem', fontSize: '0.72rem', color: T.faint }}>
               © {new Date().getFullYear()} B&amp;E Consult FZCO. MyDD® PAC Network® are registered trademarks.{' '}
               <Link to="/legal" style={{ color: T.faint }}>Legal &amp; Disclaimer</Link>
