@@ -148,12 +148,15 @@ test.describe('Payments — mission fee checkout', () => {
   test('paid mission shows green paid badge instead of pay button', async ({ page }) => {
     await page.goto('/dashboard')
 
+    // The dashboard is a lazy-loaded route chunk — wait for it to be interactive
+    // before probing the tab (an immediate isVisible() check would race the chunk).
     const auditsTab = page.getByRole('button', { name: /audit/i }).first()
-    if (await auditsTab.isVisible()) await auditsTab.click()
+    await expect(auditsTab).toBeVisible({ timeout: 15000 })
+    await auditsTab.click()
 
     // Mission id=43 has paymentConfirmedAt set → shows "✓ Paid $300" (EN) / "✓ Payé $300" (FR)
     await expect(
       page.getByText(/✓ pa[iy]/i).first()
-    ).toBeVisible({ timeout: 5000 })
+    ).toBeVisible({ timeout: 8000 })
   })
 })
