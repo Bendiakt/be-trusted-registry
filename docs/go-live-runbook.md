@@ -183,18 +183,21 @@ l'architecture réelle (Railway + migrations forward-only).
   `-- @destructive-ok: <raison>`.
 
 ### 4.2 Test de restauration de sauvegarde (à faire 1× avant go-live)
-1. Railway → service **Postgres** → onglet **Backups** : vérifie que les backups
+> ✅ **Déjà outillé** — pas besoin de le faire à la main. Les scripts existent
+> (voir `scripts/README.md` + `DR_RUNBOOK.md`).
+1. Railway → service **Postgres** → onglet **Backups** : confirme que les backups
    automatiques (ou PITR) sont **activés**.
-2. Crée une **base de staging** (ou un service PG jetable).
-3. Restaure le dernier backup vers cette base de test.
-4. Connecte-toi et vérifie l'intégrité :
-   ```sql
-   SELECT count(*) FROM users;
-   SELECT count(*) FROM certifications;
-   SELECT max(applied_at) FROM schema_migrations;
+2. Lance le **drill de restauration non destructif** (restaure le dernier dump
+   dans une base temporaire + vérifie l'intégrité) :
+   ```bash
+   DATABASE_PUBLIC_URL="postgresql://…" bash scripts/db-restore-dry-run.sh
    ```
-5. Note le **temps de restauration** (= ton RTO réel) dans ce runbook.
-- [ ] Backups activés · [ ] restauration testée · [ ] RTO mesuré : ______
+3. Ou la séquence DR complète (monitor + backup/restore + failover dry-run) :
+   ```bash
+   bash scripts/dr-validate.sh
+   ```
+4. Note le **temps de restauration** affiché (= ton RTO réel).
+- [ ] Backups activés · [ ] `db-restore-dry-run.sh` OK · [ ] RTO mesuré : ______
 
 ### 4.3 Uptime-checker externe
 1. Crée un compte **UptimeRobot** (ou équivalent : Better Uptime, Railway metrics).
@@ -228,4 +231,6 @@ audience limitée.
 
 *Documents liés : `docs/go-live-checklist.md` (vue synthétique),
 `docs/compliance-rgpd.md` (RGPD), `docs/support.md` (support/SLA),
+`scripts/README.md` (index des outils Ops : backup, restore, monitoring, DR),
+`DR_RUNBOOK.md` · `DB_OPERATIONS.md` · `MIGRATION_STRATEGY.md` (racine),
 `backend/scripts/preflight-env.js` (`npm run preflight`).*
