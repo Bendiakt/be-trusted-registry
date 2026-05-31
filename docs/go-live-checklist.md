@@ -6,6 +6,9 @@
 
 Légende : 🔴 bloquant · 🟡 important · 🟢 confort post-lancement
 
+> 📘 **Guide d'exécution pas-à-pas** (Stripe LIVE, vars env, juridique, rollback/backup/uptime) :
+> **`docs/go-live-runbook.md`**.
+
 ---
 
 ## 1. 🔴 Paiements Stripe (verrou n°1)
