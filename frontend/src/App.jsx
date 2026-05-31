@@ -21,6 +21,7 @@ import MissionReport from './pages/MissionReport'
 import VerifyEmail from './pages/VerifyEmail'
 import Legal from './pages/Legal'
 import Support from './pages/Support'
+import Settings from './pages/Settings'
 import SectorPage from './pages/SectorPage'
 import Onboarding from './pages/Onboarding'
 
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/support"                 element={<Support />} />
         <Route path="/sectors/:sector"         element={<SectorPage />} />
         <Route path="/onboarding"              element={<PrivateRoute><Onboarding /></PrivateRoute>} />
+        <Route path="/settings"                element={<PrivateRoute><Settings /></PrivateRoute>} />
         <Route path="/dashboard" element={<RoleRoute role="company"><Dashboard /></RoleRoute>} />
         <Route path="/pac"       element={<RoleRoute role="pac"><PACPortal /></RoleRoute>} />
         <Route path="/pac/missions/:id/report" element={<RoleRoute role="pac"><MissionReport /></RoleRoute>} />
