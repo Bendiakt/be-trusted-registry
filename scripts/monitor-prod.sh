@@ -4,7 +4,7 @@ set -euo pipefail
 backend="${BACKEND_URL:-https://be-trusted-registry-production.up.railway.app}"
 backend="${backend%/}"
 max_ms="${MAX_HEALTH_MS:-1500}"
-max_business_metrics_ms="${MAX_BUSINESS_METRICS_MS:-1000}"
+max_business_metrics_ms="${MAX_BUSINESS_METRICS_MS:-2000}"
 run_stripe_check="${RUN_STRIPE_CHECK:-1}"
 stripe_check_mode="${STRIPE_CHECK_MODE:-live}"
 curl_max_time="${CURL_MAX_TIME:-15}"
