@@ -168,7 +168,7 @@ resp = json.loads(sys.argv[1])
 msg = resp.get("message")
 err = resp.get("error")
 
-if msg == "Registered successfully":
+if isinstance(msg, str) and "Registered successfully" in msg:
         print("PASS: monitor user registered")
         sys.exit(0)
 
