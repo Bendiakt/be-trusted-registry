@@ -30,6 +30,12 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children, to }) => <a href={to}>{children}</a>,
 }))
 
+// Resolve i18n keys against the real English locale so assertions stay readable.
+import en from '../locales/en.json'
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key) => key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), en) ?? key }),
+}))
+
 import Settings from '../pages/Settings'
 
 describe('Settings', () => {
@@ -37,9 +43,9 @@ describe('Settings', () => {
 
   it('renders the three sections', () => {
     render(<Settings />)
-    expect(screen.getByText('Profil')).toBeInTheDocument()
-    expect(screen.getByText(/Vos données \(RGPD\)/)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Supprimer mon compte' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: en.settings.profile })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: en.settings.data_heading })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: en.settings.delete_heading })).toBeInTheDocument()
   })
 
   it('export button calls GET /api/auth/me/export as a blob', async () => {
@@ -47,7 +53,7 @@ describe('Settings', () => {
     global.URL.createObjectURL = vi.fn(() => 'blob:x')
     global.URL.revokeObjectURL = vi.fn()
     render(<Settings />)
-    fireEvent.click(screen.getByText(/Télécharger mes données/))
+    fireEvent.click(screen.getByText(new RegExp(en.settings.download_data)))
     await waitFor(() => {
       expect(mockApi.get).toHaveBeenCalledWith('/api/auth/me/export', { responseType: 'blob' })
     })
@@ -57,11 +63,11 @@ describe('Settings', () => {
     global.URL.createObjectURL = vi.fn(() => 'blob:x')
     const { container } = render(<Settings />)
     // open modal (the danger-zone trigger button)
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer mon compte' }))
+    fireEvent.click(screen.getByRole('button', { name: en.settings.delete_button }))
     const pwd = container.querySelector('#del-pass')
     expect(pwd).toBeTruthy()
     fireEvent.change(pwd, { target: { value: 'secret123' } })
-    fireEvent.click(screen.getByText('Supprimer définitivement'))
+    fireEvent.click(screen.getByText(en.settings.delete_permanently))
     await waitFor(() => {
       expect(mockApi.delete).toHaveBeenCalledWith('/api/auth/me', { data: { password: 'secret123' } })
     })
@@ -70,7 +76,7 @@ describe('Settings', () => {
   it('saving a new name calls PATCH /api/auth/profile', async () => {
     const { container } = render(<Settings />)
     fireEvent.change(container.querySelector('#set-name'), { target: { value: 'Janet' } })
-    fireEvent.click(screen.getByText('Enregistrer'))
+    fireEvent.click(screen.getByText(en.settings.save))
     await waitFor(() => {
       expect(mockApi.patch).toHaveBeenCalledWith('/api/auth/profile', { name: 'Janet' })
     })
