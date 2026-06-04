@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api'
 import { getSession, saveSession, clearSession } from '../lib/session'
 import { useToast, ToastContainer } from '../components/Toast'
@@ -30,6 +31,7 @@ const S = {
 
 export default function Settings() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const user = getSession()
   const [toasts, showToast] = useToast()
 
@@ -62,7 +64,7 @@ export default function Settings() {
       payload.currentPassword = currentPassword
     }
     if (Object.keys(payload).length === 0) {
-      showToast('Aucune modification à enregistrer.', 'info')
+      showToast(t('settings.no_changes'), 'info')
       return
     }
     setSavingProfile(true)
@@ -71,9 +73,9 @@ export default function Settings() {
       if (data?.name) saveSession({ ...user, name: data.name })
       setCurrentPassword('')
       setNewPassword('')
-      showToast('Profil mis à jour.', 'success')
+      showToast(t('settings.profile_updated'), 'success')
     } catch (err) {
-      showToast(err.response?.data?.error || 'Échec de la mise à jour.', 'error')
+      showToast(err.response?.data?.error || t('settings.profile_update_failed'), 'error')
     } finally {
       setSavingProfile(false)
     }
@@ -92,9 +94,9 @@ export default function Settings() {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      showToast('Export téléchargé.', 'success')
+      showToast(t('settings.export_downloaded'), 'success')
     } catch (err) {
-      showToast(err.response?.data?.error || 'Export impossible.', 'error')
+      showToast(err.response?.data?.error || t('settings.export_failed'), 'error')
     } finally {
       setExporting(false)
     }
@@ -103,7 +105,7 @@ export default function Settings() {
   // ── Delete account (RGPD Art. 17) ─────────────────────────────────────────────
   async function handleDelete() {
     if (!deletePassword) {
-      showToast('Mot de passe requis pour confirmer.', 'error')
+      showToast(t('settings.password_required'), 'error')
       return
     }
     setDeleting(true)
@@ -113,79 +115,68 @@ export default function Settings() {
       // Hard redirect home — session is gone.
       window.location.assign('/')
     } catch (err) {
-      showToast(err.response?.data?.error || 'Suppression impossible.', 'error')
+      showToast(err.response?.data?.error || t('settings.delete_failed'), 'error')
       setDeleting(false)
     }
   }
 
   return (
     <div style={S.page}>
-      <h1 style={S.h1}>Paramètres du compte</h1>
-      <p style={S.meta}>{user.email} · rôle : {user.role}</p>
+      <h1 style={S.h1}>{t('settings.title')}</h1>
+      <p style={S.meta}>{user.email} · {t('settings.account_role')} : {user.role}</p>
 
       {/* ── Profil ── */}
       <form style={S.card} onSubmit={handleSaveProfile}>
-        <h2 style={S.h2}>Profil</h2>
-        <p style={S.p}>Mettez à jour votre nom ou votre mot de passe.</p>
+        <h2 style={S.h2}>{t('settings.profile')}</h2>
+        <p style={S.p}>{t('settings.profile_desc')}</p>
 
-        <label style={S.label} htmlFor="set-name">Nom</label>
+        <label style={S.label} htmlFor="set-name">{t('settings.name')}</label>
         <input id="set-name" style={S.input} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
 
-        <label style={S.label} htmlFor="set-cur">Mot de passe actuel <span style={{ color: '#666' }}>(pour changer le mot de passe)</span></label>
+        <label style={S.label} htmlFor="set-cur">{t('settings.current_password')} <span style={{ color: '#666' }}>{t('settings.current_password_hint')}</span></label>
         <input id="set-cur" type="password" style={S.input} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
 
-        <label style={S.label} htmlFor="set-new">Nouveau mot de passe <span style={{ color: '#666' }}>(min. 8 caractères)</span></label>
+        <label style={S.label} htmlFor="set-new">{t('settings.new_password')} <span style={{ color: '#666' }}>{t('settings.new_password_hint')}</span></label>
         <input id="set-new" type="password" style={S.input} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
 
         <button type="submit" style={S.btn} disabled={savingProfile}>
-          {savingProfile ? 'Enregistrement…' : 'Enregistrer'}
+          {savingProfile ? t('settings.saving') : t('settings.save')}
         </button>
       </form>
 
       {/* ── Données personnelles (RGPD) ── */}
       <div style={S.card}>
-        <h2 style={S.h2}>Vos données (RGPD)</h2>
-        <p style={S.p}>
-          Téléchargez une copie complète des données que nous détenons sur vous
-          (droit d'accès et de portabilité, Art. 15 &amp; 20). Format JSON.
-        </p>
+        <h2 style={S.h2}>{t('settings.data_heading')}</h2>
+        <p style={S.p}>{t('settings.data_desc')}</p>
         <button type="button" style={S.btnGhost} onClick={handleExport} disabled={exporting}>
-          {exporting ? 'Préparation…' : '⬇ Télécharger mes données'}
+          {exporting ? t('settings.preparing') : `⬇ ${t('settings.download_data')}`}
         </button>
         <p style={{ ...S.p, marginTop: '1rem', marginBottom: 0 }}>
-          Questions sur vos données ? <Link to="/support" style={S.link}>Support</Link> ·{' '}
-          <Link to="/privacy" style={S.link}>Politique de confidentialité</Link>.
+          {t('settings.data_questions')} <Link to="/support" style={S.link}>{t('settings.support')}</Link> ·{' '}
+          <Link to="/privacy" style={S.link}>{t('settings.privacy_policy')}</Link>.
         </p>
       </div>
 
       {/* ── Zone de danger ── */}
       <div style={S.cardDanger}>
-        <h2 style={S.h2Danger}>Supprimer mon compte</h2>
-        <p style={S.p}>
-          La suppression <strong style={{ color: '#e2e2e2' }}>anonymise immédiatement</strong> vos
-          données personnelles (droit à l'effacement, Art. 17). Cette action est
-          irréversible. Vos enregistrements de certification sont conservés sous
-          forme anonymisée pour l'intégrité du registre.
-        </p>
+        <h2 style={S.h2Danger}>{t('settings.delete_heading')}</h2>
+        <p style={S.p}>{t('settings.delete_desc')}</p>
         <button type="button" style={S.btnDanger} onClick={() => setShowDelete(true)}>
-          Supprimer mon compte
+          {t('settings.delete_button')}
         </button>
       </div>
 
       <div style={S.footer}>
-        <Link to="/dashboard" style={S.link}>← Retour au tableau de bord</Link>
+        <Link to="/dashboard" style={S.link}>← {t('settings.back_dashboard')}</Link>
       </div>
 
       {/* ── Delete confirmation modal ── */}
       {showDelete && (
-        <div style={S.overlay} role="dialog" aria-modal="true" aria-label="Confirmer la suppression du compte">
+        <div style={S.overlay} role="dialog" aria-modal="true" aria-label={t('settings.confirm_delete')}>
           <div style={S.modal}>
-            <h2 style={S.h2Danger}>Confirmer la suppression</h2>
-            <p style={S.p}>
-              Saisissez votre mot de passe pour confirmer la suppression définitive
-              de votre compte.
-            </p>
-            <label style={S.label} htmlFor="del-pass">Mot de passe</label>
+            <h2 style={S.h2Danger}>{t('settings.confirm_delete')}</h2>
+            <p style={S.p}>{t('settings.confirm_delete_desc')}</p>
+            <label style={S.label} htmlFor="del-pass">{t('settings.password')}</label>
             <input
               id="del-pass" type="password" style={S.input}
               value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)}
@@ -197,10 +188,10 @@ export default function Settings() {
                 onClick={() => { setShowDelete(false); setDeletePassword('') }}
                 disabled={deleting}
               >
-                Annuler
+                {t('settings.cancel')}
               </button>
               <button type="button" style={S.btnDangerSolid} onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Suppression…' : 'Supprimer définitivement'}
+                {deleting ? t('settings.deleting') : t('settings.delete_permanently')}
               </button>
             </div>
           </div>
