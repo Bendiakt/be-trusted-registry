@@ -50,8 +50,14 @@ describe('encrypt / decrypt', () => {
   test('decrypt throws on tampered ciphertext', () => {
     const ct = encrypt('original')
     const parts = ct.split('.')
-    // Flip one byte in the ciphertext segment
-    const tampered = parts[0] + '.' + parts[1].slice(0, -2) + 'ff' + '.' + parts[2]
+    // Flip the last hex digit of the ciphertext segment to a GUARANTEED-different
+    // value. (Previously this overwrote it with 'ff', which was a no-op ~1/256 of
+    // the time when the ciphertext already ended in 'ff' → flaky false pass.)
+    const seg = parts[1]
+    const last = seg.slice(-1)
+    const flipped = last === '0' ? '1' : '0'
+    const tampered = parts[0] + '.' + seg.slice(0, -1) + flipped + '.' + parts[2]
+    assert.notEqual(tampered, ct) // sanity: we actually changed something
     assert.throws(() => decrypt(tampered))
   })
 
