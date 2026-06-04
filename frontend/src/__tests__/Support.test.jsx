@@ -3,8 +3,8 @@
  *
  * Covers:
  *  - Renders the three contact channels
- *  - Renders the SLA table (incl. the RGPD row)
- *  - Surfaces the self-service data-export endpoint
+ *  - Renders the SLA table (incl. the GDPR row)
+ *  - Renders the GDPR-rights section
  *  - Links to /privacy, /terms and home
  */
 import { render, screen } from '@testing-library/react'
@@ -14,26 +14,33 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children, to }) => <a href={to}>{children}</a>,
 }))
 
+// Resolve i18n keys against the real English locale so assertions stay readable.
+import en from '../locales/en.json'
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key) => key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), en) ?? key }),
+}))
+
 import Support from '../pages/Support'
 
 describe('Support', () => {
   it('renders the three contact email channels', () => {
     render(<Support />)
-    // emails appear in the table and again in the footer / RGPD section
+    // emails appear in the table and again in the footer
     expect(screen.getAllByText('support@mydd.work').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('privacy@mydd.work').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('legal@mydd.work').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows the SLA table including the RGPD response window', () => {
+  it('shows the SLA table including the GDPR response window', () => {
     render(<Support />)
-    expect(screen.getByText(/Délais de réponse/i)).toBeInTheDocument()
-    expect(screen.getByText(/Accusé sous 3 j · réponse 30 j/)).toBeInTheDocument()
+    expect(screen.getByText(en.support.sla_heading)).toBeInTheDocument()
+    expect(screen.getByText(en.support.sla_gdpr)).toBeInTheDocument()
   })
 
-  it('surfaces the self-service GDPR data-export endpoint', () => {
+  it('renders the GDPR-rights section', () => {
     render(<Support />)
-    expect(screen.getByText('/api/auth/me/export')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: en.support.rgpd_heading })).toBeInTheDocument()
+    expect(screen.getByText(en.support.rgpd_access_label)).toBeInTheDocument()
   })
 
   it('links to privacy, terms and home', () => {

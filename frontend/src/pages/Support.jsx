@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 // ─── Shared prose styles (mirrors Legal.jsx for visual consistency) ──────────
 const S = {
@@ -19,26 +20,36 @@ const S = {
 }
 
 export default function Support() {
+  const { t } = useTranslation()
+
+  const channels = [
+    ['support@mydd.work', t('support.purpose_support')],
+    ['privacy@mydd.work', t('support.purpose_privacy')],
+    ['legal@mydd.work', t('support.purpose_legal')],
+  ]
+  const slaRows = [
+    [t('support.prio_critical'), t('support.ex_critical'), t('support.sla_critical')],
+    [t('support.prio_high'), t('support.ex_high'), t('support.sla_high')],
+    [t('support.prio_normal'), t('support.ex_normal'), t('support.sla_normal')],
+    [t('support.prio_gdpr'), t('support.ex_gdpr'), t('support.sla_gdpr')],
+  ]
+
   return (
     <div style={S.page}>
-      <h1 style={S.h1}>Support &amp; Contact</h1>
+      <h1 style={S.h1}>{t('support.title')}</h1>
       <p style={S.meta}>MyDD Registry — B&amp;E Consult FZCO · Dubai, UAE</p>
 
-      <h2 style={S.h2}>Nous contacter</h2>
-      <p style={S.p}>Selon votre demande, écrivez à l'adresse la plus adaptée :</p>
+      <h2 style={S.h2}>{t('support.contact_heading')}</h2>
+      <p style={S.p}>{t('support.contact_intro')}</p>
       <table style={S.table}>
         <thead>
           <tr>
-            <th style={S.th}>Adresse</th>
-            <th style={S.th}>Pour quoi ?</th>
+            <th style={S.th}>{t('support.col_address')}</th>
+            <th style={S.th}>{t('support.col_purpose')}</th>
           </tr>
         </thead>
         <tbody>
-          {[
-            ['support@mydd.work', 'Aide produit : connexion, certification, paiements, missions PAC, bugs.'],
-            ['privacy@mydd.work', 'Données personnelles & RGPD (accès, effacement, opposition).'],
-            ['legal@mydd.work', 'Questions contractuelles, CGU, signalements juridiques.'],
-          ].map(([email, purpose]) => (
+          {channels.map(([email, purpose]) => (
             <tr key={email}>
               <td style={{ ...S.td, whiteSpace: 'nowrap' }}>
                 <a href={`mailto:${email}`} style={S.link}>{email}</a>
@@ -51,22 +62,17 @@ export default function Support() {
 
       <hr style={S.sep} />
 
-      <h2 style={S.h2}>Délais de réponse (SLA)</h2>
+      <h2 style={S.h2}>{t('support.sla_heading')}</h2>
       <table style={S.table}>
         <thead>
           <tr>
-            <th style={S.th}>Priorité</th>
-            <th style={S.th}>Exemple</th>
-            <th style={S.th}>1ère réponse</th>
+            <th style={S.th}>{t('support.col_priority')}</th>
+            <th style={S.th}>{t('support.col_example')}</th>
+            <th style={S.th}>{t('support.col_first_response')}</th>
           </tr>
         </thead>
         <tbody>
-          {[
-            ['Critique', 'Service indisponible, paiement bloqué, sécurité', '4 h ouvrées'],
-            ['Élevée', 'Fonction majeure dégradée sans contournement', '1 jour ouvré'],
-            ['Normale', 'Question, bug mineur avec contournement', '2 jours ouvrés'],
-            ['RGPD', 'Exercice de vos droits (accès, effacement…)', 'Accusé sous 3 j · réponse 30 j'],
-          ].map(([prio, ex, sla]) => (
+          {slaRows.map(([prio, ex, sla]) => (
             <tr key={prio}>
               <td style={{ ...S.td, color: '#C9A84C', fontWeight: 600 }}>{prio}</td>
               <td style={S.td}>{ex}</td>
@@ -75,50 +81,42 @@ export default function Support() {
           ))}
         </tbody>
       </table>
-      <p style={S.p}>Heures ouvrées : dimanche–jeudi, 9h–18h (GST, UTC+4).</p>
+      <p style={S.p}>{t('support.business_hours')}</p>
 
       <hr style={S.sep} />
 
-      <h2 style={S.h2}>Vos droits RGPD</h2>
-      <p style={S.p}>
-        Vous pouvez exercer vos droits directement depuis votre compte ou en nous écrivant :
-      </p>
+      <h2 style={S.h2}>{t('support.rgpd_heading')}</h2>
+      <p style={S.p}>{t('support.rgpd_intro')}</p>
       <ul style={S.ul}>
         <li style={S.li}>
-          <span style={S.strong}>Accès &amp; portabilité</span> — une fois connecté, demandez
-          l'export complet de vos données (format JSON) via l'API
-          <code> /api/auth/me/export</code>, ou écrivez à{' '}
-          <a href="mailto:privacy@mydd.work" style={S.link}>privacy@mydd.work</a>.
+          <span style={S.strong}>{t('support.rgpd_access_label')}</span> — {t('support.rgpd_access_desc')}
         </li>
         <li style={S.li}>
-          <span style={S.strong}>Effacement (« droit à l'oubli »)</span> — la suppression de
-          compte anonymise immédiatement vos données personnelles (confirmation par mot de
-          passe requise).
+          <span style={S.strong}>{t('support.rgpd_erasure_label')}</span> — {t('support.rgpd_erasure_desc')}
         </li>
         <li style={S.li}>
-          <span style={S.strong}>Rectification, opposition, limitation</span> — contactez{' '}
-          <a href="mailto:privacy@mydd.work" style={S.link}>privacy@mydd.work</a> (réponse sous 30 jours).
+          <span style={S.strong}>{t('support.rgpd_other_label')}</span> — {t('support.rgpd_other_desc')}
         </li>
       </ul>
       <p style={S.p}>
-        Détails complets dans notre{' '}
-        <Link to="/privacy" style={S.link}>Politique de confidentialité</Link>.
+        {t('support.rgpd_details')}{' '}
+        <Link to="/privacy" style={S.link}>{t('support.privacy_policy')}</Link>.
       </p>
 
       <hr style={S.sep} />
 
-      <h2 style={S.h2}>Documents utiles</h2>
+      <h2 style={S.h2}>{t('support.docs_heading')}</h2>
       <ul style={S.ul}>
-        <li style={S.li}><Link to="/terms" style={S.link}>Conditions Générales d'Utilisation</Link></li>
-        <li style={S.li}><Link to="/privacy" style={S.link}>Politique de Confidentialité</Link></li>
-        <li style={S.li}><Link to="/registry" style={S.link}>Registre public des entreprises certifiées</Link></li>
+        <li style={S.li}><Link to="/terms" style={S.link}>{t('support.doc_terms')}</Link></li>
+        <li style={S.li}><Link to="/privacy" style={S.link}>{t('support.doc_privacy')}</Link></li>
+        <li style={S.li}><Link to="/registry" style={S.link}>{t('support.doc_registry')}</Link></li>
       </ul>
 
       <div style={S.footer}>
         B&amp;E Consult FZCO · Dubai, UAE ·{' '}
         <a href="mailto:support@mydd.work" style={S.link}>support@mydd.work</a>
         {' · '}
-        <Link to="/" style={S.link}>← Accueil</Link>
+        <Link to="/" style={S.link}>← {t('support.back_home')}</Link>
       </div>
     </div>
   )
