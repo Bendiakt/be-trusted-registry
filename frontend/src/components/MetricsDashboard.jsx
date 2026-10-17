@@ -36,18 +36,55 @@ const useAnimatedValue = (target, duration = 800) => {
 }
 
 // ---------------------------------------------------------------------------
+// Locale aware formatting. Follows the app language (i18n), not the browser.
+// Latin digits are forced so figures stay comparable across all six locales.
+// Revenue is stored in USD on the backend (revenue_total_usd).
+// ---------------------------------------------------------------------------
+const toLocaleTag = (lng) => `${(lng || 'en').split('-')[0]}-u-nu-latn`
+
+export const formatCurrency = (value, lng, currency = 'USD') => {
+  const n = Number.isFinite(value) ? value : 0
+  try {
+    return new Intl.NumberFormat(toLocaleTag(lng), {
+      style: 'currency', currency, maximumFractionDigits: 0, minimumFractionDigits: 0,
+    }).format(Math.round(n))
+  } catch {
+    return `${currency} ${Math.round(n).toLocaleString('en-US')}`
+  }
+}
+
+export const formatNumber = (value, lng, opts = {}) => {
+  const n = Number.isFinite(value) ? value : 0
+  try {
+    return new Intl.NumberFormat(toLocaleTag(lng), opts).format(n)
+  } catch {
+    return String(n)
+  }
+}
+
+export const formatDateTime = (date, lng, opts) => {
+  const d = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return d.toLocaleString(toLocaleTag(lng), opts)
+  } catch {
+    return d.toISOString()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Individual KPI card
 // ---------------------------------------------------------------------------
-const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, delta, vsLabel }) => {
+const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, delta, vsLabel, lng = 'en' }) => {
   const animated = useAnimatedValue(
     typeof value === 'number' ? value : parseFloat(value) || 0,
   )
 
   const formatted = (() => {
-    if (format === 'currency') return '$' + Math.round(animated).toLocaleString()
+    if (format === 'currency') return formatCurrency(animated, lng)
     if (format === 'percent') return Math.round(animated) + '%'
-    if (format === 'decimal') return animated.toFixed(1)
-    return Math.round(animated).toLocaleString()
+    if (format === 'decimal') return formatNumber(animated, lng, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    return formatNumber(Math.round(animated), lng)
   })()
 
   const deltaColor = delta > 0 ? '#4CAF50' : delta < 0 ? '#e74c3c' : '#666'
@@ -79,7 +116,7 @@ const KpiCard = ({ label, value, format = 'int', color = '#C9A84C', subtitle, de
       )}
       {delta !== undefined && (
         <div style={{ color: deltaColor, fontSize: '0.7rem', marginTop: '0.25rem', fontWeight: '600' }}>
-          {deltaIcon} {Math.abs(delta)} {vsLabel}
+          {deltaIcon} {format === 'currency' ? formatCurrency(Math.abs(delta), lng) : formatNumber(Math.abs(delta), lng)} {vsLabel}
         </div>
       )}
     </div>
@@ -163,7 +200,8 @@ const StatusDot = ({ live, liveLabel, pollingLabel }) => (
 // Main MetricsDashboard component
 // ---------------------------------------------------------------------------
 export default function MetricsDashboard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lng = i18n?.resolvedLanguage || i18n?.language || 'en'
   const [metrics, setMetrics] = useState(null)
   const [wsLive, setWsLive] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -263,7 +301,7 @@ export default function MetricsDashboard() {
         <div>
           <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#eee' }}>{t('metrics.title')}</div>
           <div style={{ color: '#444', fontSize: '0.75rem', marginTop: '0.15rem' }}>
-            {lastUpdated ? `${t('metrics.updated')} ${lastUpdated.toLocaleTimeString()}` : t('metrics.loading')}
+            {lastUpdated ? `${t('metrics.updated')} ${formatDateTime(lastUpdated, lng, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : t('metrics.loading')}
           </div>
         </div>
         <StatusDot live={wsLive} liveLabel={t('metrics.live')} pollingLabel={t('metrics.polling')} />
@@ -282,6 +320,7 @@ export default function MetricsDashboard() {
             <div style={{ ...G.sectionTitle }}>{t('metrics.sections.registry')}</div>
             <div style={{ ...G.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               <KpiCard
+                lng={lng}
                 label={t('metrics.kpis.users')}
                 value={metrics.users_total}
                 color="#C9A84C"
@@ -289,6 +328,7 @@ export default function MetricsDashboard() {
                 vsLabel={t('metrics.vs_snapshot')}
               />
               <KpiCard
+                lng={lng}
                 label={t('metrics.kpis.companies')}
                 value={metrics.companies_total}
                 color="#4a90e2"
@@ -296,6 +336,7 @@ export default function MetricsDashboard() {
                 vsLabel={t('metrics.vs_snapshot')}
               />
               <KpiCard
+                lng={lng}
                 label={t('metrics.kpis.certified')}
                 value={metrics.certified_total}
                 color="#4CAF50"
@@ -304,6 +345,7 @@ export default function MetricsDashboard() {
                 vsLabel={t('metrics.vs_snapshot')}
               />
               <KpiCard
+                lng={lng}
                 label={t('metrics.kpis.revenue')}
                 value={metrics.revenue_total_usd}
                 format="currency"
@@ -380,6 +422,7 @@ export default function MetricsDashboard() {
             <div style={{ ...G.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               {metrics.requests_total !== undefined && (
                 <KpiCard
+                  lng={lng}
                   label={t('metrics.kpis.requests')}
                   value={metrics.requests_total}
                   color="#888"
@@ -390,7 +433,7 @@ export default function MetricsDashboard() {
               <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '1.25rem' }}>
                 <div style={{ color: '#666', fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{t('metrics.kpis.data_as_of')}</div>
                 <div style={{ color: '#555', fontSize: '0.8rem' }}>
-                  {new Date(metrics.timestamp).toLocaleString()}
+                  {formatDateTime(metrics.timestamp, lng)}
                 </div>
               </div>
             </div>
