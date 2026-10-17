@@ -28,10 +28,10 @@ import { vi } from 'vitest'
 // ── module mock ───────────────────────────────────────────────────────────────
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k) => k }),
+  useTranslation: () => ({ t: (k) => k, i18n: { language: 'en', resolvedLanguage: 'en' } }),
 }))
 
-import MetricsDashboard from '../components/MetricsDashboard'
+import MetricsDashboard, { formatCurrency, formatNumber, formatDateTime } from '../components/MetricsDashboard'
 
 // ── shared fixture ────────────────────────────────────────────────────────────
 
@@ -136,9 +136,9 @@ describe('MetricsDashboard — fetch', () => {
   it('renders revenue as formatted currency', async () => {
     global.fetch = okFetch()
     render(<MetricsDashboard />)
-    // KpiCard format="currency" → "$" + Math.round(12400).toLocaleString()
+    // KpiCard format="currency" → Intl USD formatting in the app language (en)
     await waitFor(() => {
-      const matches = screen.getAllByText(/\$12[,.]?400/)
+      const matches = screen.getAllByText(/\$12,400/)
       expect(matches.length).toBeGreaterThanOrEqual(1)
     })
   })
@@ -228,5 +228,39 @@ describe('MetricsDashboard — WebSocket', () => {
     await waitFor(() => screen.getByText('metrics.live'))
     act(() => { ws.instances[0].onclose?.() })
     await waitFor(() => expect(screen.getByText('metrics.polling')).toBeInTheDocument())
+  })
+})
+
+// ── locale formatting helpers ─────────────────────────────────────────────────
+
+describe('MetricsDashboard locale formatting', () => {
+  const norm = (s) => s.replace(/[\u00a0\u202f]/g, ' ')
+
+  it('formats USD in English with a leading dollar sign', () => {
+    expect(formatCurrency(12400, 'en')).toBe('$12,400')
+  })
+
+  it('formats USD in French with French grouping and trailing symbol', () => {
+    expect(norm(formatCurrency(12400, 'fr'))).toBe('12 400 $US')
+  })
+
+  it('keeps Latin digits for Arabic so figures stay comparable', () => {
+    expect(formatCurrency(12400, 'ar')).toMatch(/12[,.\u066c]?400/)
+    expect(formatNumber(1234, 'ar')).not.toMatch(/[\u0660-\u0669]/)
+  })
+
+  it('rounds currency to whole units and tolerates bad input', () => {
+    expect(formatCurrency(12399.6, 'en')).toBe('$12,400')
+    expect(formatCurrency(NaN, 'en')).toBe('$0')
+    expect(formatCurrency(100, undefined)).toBe('$100')
+  })
+
+  it('falls back to the base language for regional tags', () => {
+    expect(formatCurrency(12400, 'en-GB')).toBe(formatCurrency(12400, 'en'))
+  })
+
+  it('returns an empty string for an invalid date', () => {
+    expect(formatDateTime('not-a-date', 'en')).toBe('')
+    expect(formatDateTime('2026-10-18T10:00:00Z', 'fr')).toMatch(/2026/)
   })
 })
