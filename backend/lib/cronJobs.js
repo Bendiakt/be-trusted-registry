@@ -336,7 +336,7 @@ const runAchievementCheck = async () => {
       FROM pac_profiles pp
       JOIN users u ON u.id = pp.user_id
       WHERE (pp.pac_tier = 'S1' OR pp.pac_tier = 's1')
-        AND (u.pac_status = 'approved' OR pp.kyc_status = 'approved')
+        AND pp.kyc_status = 'approved'
         AND pp.eligible_for_s2 = FALSE
     `)
 
@@ -388,7 +388,7 @@ const runAchievementCheck = async () => {
       FROM pac_profiles pp
       JOIN users u ON u.id = pp.user_id
       WHERE (pp.pac_tier = 'S2' OR pp.pac_tier = 's2')
-        AND (u.pac_status = 'approved' OR pp.kyc_status = 'approved')
+        AND pp.kyc_status = 'approved'
         AND pp.eligible_for_s3 = FALSE
         AND pp.is_founder = FALSE
         AND pp.membership_active = TRUE
