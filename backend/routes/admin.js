@@ -1123,11 +1123,6 @@ router.patch('/pac/:id/approve-upgrade', auth, requireAdminMFA, adminWriteLimite
        stripeSubId, anniversary.toDateString(), userId]
     )
 
-    await client.query(
-      `UPDATE users SET pac_tier = $1, pac_status = 'approved' WHERE id = $2`,
-      [tier.toLowerCase(), userId]
-    )
-
     await client.query('COMMIT')
 
     await logAudit(req.user.id, AUDIT.PAC_UPGRADE_APPROVED, 'pac_profiles', req.ip, {
@@ -1217,12 +1212,6 @@ router.patch('/pac/:id/founder', auth, requireAdminMFA, adminWriteLimiter, async
          updated_at               = NOW()
        WHERE user_id = $3`,
       [exemptionExpires, region, userId]
-    )
-
-    // Sync users table tier
-    await client.query(
-      `UPDATE users SET pac_tier = 's3', pac_status = 'pending' WHERE id = $1`,
-      [userId]
     )
 
     await client.query('COMMIT')

@@ -530,10 +530,6 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
            WHERE id = $5`,
           [downTier, downCommission, downMaxSup, pac.pac_tier, pac.id]
         )
-        await query(
-          `UPDATE users SET pac_tier = $1 WHERE id = $2`,
-          [downTier.toLowerCase(), pac.user_id]
-        )
         sendLicenseSuspended({
           email:     pac.email,
           full_name: pac.full_name,
@@ -635,10 +631,6 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
            isReinstatement ? tierCfg?.max_supervised ?? null : null]
         )
         if (isReinstatement) {
-          await query(
-            `UPDATE users SET pac_tier = $1 WHERE id = (SELECT user_id FROM pac_profiles WHERE id = $2)`,
-            [reinstatedTier.toLowerCase(), pac.id]
-          )
           sendLicenseReinstated({ email: pac.email, full_name: pac.full_name, tier: reinstatedTier }).catch(() => {})
           console.log(JSON.stringify({ event: 'pac.membership.reinstated', pacId: pac.id, tier: reinstatedTier, invoiceId: invoice.id }))
         } else {
@@ -1209,10 +1201,6 @@ router.post('/pac-upgrade-checkout', auth, async (req, res) => {
            kyc_status        = 'pending',
            updated_at        = NOW()
          WHERE user_id = $1`,
-        [req.user.id]
-      )
-      await query(
-        `UPDATE users SET pac_tier = 's3', pac_status = 'pending' WHERE id = $1`,
         [req.user.id]
       )
       return res.json({
