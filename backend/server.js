@@ -99,7 +99,11 @@ app.use(cors({
     // Allow server-to-server and CLI calls without an Origin header.
     if (!origin) return callback(null, true)
     if (allowedOrigins.includes(origin)) return callback(null, true)
-    return callback(new Error('Not allowed by CORS'))
+    // Reject without an Error: passing one to cors() turns a foreign-origin
+    // request into an unhandled 500 (and a Sentry issue). With `false` the
+    // browser simply gets no Access-Control-Allow-Origin header and blocks it.
+    console.warn(JSON.stringify({ event: 'cors.rejected', origin }))
+    return callback(null, false)
   },
   credentials: true,
 }))
