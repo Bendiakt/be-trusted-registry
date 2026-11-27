@@ -99,7 +99,8 @@ async function getNetBERevenue (supervisedPacIds, year, month) {
 }
 
 /**
- * Upsert a bonus payout statement (idempotent — re-running for the same period overwrites drafts).
+ * Upsert a bonus payout statement (idempotent — re-running for the same period
+ * refreshes drafts only; validated/paid statements are left untouched).
  */
 async function upsertBonusStatement ({
   supervisorId, year, month, bonusLevel,
@@ -123,9 +124,9 @@ async function upsertBonusStatement ({
       bonus_amount_cents     = EXCLUDED.bonus_amount_cents,
       task_completion_pct    = EXCLUDED.task_completion_pct,
       bonus_multiplier       = EXCLUDED.bonus_multiplier,
-      final_bonus_cents      = EXCLUDED.final_bonus_cents,
-      status                 = CASE WHEN pac_bonus_payouts.status = 'draft' THEN 'draft'
-                                    ELSE pac_bonus_payouts.status END
+      final_bonus_cents      = EXCLUDED.final_bonus_cents
+    -- Never rewrite amounts on a statement that was already validated or paid.
+    WHERE pac_bonus_payouts.status = 'draft'
   `, [
     supervisorId, year, month, bonusLevel,
     count, gross, commissions, net,
@@ -245,27 +246,57 @@ async function computeMonthlyBonuses (targetYear, targetMonth) {
  * Schedule — runs on 1st of each month at 02:00 UTC.
  * Called from cronJobs.js.
  */
-function schedulePacBonusCron () {
-  const now          = new Date()
-  // Target = previous month
-  const targetDate   = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const targetYear   = targetDate.getFullYear()
-  const targetMonth  = targetDate.getMonth() + 1
+// setTimeout silently clamps any delay above 2^31-1 ms (~24.8 days) to 1 ms,
+// so a month-long wait must be split into shorter hops.
+const MAX_TIMEOUT_MS = 2 ** 31 - 1
 
-  // Next 1st of month at 02:00 UTC
-  const nextRun      = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 2, 0, 0))
-  const delay        = nextRun.getTime() - Date.now()
+/** Next 1st-of-month 02:00 UTC strictly after `date`. */
+function nextRunAfter (date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1, 2, 0, 0))
+}
+
+/** Month preceding `date`, in UTC. month is 1-12. */
+function previousMonthUTC (date) {
+  const year  = date.getUTCFullYear()
+  const month = date.getUTCMonth() // 0-11, so this is already "previous month" as 1-12
+  return month === 0 ? { year: year - 1, month: 12 } : { year, month }
+}
+
+/** Call `fn` once the clock reaches `target`, hopping in chunks below the setTimeout limit. */
+function runAt (target, fn, { now, setTimer }) {
+  const remaining = target.getTime() - now()
+  if (remaining <= 0) return fn()
+  setTimer(() => runAt(target, fn, { now, setTimer }), Math.min(remaining, MAX_TIMEOUT_MS))
+}
+
+function schedulePacBonusCron ({
+  now      = Date.now,
+  setTimer = setTimeout,
+  compute  = computeMonthlyBonuses,
+} = {}) {
+  const nextRun = nextRunAfter(new Date(now()))
+  // The period is the month before the run date, not before the boot date:
+  // a process started on the 27th must compute that month on the next 1st.
+  const { year, month } = previousMonthUTC(nextRun)
 
   console.log(JSON.stringify({
     event: 'pac_bonus_cron_scheduled',
     next_run: nextRun.toISOString(),
-    will_compute_period: `${targetYear}-${String(targetMonth).padStart(2,'0')}`
+    will_compute_period: `${year}-${String(month).padStart(2, '0')}`
   }))
 
-  setTimeout(async () => {
-    await computeMonthlyBonuses(targetYear, targetMonth)
-    schedulePacBonusCron()  // reschedule for next month
-  }, delay)
+  runAt(nextRun, async () => {
+    try {
+      await compute(year, month)
+    } catch (err) {
+      console.error(JSON.stringify({ event: 'pac_bonus_cron_failed', message: err.message }))
+    }
+    schedulePacBonusCron({ now, setTimer, compute })  // reschedule for next month
+  }, { now, setTimer })
 }
 
-module.exports = { schedulePacBonusCron, computeMonthlyBonuses }
+module.exports = {
+  schedulePacBonusCron,
+  computeMonthlyBonuses,
+  _internal: { nextRunAfter, previousMonthUTC, upsertBonusStatement, MAX_TIMEOUT_MS },
+}
