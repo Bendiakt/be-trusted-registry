@@ -41,7 +41,7 @@ const schemas = {
     name:     str(100).min(2, 'Name must be at least 2 characters'),
     email:    email(),
     password: str(128).min(8, 'Password must be at least 8 characters'),
-    role:     z.enum(REGISTER_ROLES, { errorMap: () => ({ message: `Role must be one of: ${REGISTER_ROLES.join(', ')}` }) })
+    role:     z.enum(REGISTER_ROLES, { error: `Role must be one of: ${REGISTER_ROLES.join(', ')}` })
                .default('company'),
   }),
 
@@ -102,7 +102,7 @@ const schemas = {
   /** PATCH /api/admin/users/:id/role */
   assignRole: z.object({
     role: z.enum(['company', 'pac', 'trader', 'admin'], {
-      errorMap: () => ({ message: 'Role must be one of: company, pac, trader, admin' }),
+      error: 'Role must be one of: company, pac, trader, admin',
     }),
   }),
 
@@ -116,14 +116,14 @@ const schemas = {
 
   /** POST /api/admin/companies/:id/suspend */
   suspendCompany: z.object({
-    suspend: z.boolean({ required_error: 'suspend (boolean) required' }),
+    suspend: z.boolean({ error: (iss) => (iss.input === undefined ? 'suspend (boolean) required' : undefined) }),
     reason:  str(500).optional(),
   }),
 
   /** PATCH /api/admin/companies/:id/status */
   updateCompanyStatus: z.object({
     status: z.enum(COMPANY_STATUSES, {
-      errorMap: () => ({ message: `Status must be one of: ${COMPANY_STATUSES.join(', ')}` }),
+      error: `Status must be one of: ${COMPANY_STATUSES.join(', ')}`,
     }),
   }),
 
@@ -142,7 +142,7 @@ const schemas = {
   submitMissionReport: z.object({
     report_text: str(10000).min(10, 'Report must be at least 10 characters'),
     outcome:     z.enum(MISSION_OUTCOMES, {
-      errorMap: () => ({ message: `Outcome must be one of: ${MISSION_OUTCOMES.join(', ')}` }),
+      error: `Outcome must be one of: ${MISSION_OUTCOMES.join(', ')}`,
     }),
   }),
 
@@ -175,7 +175,7 @@ const schemas = {
 
   /** PATCH /api/admin/documents/:id/review */
   reviewDocument: z.object({
-    status:  z.enum(['approved', 'rejected'], { required_error: 'status required' }),
+    status:  z.enum(['approved', 'rejected'], { error: (iss) => (iss.input === undefined ? 'status required' : undefined) }),
     comment: str(500).optional(),
     note:    str(1000).optional(),
   }),
@@ -189,13 +189,13 @@ const schemas = {
 
   /** POST /api/payments/create-checkout-session */
   createCheckoutSession: z.object({
-    planId:          z.enum(['level1', 'level2', 'level3'], { required_error: 'planId required' }),
+    planId:          z.enum(['level1', 'level2', 'level3'], { error: (iss) => (iss.input === undefined ? 'planId required' : undefined) }),
     certificationId: z.number().int().positive().optional(),
   }),
 
   /** POST /api/payments/renewal-checkout */
   renewalCheckout: z.object({
-    planId: z.enum(['level1', 'level2', 'level3'], { required_error: 'planId required' }),
+    planId: z.enum(['level1', 'level2', 'level3'], { error: (iss) => (iss.input === undefined ? 'planId required' : undefined) }),
   }),
 
   /** POST /api/payments/mission-checkout */
@@ -215,7 +215,7 @@ const schemas = {
 const validate = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.body)
   if (!result.success) {
-    const errors = result.error.errors.map((e) => ({
+    const errors = result.error.issues.map((e) => ({
       field:   e.path.join('.') || 'body',
       message: e.message,
     }))
