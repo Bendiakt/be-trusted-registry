@@ -26,7 +26,7 @@ function parse(schema, data) {
   return {
     ok: false,
     data: null,
-    errors: result.error.errors.map((e) => ({ field: e.path.join('.') || 'body', message: e.message })),
+    errors: result.error.issues.map((e) => ({ field: e.path.join('.') || 'body', message: e.message })),
   }
 }
 
